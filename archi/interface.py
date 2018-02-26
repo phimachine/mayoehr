@@ -12,19 +12,57 @@ class interface(nn.Module):
     def forward(self, interface_input):
         # TODO no initiation here, see if it works
 
-        last_index=param_W*param_R-1
+        last_index=param_W*param_R
 
-        # R read keys, each W dimensions, W*R in total
+        # Read keys, each W dimensions, [W*R] in total
         # no processing needed
         read_keys=interface_input[0:last_index].view(param_W,-1)
 
-        # R read strengths
+        # Read strengths, [R]
         # 1 to infinity
         # slightly different equation from the paper, should be okay
-        read_strengths=interface_input[last_index+1:param_W*param_R+param_R]
+        read_strengths=interface_input[last_index:last_index+param_R]
+        last_index=last_index+param_R
         read_strengths=1-nn.LogSigmoid(read_strengths)
 
-        # one write key, W
-        write_key=interface_input[param]
+        # Write key, [W]
+        write_key=interface_input[last_index:last_index+param_W]
+        last_index=last_index+param_W
 
-        return read_keys, read_strengths,
+        # write strength beta, [1]
+        write_strength=interface_input[last_index:last_index+1]
+        last_index=last_index+1
+        write_strength=1-nn.LogSigmoid(write_strength)
+
+        # erase strength, [W]
+        erase_vector=interface_input[last_index:last_index+param_W]
+        last_index=last_index+param_W
+        erase_vector=nn.Sigmoid(erase_vector)
+
+        # write vector, [W]
+        write_vector=interface[last_index:last_index+param_W]
+        last_index=last_index+param_W
+
+        # R free gates? [R] TODO what is this?
+        free_gates=interface[last_index:last_index+param_R]
+        last_index=last_index+param_R
+        free_gates=nn.Sigmoid(free_gates)
+
+        # allocation gate [1]
+        allocation_gate=interface[last_index:last_index+1]
+        last_index=last_index+1
+        allocation_gate=nn.Sigmoid(allocation_gate)
+
+        # write gate [1]
+        write_gate=interface[last_index:last_index+1]
+        last_index=last_index+1
+        write_gate=nn.Sigmoid(write_gate)
+
+        # read modes [R]
+        read_modes=interface[last_index:last_index+param_R]
+        read_modes=nn.Softmax(read_modes)
+
+        # total dimension: param_W*param_R+3*param_W+5*param_R+3
+        return read_keys, read_strengths, write_key, write_strength, \
+               erase_vector, write_vector, free_gates, allocation_gate, \
+               write_gate, read_modes
