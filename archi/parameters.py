@@ -21,7 +21,11 @@ param_L=64
 # Controller output v_t size
 param_v_t=32
 
+# Memory location width param_W
+# Memory read heads count param_R
 # Controller interface epsilon_t size, derived
 param_W=5
 param_R=7
 param_E_t=param_W*param_R+3*param_W+5*param_R+3
+
+#

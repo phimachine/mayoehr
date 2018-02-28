@@ -10,12 +10,13 @@ class interface(nn.Module):
         super(interface, self).__init__()
 
     def forward(self, interface_input):
-        # TODO no initiation here, see if it works
+        # TODO no initiation on assigned tensor here, see if it works
 
         last_index=param_W*param_R
 
         # Read keys, each W dimensions, [W*R] in total
         # no processing needed
+        # this is the address keys, not the contents
         read_keys=interface_input[0:last_index].view(param_W,-1)
 
         # Read strengths, [R]
@@ -63,6 +64,7 @@ class interface(nn.Module):
         read_modes=nn.Softmax(read_modes)
 
         # total dimension: param_W*param_R+3*param_W+5*param_R+3
+        # TODO I count a param_W feweer than it's supposed to have.
         return read_keys, read_strengths, write_key, write_strength, \
                erase_vector, write_vector, free_gates, allocation_gate, \
                write_gate, read_modes
