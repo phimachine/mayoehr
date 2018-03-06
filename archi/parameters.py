@@ -28,4 +28,5 @@ param_W=5
 param_R=7
 param_E_t=param_W*param_R+3*param_W+5*param_R+3
 
-#
+# Total memory locations count
+param_N=8
