@@ -1,5 +1,5 @@
 import torch.nn as nn
-from archi.parameters import *
+from archi.param import *
 
 class interface(nn.Module):
     # an interface processor that takes all the interface output

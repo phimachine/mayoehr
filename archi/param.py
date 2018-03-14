@@ -5,28 +5,29 @@
 Controller parameters
 '''
 # input vector size x_t
-param_x=10
+x=10
 
 # single hidden unit output size h^l_t
-param_h=10
+h=10
 
 # state size
-# output size, forget gate size, input gate size are all equal to state size param_s
-# all weight matrices in equation 1-5 then has dimension (param_s, param_x+2*param_h)
-param_s=20
+# output size, forget gate size, input gate size are all equal to state size s
+# all weight matrices in equation 1-5 then has dimension (s, x+2*h)
+s=20
 
 # Controller RNN layers count
-param_L=64
+L=64
 
 # Controller output v_t size
-param_v_t=32
+v_t=32
 
-# Memory location width param_W
-# Memory read heads count param_R
+# Memory location width W
+# Memory read heads count R
 # Controller interface epsilon_t size, derived
-param_W=5
-param_R=7
-param_E_t=param_W*param_R+3*param_W+5*param_R+3
+W=5
+R=7
+E_t=W*R+3*W+5*R+3
 
 # Total memory locations count
-param_N=8
+# Total memory block (n, W)
+N=8
