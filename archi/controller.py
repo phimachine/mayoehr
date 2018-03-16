@@ -60,6 +60,7 @@ class RNN_Unit(nn.Module):
         self.old_state=Parameter(torch.Tensor(param.s).zero_())
 
     def reset_parameters(self):
+        #TODO
         pass
 
     def forward(self,input_x,previous_time,previous_layer):

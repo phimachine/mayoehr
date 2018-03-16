@@ -3,6 +3,10 @@
 # cannot read the paper anymore. let's just implement it. hopefully by the end
 # I know what I'm doing.
 
+# parameter notation convention:
+# latex symbols
+# :param variable_name: variable_symbol, tensor dimension, domain, note
+
 import torch
 import torch.nn as nn
 from torch.nn.functional import cosine_similarity, softmax
@@ -20,7 +24,7 @@ class Memory(nn.Module):
         :param memory: M, (param.N, param.W)
         :param key_strength: \beta, (1) [1, \infty)
         :param index: i, lookup on memory[i]
-        :return: most weighted similar: C, (param.N, 1), (0,1)
+        :return: most weighted similar: C(M,k,\beta), (param.N, 1), (0,1)
         '''
 
         # TODO make sure the dimensions are correct.
@@ -34,7 +38,8 @@ class Memory(nn.Module):
         '''
 
         :param free_gate: f, (R), [0,1], from interface vector
-        :param read_weighting: TODO calculated later, w, (N, R), simplex bounded
+        :param read_weighting: TODO calculated later, w, (N, R), simplex bounded,
+               note it's from previous timestep.
         :return: \phi, (N), simplex bounded
         '''
 
@@ -46,6 +51,36 @@ class Memory(nn.Module):
         inside_bracket = 1 - read_weighting * free_gate
         return torch.prod(inside_bracket, 1)
 
+    def usage_vector(self, previous_usage, write_wighting, memory_retention):
+        '''
+        I cannot understand what this vector is for.
+        This should be a variable that records the usages history of a vector
+        Penalized by the free gate.
 
+        :param previous_usage: u_{t-1}, (N), [0,1]
+        :param write_wighting: w^w_{t-1}, (N), (inferred) sum to one
+        :param memory_retention: \phi_t, (N), simplex bounded
+        :return: u_t, (N), [0,1], the next usage,
+        '''
 
+        ret= (previous_usage+write_wighting-previous_usage*write_wighting)*memory_retention
+
+        return ret
+
+    def allocation_weighting(self,usage_vector):
+        '''
+        Sorts the memory by usages first.
+        Then perform calculation depending on the sort order.
+
+        The alloation_weighting of the third least used memory is calculated as follows:
+        Find the least used and second least used. Multiply their usages.
+        Multiply the product with (1-usage of the third least), return.
+
+        TODO
+        Do not confuse the sort order and the memory's natural location.
+        Verify backprop.
+
+        :param usage_vector: u_t, (N), [0,1]
+        :return:
+        '''
 
