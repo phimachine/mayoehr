@@ -84,3 +84,4 @@ class Memory(nn.Module):
         :return:
         '''
 
+        sorted, indices= usage_vector.sort()
