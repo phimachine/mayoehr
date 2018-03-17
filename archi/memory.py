@@ -15,20 +15,22 @@ import archi.param as param
 class Memory(nn.Module):
 
     def __init__(self):
-        memory_usage_u_t=torch.Tensor(param.N).zero_()
+        self.memory_usage=torch.Tensor(param.N).zero_()
+        self.precedence_weighting=torch.Tensor(param.N).zero_()
+        self.temporal_memory_linkage=torch.Tensor(param.N,param.N).zero_()
 
-    def content_lookup(self, desired_content, memory, key_strength):
+    def content_weighting(self, memory, write_key, key_strength):
         '''
 
-        :param desired_content: \k, (W), R, lookup key
-        :param memory: M, (param.N, param.W)
+        :param memory: M, (N, W)
+        :param write_key: k, (W), R, desired content
         :param key_strength: \beta, (1) [1, \infty)
         :param index: i, lookup on memory[i]
-        :return: most weighted similar: C(M,k,\beta), (param.N, 1), (0,1)
+        :return: most similar weighted: C(M,k,\beta), (N, 1), (0,1)
         '''
 
         # TODO make sure the dimensions are correct.
-        similarties= cosine_similarity(desired_content, memory)
+        similarties= cosine_similarity(write_key, memory)
         weighted=similarties*key_strength
         return softmax(weighted)
 
@@ -60,12 +62,11 @@ class Memory(nn.Module):
         :param previous_usage: u_{t-1}, (N), [0,1]
         :param write_wighting: w^w_{t-1}, (N), (inferred) sum to one
         :param memory_retention: \phi_t, (N), simplex bounded
-        :return: u_t, (N), [0,1], the next usage,
+        :return: u_t, (N), [0,1], the next usage
         '''
 
         ret= (previous_usage+write_wighting-previous_usage*write_wighting)*memory_retention
-
-        return ret
+        self.memory_usage=ret
 
     def allocation_weighting(self,usage_vector):
         '''
@@ -85,3 +86,25 @@ class Memory(nn.Module):
         '''
 
         sorted, indices= usage_vector.sort()
+
+
+    def write_weighting(self,memory, write_key, write_strength, allocation_gate, write_gate, allocation_weighting):
+
+        '''
+        calculates the weighting on each memory cell when writing a new value in
+
+        :param memory: M, (N, W), memory block
+        :param write_key: k^w_t, (W), R, the key that is to be written
+        :param write_strength: \beta, (1) bigger it is, stronger it concentrates the content weighting
+        :param allocation_gate: g^a_t, (1), balances between write by content and write by allocation gate
+        :param write_gate: g^w_t, overall strength of the write signal
+        :param allocation_weighting: see above.
+        :return:
+        '''
+
+        # measures content similarity
+        content_weighting=self.content_weighting(memory,write_key,write_strength)
+        return write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
+
+    def update_temporal_memory_linkage(self):
+        pass
