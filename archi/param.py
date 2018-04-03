@@ -30,4 +30,4 @@ E_t=W*R+3*W+5*R+3
 
 # Total memory locations count
 # Total memory block (n, W)
-N=8
+N=3
