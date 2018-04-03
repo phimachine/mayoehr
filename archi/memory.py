@@ -16,6 +16,7 @@ class Memory(nn.Module):
 
     def __init__(self):
         self.memory_usage=torch.Tensor(param.N).zero_()
+        # p, (W), should be simplex bound
         self.precedence_weighting=torch.Tensor(param.N).zero_()
         self.temporal_memory_linkage=torch.Tensor(param.N,param.N).zero_()
 
@@ -52,6 +53,8 @@ class Memory(nn.Module):
         # (N, R) TODO make sure this is pointwise multiplication, not matmul
         inside_bracket = 1 - read_weighting * free_gate
         return torch.prod(inside_bracket, 1)
+
+    #cumprod!
 
     def usage_vector(self, previous_usage, write_wighting, memory_retention):
         '''
@@ -99,12 +102,15 @@ class Memory(nn.Module):
         :param allocation_gate: g^a_t, (1), balances between write by content and write by allocation gate
         :param write_gate: g^w_t, overall strength of the write signal
         :param allocation_weighting: see above.
-        :return:
+        :return: write_weighting: where does this write key go?
         '''
 
         # measures content similarity
         content_weighting=self.content_weighting(memory,write_key,write_strength)
-        return write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
+        write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
+        return write_weighting
 
-    def update_temporal_memory_linkage(self):
-        pass
+    def update_temporal_memory_linkage(self,write_weighting):
+        sum_ww=sum(write_weighting)
+        self.precedence_weighting=(1-sum_ww)*self.precedence_weighting+write_weighting
+        
