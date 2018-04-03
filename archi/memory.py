@@ -40,7 +40,7 @@ class Memory(nn.Module):
         :param free_gate: f, (R), [0,1], from interface vector
         :param read_weighting: TODO calculated later, w, (N, R), simplex bounded,
                note it's from previous timestep.
-        :return: \phi, (N), simplex bounded
+        :return: \psi, (N), simplex bounded
         '''
 
 
@@ -59,7 +59,7 @@ class Memory(nn.Module):
 
         :param previous_usage: u_{t-1}, (N), [0,1]
         :param write_wighting: w^w_{t-1}, (N), (inferred) sum to one
-        :param memory_retention: \phi_t, (N), simplex bounded
+        :param memory_retention: \psi_t, (N), simplex bounded
         :return: u_t, (N), [0,1], the next usage,
         '''
 
@@ -84,4 +84,15 @@ class Memory(nn.Module):
         :return:
         '''
 
-        sorted, indices= usage_vector.sort()
+        # the indices here is \phi_t referred to in the paper
+        sorted, indices=usage_vector.sort()
+        ret=torch.Tensor(param.N)
+        rolling_product=1
+        ret[indices[0]]=(1-sorted[0])
+        print("retret:", ret)
+        print(sorted)
+        for i in range(param.N-1):
+            rolling_product=sorted[i]*rolling_product
+            print("rolling product: ", rolling_product)
+            ret[indices[i+1]]=(1-sorted[i])*rolling_product
+        print("ret: ",ret)
