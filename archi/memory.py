@@ -21,8 +21,8 @@ class Memory(nn.Module):
         self.precedence_weighting=torch.Tensor(param.N).zero_()
         self.temporal_memory_linkage=torch.Tensor(param.N, param.N).zero_()
         #TODO
-        self.read_weighting_i=None
-        self.memory=None
+        self.memory=torch.Tensor(param.N,param.W)
+        self.rwi=None
 
     def content_weighting(self, read_write_key, key_strength):
         '''
@@ -182,5 +182,35 @@ class Memory(nn.Module):
 
         return read_weighting_i
 
-    def forward(self, *input):
-        # TODO figure out
+    def read_memory_i(self, read_weighting_i):
+        # this is currently the formula of a single read head TODO
+        '''
+
+        :param read_weighting:
+        :return: read_vectors: r^i_t
+        '''
+        return self.memory.t()*read_weighting_i
+
+    def write_to_memory(self,write_weighting,erase_vector,write_vector):
+        '''
+
+        :param write_weighting: the strength of writing
+        :param erase_vector:
+        :param write_vector: what to write, a cat picture, e.g.
+        :return:
+        '''
+
+        self.memory=self.memory*(torch.ones((param.N,param.W))-write_weighting*
+                                 erase_vector.t())+write_weighting*write_vector.t()
+
+    def forward(self,read_keys,read_key_strengths,read_mode_vectors):
+        # read from memory first
+        self.rwis=[]
+        for read_key, read_key_strength, read_mode_vector in zip(read_keys,read_key_strengths,read_mode_vectors):
+            self.rwis.append(self.read_weighting_i(self.forward_weighting(), self.backward_weighting()),
+                            read_key,read_key_strength, read_mode_vector)
+        ri=[]
+        for rwi in self.rwis:
+            ri.append(self.read_memory_i(read_weighting_i=rwi))
+        # write to memory
+        self.write_to_memory(write_weighting(),)
