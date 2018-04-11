@@ -1,43 +1,55 @@
-# this is the memory module
-# wow the dynamic memory thing is hard.
-# cannot read the paper anymore. let's just implement it. hopefully by the end
-# I know what I'm doing.
-
 # parameter notation convention:
 # latex symbols
 # :param variable_name: variable_symbol, tensor dimension, domain, note
 
 import torch
 import torch.nn as nn
-from torch.nn.functional import cosine_similarity, softmax
+from torch.nn.functional import cosine_similarity, softmax, normalize
 import archi.param as param
+from torch.autograd import Variable
 
 class Memory(nn.Module):
 
     def __init__(self):
+        super(Memory, self).__init__()
         # u_0
         self.usage_vector=torch.Tensor(param.N).zero_()
         # p, (W), should be simplex bound
         self.precedence_weighting=torch.Tensor(param.N).zero_()
         self.temporal_memory_linkage=torch.Tensor(param.N, param.N).zero_()
-        #TODO
-        self.memory=torch.Tensor(param.N,param.W)
+        #TODO will autograd alter memory? Should autograd alter memory?
+        self.memory=Variable(torch.Tensor(param.N,param.W),requires_grad=False)
         self.rwi=None
 
-    def content_weighting(self, read_write_key, key_strength):
+    def write_content_weighting(self, write_key, key_strength):
         '''
 
         :param memory: M, (N, W)
-        :param read_write_key: k, (W), R, desired content
+        :param write_key: k, (W), R, desired content
         :param key_strength: \beta, (1) [1, \infty)
         :param index: i, lookup on memory[i]
         :return: most similar weighted: C(M,k,\beta), (N, 1), (0,1)
         '''
 
         # TODO make sure the dimensions are correct.
-        similarties= cosine_similarity(read_write_key, self.memory)
+        similarties= cosine_similarity(self.memory,write_key,dim=-1)
         weighted=similarties*key_strength
-        return softmax(weighted)
+        return softmax(weighted,dim=0)
+
+    def read_content_weighting(self, read_keys, key_strength):
+        '''
+
+        :param memory: M, (N, W)
+        :param write_key: k, (W), R, desired content
+        :param key_strength: \beta, (1) [1, \infty)
+        :param index: i, lookup on memory[i]
+        :return: most similar weighted: C(M,k,\beta), (N, 1), (0,1)
+        '''
+
+        # TODO make sure the dimensions are correct.
+        similarties= cosine_similarity(self.memory, read_keys[0],dim=-1)
+        weighted=similarties*key_strength
+        return softmax(weighted,dim=0)
 
 
     # the highest freed will be retained? What does it mean?
@@ -58,9 +70,9 @@ class Memory(nn.Module):
         inside_bracket = 1 - read_weighting * free_gate
         return torch.prod(inside_bracket, 1)
 
-    #cumprod!
+    #cumprod! TODO
 
-    def update_usage_vector(self, previous_usage, write_wighting, memory_retention):
+    def update_usage_vector(self, write_wighting, memory_retention):
         '''
         I cannot understand what this vector is for.
         This should be a variable that records the usages history of a vector
@@ -72,7 +84,7 @@ class Memory(nn.Module):
         :return: u_t, (N), [0,1], the next usage,
         '''
 
-        ret= (previous_usage+write_wighting-previous_usage*write_wighting)*memory_retention
+        ret= (self.usage_vector+write_wighting-self.usage_vector*write_wighting)*memory_retention
         self.usage_vector=ret
         return ret
 
@@ -104,7 +116,7 @@ class Memory(nn.Module):
         return allocation_weighting.index_select(0, indices)
 
 
-    def write_weighting(self,memory, write_key, write_strength, allocation_gate, write_gate, allocation_weighting):
+    def write_weighting(self, write_key, write_strength, allocation_gate, write_gate, allocation_weighting):
         '''
         calculates the weighting on each memory cell when writing a new value in
 
@@ -118,7 +130,7 @@ class Memory(nn.Module):
         '''
 
         # measures content similarity
-        content_weighting=self.content_weighting(memory,write_key,write_strength)
+        content_weighting=self.content_weighting(self.memory,write_key,write_strength)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
         return write_weighting
 
@@ -132,7 +144,7 @@ class Memory(nn.Module):
         self.precedence_weighting=(1-sum_ww)*self.precedence_weighting+write_weighting
         return self.precedence_weighting
 
-    def update_temporal_linkage_matrix(self,write_weighting,precedence_weighting):
+    def update_temporal_linkage_matrix(self,write_weighting):
         '''
 
         :param write_weighting: (N)
@@ -142,7 +154,7 @@ class Memory(nn.Module):
 
         ww_j=write_weighting.unsqueeze(0).expand(param.N,-1)
         ww_i=write_weighting.unsqueeze(1).expand(-1,param.N)
-        p_j=precedence_weighting.unsqueeze(0).expand(param.N,-1)
+        p_j=self.precedence_weighting.unsqueeze(0).expand(param.N,-1)
 
         self.temporal_memory_linkage= (1 - ww_j - ww_i) * self.temporal_memory_linkage + ww_i * p_j
         return self.temporal_memory_linkage
@@ -203,14 +215,27 @@ class Memory(nn.Module):
         self.memory=self.memory*(torch.ones((param.N,param.W))-write_weighting*
                                  erase_vector.t())+write_weighting*write_vector.t()
 
-    def forward(self,read_keys,read_key_strengths,read_mode_vectors):
+    def forward(self,read_keys,read_key_strengths,read_mode_vectors,write_key,write_strength,allocation_gate,
+                write_gate,erase_vector,write_vector,free_gate):
         # read from memory first
+        #TODO list is not okay, and we are going to separate read and write weighting functions
         self.rwis=[]
         for read_key, read_key_strength, read_mode_vector in zip(read_keys,read_key_strengths,read_mode_vectors):
             self.rwis.append(self.read_weighting_i(self.forward_weighting(), self.backward_weighting()),
                             read_key,read_key_strength, read_mode_vector)
+        read_weighting=torch.Tensor(self.rwis)
         ri=[]
         for rwi in self.rwis:
             ri.append(self.read_memory_i(read_weighting_i=rwi))
         # write to memory
-        self.write_to_memory(write_weighting(),)
+        allocation_weighting=self.allocation_weighting(self.usage_vector)
+        write_weighting=self.write_weighting(write_key,write_strength,allocation_gate,write_gate,allocation_weighting)
+        self.write_to_memory(write_weighting=write_weighting,erase_vector=erase_vector,write_vector=write_vector)
+        # update_usage_vector
+        # memory_retentions=[]
+        # for rwi,fg  in zip(self.rwis,free_gates):
+        #     memory_retentions.append(self.memory_retention(free_gate=fg,read_weighting=rwi))
+        memory_retention=self.memory_retention(free_gate,read_weighting)
+        self.update_usage_vector(write_weighting,memory_retention)
+        self.update_temporal_linkage_matrix(write_weighting,self.precedence_weighting)
+        self.update_precedence_weighting(write_weighting)

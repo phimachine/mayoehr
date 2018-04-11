@@ -53,13 +53,13 @@ import archi.param as param
 #
 #
 
-'''
-Testing temporal linkage
-'''
+# '''
+# Testing temporal linkage
+# '''
 
-memory=Memory()
-write_weighting=torch.Tensor([1,2,3])
-precedence_weighting=torch.Tensor([5,6,7])
-memory.temporal_memory_linkage=torch.Tensor(param.N, param.N).fill_(1)
-val=memory.update_temporal_linkage_matrix(write_weighting,precedence_weighting)
-print(val)
+# memory=Memory()
+# write_weighting=torch.Tensor([1,2,3])
+# precedence_weighting=torch.Tensor([5,6,7])
+# memory.temporal_memory_linkage=torch.Tensor(param.N, param.N).fill_(1)
+# val=memory.update_temporal_linkage_matrix(write_weighting,precedence_weighting)
+# print(val)
