@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 import archi.param as param
+import math
+from torch.nn.modules.rnn import LSTM
 
 
 class Controller(nn.Module):
@@ -52,16 +54,20 @@ class RNN_Unit(nn.Module):
         self.W_forget=nn.Linear(param.s,param.x+2*param.h)
         self.b_forget=Parameter(torch.Tensor(param.s))
         self.W_output=nn.Linear(param.s,param.x+2*param.h)
-        self.b_output=nn.Parameter(torch.tensor(param.s))
+        self.b_output=nn.Parameter(torch.Tensor(param.s))
         self.W_state=nn.Linear(param.s,param.x+2*param.h)
-        self.b_state=nn.Parameter(torch.tensor(param.s))
+        self.b_state=nn.Parameter(torch.Tensor(param.s))
 
         # state or cell, initialized in place to zero.
         self.old_state=Parameter(torch.Tensor(param.s).zero_())
 
     def reset_parameters(self):
-        #TODO
-        pass
+        # initialized the way pytorch LSTM is initialized, from normal
+        # initial state and cell are empty
+        stdv= 1.0 /math.sqrt(param.h)
+        for weight in self.parameters():
+            weight.data.uniform_(-stdv,stdv)
+
 
     def forward(self,input_x,previous_time,previous_layer):
         # a hidden unit outputs a hidden output new_hidden.

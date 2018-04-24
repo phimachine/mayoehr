@@ -48,6 +48,7 @@ class Interface(nn.Module):
 
         # R free gates? [R] TODO what is this?
         free_gates=interface_input[last_index:last_index+param.R]
+
         last_index=last_index+param.R
         free_gates=self.Sigmoid(free_gates)
 
@@ -66,7 +67,7 @@ class Interface(nn.Module):
         read_modes=self.softmax(read_modes)
 
         # total dimension: param.W*param.R+3*param.W+5*param.R+3
-        # TODO I count a param.W feweer than it's supposed to have.
+        # TODO I count a param.W fewer than it's supposed to have.
         return read_keys, read_strengths, write_key, write_strength, \
                erase_vector, write_vector, free_gates, allocation_gate, \
                write_gate, read_modes
