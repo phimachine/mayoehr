@@ -44,3 +44,4 @@ class TestMemory(unittest.TestCase):
         print(memory.read_content_weighting(Variable(torch.Tensor([[1,1,1],[2,3,4]])),1))
         param.N=temp_param_N
         param.W=temp_param_W
+        # TODO

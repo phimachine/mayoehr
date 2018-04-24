@@ -231,10 +231,8 @@ class Memory(nn.Module):
         allocation_weighting=self.allocation_weighting(self.usage_vector)
         write_weighting=self.write_weighting(write_key,write_strength,allocation_gate,write_gate,allocation_weighting)
         self.write_to_memory(write_weighting=write_weighting,erase_vector=erase_vector,write_vector=write_vector)
-        # update_usage_vector
-        # memory_retentions=[]
-        # for rwi,fg  in zip(self.rwis,free_gates):
-        #     memory_retentions.append(self.memory_retention(free_gate=fg,read_weighting=rwi))
+
+        # update memory
         memory_retention=self.memory_retention(free_gate,read_weighting)
         self.update_usage_vector(write_weighting,memory_retention)
         self.update_temporal_linkage_matrix(write_weighting,self.precedence_weighting)
