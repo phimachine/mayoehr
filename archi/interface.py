@@ -44,7 +44,7 @@ class interface(nn.Module):
         write_vector=interface[last_index:last_index+param.W]
         last_index=last_index+param.W
 
-        # R free gates? [R] TODO what is this?
+        # R free gates? [R]
         free_gates=interface[last_index:last_index+param.R]
         last_index=last_index+param.R
         free_gates=nn.Sigmoid(free_gates)
@@ -64,7 +64,7 @@ class interface(nn.Module):
         read_modes=nn.Softmax(read_modes)
 
         # total dimension: param.W*param.R+3*param.W+5*param.R+3
-        # TODO I count a param.W feweer than it's supposed to have.
+        # TODO I count a param.W fewer than it's supposed to have.
         return read_keys, read_strengths, write_key, write_strength, \
                erase_vector, write_vector, free_gates, allocation_gate, \
                write_gate, read_modes

@@ -62,7 +62,6 @@ class Memory(nn.Module):
         :return: \psi, (N), simplex bounded
         '''
 
-
         # a free gate belongs to a read head.
         # a single read head weighting is a (N) dimensional simplex bounded value
 
@@ -70,7 +69,6 @@ class Memory(nn.Module):
         inside_bracket = 1 - read_weighting * free_gate
         return torch.prod(inside_bracket, 1)
 
-    #cumprod! TODO
 
     def update_usage_vector(self, write_wighting, memory_retention):
         '''
@@ -97,7 +95,6 @@ class Memory(nn.Module):
         Find the least used and second least used. Multiply their usages.
         Multiply the product with (1-usage of the third least), return.
 
-        TODO
         Do not confuse the sort order and the memory's natural location.
         Verify backprop.
 
