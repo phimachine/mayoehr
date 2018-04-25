@@ -65,12 +65,21 @@ class RNN_Unit(nn.Module):
         # state or cell, initialized in place to zero.
         self.old_state=Parameter(torch.Tensor(param.h).zero_())
 
+        # critical
+        self.reset_parameters()
+
     def reset_parameters(self):
         # initialized the way pytorch LSTM is initialized, from normal
         # initial state and cell are empty
+
+        # if this is not run, any output might be nan
+
         stdv= 1.0 /math.sqrt(param.h)
         for weight in self.parameters():
             weight.data.uniform_(-stdv,stdv)
+        for module in self.modules():
+            if isinstance(module,nn.Linear):
+                module.reset_parameters()
 
 
     def forward(self,input_x,previous_time,previous_layer):

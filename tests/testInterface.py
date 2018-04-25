@@ -49,6 +49,7 @@ class test_interface(unittest.TestCase):
         ctrl.reset_parameters()
         test_input=torch.Tensor([1,2,3,4,5,6,7,8,9,10])
         output,interface_vector=ctrl(test_input)
+
         interface=Interface()
         ret=interface(interface_vector)
         read_keys, read_strengths, write_key, write_strength, \
