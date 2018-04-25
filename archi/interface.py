@@ -1,5 +1,6 @@
 import torch.nn as nn
 import archi.param as param
+import torch.nn.functional as F
 
 class Interface(nn.Module):
     # an interface processor that takes all the interface output
@@ -9,7 +10,7 @@ class Interface(nn.Module):
         super(Interface, self).__init__()
         self.logSigmoid=nn.LogSigmoid()
         self.Sigmoid=nn.Sigmoid()
-        self.softmax=nn.Softmax()
+        self.softmax=nn.Softmax(dim=0)
         
     def forward(self, interface_input):
         # TODO no initiation on assigned tensor here, see if it works
