@@ -8,9 +8,10 @@ class testRNNUnit(unittest.TestCase):
     def test_RNN_Unit_forward(self):
         test_input=torch.Tensor([1,2,3,4,5,6,7,8,9,10])
         previous_time=torch.Tensor([1,2,3,4,5,6,7,8,9,10])
-        test_layer=torch.Tensor([1,2,3,4,5,6,7,8,9,10])
+        previous_layer=torch.Tensor([1,2,3,4,5,6,7,8,9,10])
 
-        RNN_Unit(test_input,previous_time,previous_layer)
+        ru=RNN_Unit()
+        ru(test_input,previous_time,previous_layer)
 
 class testController(unittest.TestCase):
 

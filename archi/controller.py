@@ -16,7 +16,7 @@ class Controller(nn.Module):
     def __init__(self):
         super(Controller, self).__init__()
         self.RNN_list=nn.ModuleList()
-        for _ in param.L:
+        for _ in range(param.L):
             self.RNN_list.append(RNN_Unit())
         self.hidden_previous_timestep=torch.Tensor(param.L*param.h).zero_()
         self.W_y=nn.Linear(param.L*param.h,param.v_t)
@@ -40,6 +40,9 @@ class Controller(nn.Module):
         interface=self.W_E(hidden_this_timestep)
         self.hidden_previous_timestep=hidden_this_timestep
         return output, interface
+
+    def reset_parameters(self):
+        pass
 
 
 class RNN_Unit(nn.Module):
@@ -73,7 +76,7 @@ class RNN_Unit(nn.Module):
         # a hidden unit outputs a hidden output new_hidden.
         # state also changes, but it's hidden inside a hidden unit.
 
-        semicolon_input=torch.cat(input_x,previous_time,previous_layer)
+        semicolon_input=torch.cat([input_x,previous_time,previous_layer])
 
         # 5 equations
         input_gate=torch.nn.Sigmoid(self.W_input(semicolon_input)+self.b_input)
