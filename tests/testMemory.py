@@ -50,17 +50,14 @@ class Test_Memory_Necessary(unittest.TestCase):
 
     def test_read_content_weighting(self):
         # two locations, width of three
-        temp_param_N=param.N
         param.N=2
-        temp_param_W=param.W
         param.W=3
+        param.R=2
         memory=Memory()
         memory.memory=torch.Tensor([[1,1,1],[-1,-1,-1]])
         read_keys=torch.Tensor([[1,1,1],[2,3,4]]).t()
         rcw=(memory.read_content_weighting(read_keys,torch.Tensor([0.5,1])))
-        param.N=temp_param_N
-        param.W=temp_param_W
-        self.assertTrue(rcw.data.size()==(2,2))
+        self.assertTrue(rcw.data.size()==(param.N, param.R))
 
     def test_forward_backward_weighting(self):
         memory=self.overwrite_memory()
@@ -73,11 +70,10 @@ class Test_Memory_Necessary(unittest.TestCase):
         memory=self.overwrite_memory()
         fw=memory.forward_weighting()
         bw=memory.backward_weighting()
-        read_keys=torch.Tensor([[1, 1, 1], [2, 3, 4]]).t()
-        read_key_strengths=torch.Tensor([9,1])
-        read_modes=torch.Tensor([[1,2,3],[2,3,4],[3,4,5],[4,5,6],[5,6,7],[6,7,8],[7,8,9]])
+        read_keys=torch.Tensor(param.W,param.R).normal_()
+        read_key_strengths=torch.Tensor(param.R).normal_()
+        read_modes=torch.Tensor(param.R,3).normal_()
         rw=memory.read_weighting(fw,bw,read_keys,read_key_strengths,read_modes)
-        print()
 
     def test_allocation_gate(self):
         pass

@@ -54,7 +54,7 @@ class Memory(nn.Module):
         :param read_keys: k^r_t, (W,R), R, desired content
         :param key_strength: \beta, (1) [1, \infty)
         :param index: i, lookup on memory[i]
-        :return: most similar weighted: C(M,k,\beta), (N, 1), (0,1)
+        :return: most similar weighted: C(M,k,\beta), (N, R), (0,1)
         '''
 
         # TODO make sure the dimensions are correct.
@@ -213,18 +213,20 @@ class Memory(nn.Module):
 
         :param forward_weighting: (N,R)
         :param backward_weighting: (N,R)
+        ****** read_content_weighting: C, (N,R), (0,1)
         :param read_keys: k^w_t, (W,R)
-        :param read_key_strengths:
+        :param read_key_strengths: (R)
         :param read_mode_weighting: /pi_t^i, (R,3)
-        :return:
+        :return: read_weightings: w^r_t, (N,R)
         '''
 
         content_weighting=self.read_content_weighting(read_keys,read_key_strengths)
-        read_weighting_i=read_mode_weighting[0]*backward_weighting+\
+        print()
+        read_weightings=read_mode_weighting[0]*backward_weighting+\
                          read_mode_weighting[1]*content_weighting+\
                          read_mode_weighting[2]*forward_weighting
 
-        return read_weighting_i
+        return read_weightings
 
     def read_memory(self):
         # this is currently the formula of a single read head TODO
