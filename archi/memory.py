@@ -16,10 +16,21 @@ class Memory(nn.Module):
         self.usage_vector=torch.Tensor(param.N).zero_()
         # p, (W), should be simplex bound
         self.precedence_weighting=torch.Tensor(param.N).zero_()
+        # (N,N)
         self.temporal_memory_linkage=torch.Tensor(param.N, param.N).zero_()
         #TODO will autograd alter memory? Should autograd alter memory?
+        # (N,W)
         self.memory=Variable(torch.Tensor(param.N,param.W),requires_grad=False)
-        self.rwi=None
+        # (N, R). Does this require gradient?
+        self.read_weightings=torch.Tensor(param.N,param.R)
+
+    def reset_parameters(self):
+        self.usage_vector.zero_()
+        self.precedence_weighting.zero_()
+        self.temporal_memory_linkage.zero_()
+        # I did not find reference here:
+        self.memory.zero_()
+        self.read_weightings.fill_(1)
 
     def write_content_weighting(self, write_key, key_strength):
         '''
@@ -36,28 +47,53 @@ class Memory(nn.Module):
         weighted=similarties*key_strength
         return softmax(weighted,dim=0)
 
-    def read_content_weighting(self, read_keys, key_strength):
+    def read_content_weighting(self, read_keys, key_strengths):
         '''
 
         :param memory: M, (N, W)
-        :param write_key: k, (W), R, desired content
+        :param read_keys: k^r_t, (W,R), R, desired content
         :param key_strength: \beta, (1) [1, \infty)
         :param index: i, lookup on memory[i]
         :return: most similar weighted: C(M,k,\beta), (N, 1), (0,1)
         '''
 
         # TODO make sure the dimensions are correct.
-        similarties= cosine_similarity(self.memory, read_keys[0],dim=-1)
-        weighted=similarties*key_strength
-        return softmax(weighted,dim=0)
+        '''
+            torch definition
+            def cosine_similarity(x1, x2, dim=1, eps=1e-8):
+                w12 = torch.sum(x1 * x2, dim)
+                w1 = torch.norm(x1, 2, dim)
+                w2 = torch.norm(x2, 2, dim)
+                return w12 / (w1 * w2).clamp(min=eps)
+        '''
 
+        outer=torch.matmul(self.memory,read_keys)
+        # print(outer)
+
+        # this is confusing. matrix[n] access nth row, not column
+        # this is very counter-intuitive, since columns have meaning,
+        # because they represent vectors
+        mem_norm=torch.norm(self.memory,p=2,dim=1)
+        # print("mem_norm:\n",mem_norm)
+        read_norm=torch.norm(read_keys,p=2,dim=0)
+        # print(read_norm)
+        mem_norm=mem_norm.unsqueeze(1)
+        read_norm=read_norm.unsqueeze(0)
+        normalizer=torch.matmul(mem_norm,read_norm)
+        # print("normalizer:\n",normalizer)
+
+        # if transposed then similiarities[0] refers to the first read key
+        similarties= outer/normalizer
+        weighted=similarties*key_strengths
+        # print("weighted:\n",weighted)
+        return softmax(weighted,dim=1)
 
     # the highest freed will be retained? What does it mean?
-    def memory_retention(self,free_gate, read_weighting):
+    def memory_retention(self,free_gate):
         '''
 
         :param free_gate: f, (R), [0,1], from interface vector
-        :param read_weighting: TODO calculated later, w, (N, R), simplex bounded,
+        :param read_weighting: w^r_t, (N, R), simplex bounded,
                note it's from previous timestep.
         :return: \psi, (N), simplex bounded
         '''
@@ -66,15 +102,13 @@ class Memory(nn.Module):
         # a single read head weighting is a (N) dimensional simplex bounded value
 
         # (N, R) TODO make sure this is pointwise multiplication, not matmul
-        inside_bracket = 1 - read_weighting * free_gate
+        inside_bracket = 1 - self.read_weightings * free_gate
         return torch.prod(inside_bracket, 1)
 
 
     def update_usage_vector(self, write_wighting, memory_retention):
         '''
-        I cannot understand what this vector is for.
-        This should be a variable that records the usages history of a vector
-        Penalized by the free gate.
+        TODO need to review the meaning of this vector
 
         :param previous_usage: u_{t-1}, (N), [0,1]
         :param write_wighting: w^w_{t-1}, (N), (inferred) sum to one
@@ -85,6 +119,7 @@ class Memory(nn.Module):
         ret= (self.usage_vector+write_wighting-self.usage_vector*write_wighting)*memory_retention
         self.usage_vector=ret
         return ret
+
 
     def allocation_weighting(self,usage_vector):
         '''
@@ -121,13 +156,13 @@ class Memory(nn.Module):
         :param write_key: k^w_t, (W), R, the key that is to be written
         :param write_strength: \beta, (1) bigger it is, stronger it concentrates the content weighting
         :param allocation_gate: g^a_t, (1), balances between write by content and write by allocation gate
-        :param write_gate: g^w_t, overall strength of the write signal
+        :param write_gate: g^w_t, (1), overall strength of the write signal
         :param allocation_weighting: see above.
         :return: write_weighting: (N), simplex bound
         '''
 
         # measures content similarity
-        content_weighting=self.content_weighting(self.memory,write_key,write_strength)
+        content_weighting=self.write_content_weighting(write_key,write_strength)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
         return write_weighting
 
@@ -159,46 +194,45 @@ class Memory(nn.Module):
     def backward_weighting(self):
         '''
 
-        :param read_weighting: only a single read_weighting from a read head
-        :return:
+        :return: backward_weighting: b^i_t, (N,R)
         '''
-        return self.temporal_memory_linkage*self.read_weighting_i
+        return torch.matmul(self.temporal_memory_linkage,self.read_weightings)
 
     def forward_weighting(self):
         '''
 
-        :param read_weighting_i:
-        :return:
+        :return: forward_weighting: f^i_t, (N,R)
         '''
-        return self.temporal_memory_linkage.t()*self.read_weighting_i
+        return torch.matmul(self.temporal_memory_linkage.t(),self.read_weightings)
 
     # TODO sparse update, skipped because it's for performance improvement.
 
-    def read_weighting_i(self,forward_weighting, backward_weighting, read_key_i,
-                         read_key_strength_i, read_mode_weighting):
+    def read_weighting(self,forward_weighting, backward_weighting, read_keys,
+                         read_key_strengths, read_mode_weighting):
         '''
 
-        :param forward_weighting:
-        :param backward_weighting:
-        :param content_weighting:
+        :param forward_weighting: (N,R)
+        :param backward_weighting: (N,R)
+        :param read_keys: k^w_t, (W,R)
+        :param read_key_strengths:
+        :param read_mode_weighting: /pi_t^i, (R,3)
         :return:
         '''
 
-        content_weighting=self.content_weighting(read_key_i,read_key_strength_i)
+        content_weighting=self.read_content_weighting(read_keys,read_key_strengths)
         read_weighting_i=read_mode_weighting[0]*backward_weighting+\
                          read_mode_weighting[1]*content_weighting+\
                          read_mode_weighting[2]*forward_weighting
 
         return read_weighting_i
 
-    def read_memory_i(self, read_weighting_i):
+    def read_memory(self):
         # this is currently the formula of a single read head TODO
         '''
 
-        :param read_weighting:
         :return: read_vectors: r^i_t
         '''
-        return self.memory.t()*read_weighting_i
+        return self.memory.t()*self.read_weightings
 
     def write_to_memory(self,write_weighting,erase_vector,write_vector):
         '''

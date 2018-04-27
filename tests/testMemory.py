@@ -4,7 +4,21 @@ import archi.param as param
 import unittest
 from torch.autograd import Variable
 
-class TestMemory(unittest.TestCase):
+class Test_Memory_Necessary(unittest.TestCase):
+    # includes a set of necessary tests
+    # there is no way I know beforehand what the values should be
+    # step over the debugger and see for yourself
+    
+    def overwrite_memory(self):
+        temp_param_N=param.N
+        param.N=2
+        temp_param_W=param.W
+        param.W=3
+        memory=Memory()
+        memory.reset_parameters()
+        memory.memory=torch.Tensor([[1,1,1],[-1,-1,-1]])
+        memory.temporal_memory_linkage=torch.Tensor([[1,7],[7,1]])
+        return memory
 
     def test_update_temporal_linkage_matrix(self):
         memory=Memory()
@@ -35,13 +49,48 @@ class TestMemory(unittest.TestCase):
         param.W=temp_param_W
 
     def test_read_content_weighting(self):
+        # two locations, width of three
         temp_param_N=param.N
         param.N=2
         temp_param_W=param.W
         param.W=3
         memory=Memory()
-        memory.memory=Variable(torch.Tensor([[1,1,1],[-1,-1,-1]]))
-        print(memory.read_content_weighting(Variable(torch.Tensor([[1,1,1],[2,3,4]])),1))
+        memory.memory=torch.Tensor([[1,1,1],[-1,-1,-1]])
+        read_keys=torch.Tensor([[1,1,1],[2,3,4]]).t()
+        rcw=(memory.read_content_weighting(read_keys,torch.Tensor([0.5,1])))
         param.N=temp_param_N
         param.W=temp_param_W
-        # TODO
+        self.assertTrue(rcw.data.size()==(2,2))
+
+    def test_forward_backward_weighting(self):
+        memory=self.overwrite_memory()
+        bw=memory.backward_weighting()
+        fw=memory.forward_weighting()
+        self.assertTrue(fw == torch.Tensor([[8, 8, 8, 8, 8, 8, 8], [8, 8, 8, 8, 8, 8, 8, 8]]))
+        self.assertTrue(bw == torch.Tensor([[8, 8, 8, 8, 8, 8, 8], [8, 8, 8, 8, 8, 8, 8, 8]]))
+
+    def test_read_weighting(self):
+        memory=self.overwrite_memory()
+        fw=memory.forward_weighting()
+        bw=memory.backward_weighting()
+        read_keys=torch.Tensor([[1, 1, 1], [2, 3, 4]]).t()
+        read_key_strengths=torch.Tensor([9,1])
+        read_modes=torch.Tensor([[1,2,3],[2,3,4],[3,4,5],[4,5,6],[5,6,7],[6,7,8],[7,8,9]])
+        rw=memory.read_weighting(fw,bw,read_keys,read_key_strengths,read_modes)
+        print()
+
+    def test_allocation_gate(self):
+        pass
+
+    def test_write_weighting(self):
+        memory=self.overwrite_memory()
+        write_key=torch.Tensor([1,2,3])
+        write_strength=0.5
+        allocation_gate=0.56
+        write_gate=0.47
+        allocation_weighting=memory.write_content_weighting(write_key,write_strength)
+        ww=memory.write_weighting(write_key,write_strength,allocation_gate,
+                                  write_gate,allocation_weighting)
+
+    def test_write_to_memory_i(self,read_weighting_i):
+        pass
