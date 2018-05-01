@@ -8,6 +8,7 @@ import math
 from torch.nn.modules import LSTM
 
 class test_interface(unittest.TestCase):
+
     def test_forward_necessary(self):
         # tests some necessary but insufficient range constraints
         interface_dimension_count=param.W*param.R+param.R+param.W+1+param.W+\
