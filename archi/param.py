@@ -28,6 +28,6 @@ W=5
 R=7
 E_t=W*R+3*W+5*R+3
 
-# Total memory locations count
+# Total memory address count
 # Total memory block (N, W)
 N=3

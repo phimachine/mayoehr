@@ -111,8 +111,8 @@ class Memory(nn.Module):
         TODO need to review the meaning of this vector
 
         :param previous_usage: u_{t-1}, (N), [0,1]
-        :param write_wighting: w^w_{t-1}, (N), (inferred) sum to one
-        :param memory_retention: \psi_t, (N), simplex bounded
+        :param write_wighting: w^w_{t-1}, (N), simplex bound
+        :param memory_retention: \psi_t, (N), simplex bound
         :return: u_t, (N), [0,1], the next usage,
         '''
 
@@ -121,7 +121,7 @@ class Memory(nn.Module):
         return ret
 
 
-    def allocation_weighting(self,usage_vector):
+    def allocation_weighting(self):
         '''
         Sorts the memory by usages first.
         Then perform calculation depending on the sort order.
@@ -137,7 +137,8 @@ class Memory(nn.Module):
         :return:
         '''
 
-        sorted, indices= usage_vector.sort()
+        # this should not be an in place sort.
+        sorted, indices= self.usage_vector.sort()
         cum_prod=torch.cumprod(sorted,0)
         # notice the index on the product
         # TODO this does not deal with batch inputs
@@ -207,8 +208,8 @@ class Memory(nn.Module):
 
     # TODO sparse update, skipped because it's for performance improvement.
 
-    def read_weighting(self,forward_weighting, backward_weighting, read_keys,
-                         read_key_strengths, read_mode_weighting):
+    def update_read_weightings(self,forward_weighting, backward_weighting, read_keys,
+                         read_strengths, read_modes):
         '''
 
         :param forward_weighting: (N,R)
@@ -216,17 +217,21 @@ class Memory(nn.Module):
         ****** read_content_weighting: C, (N,R), (0,1)
         :param read_keys: k^w_t, (W,R)
         :param read_key_strengths: (R)
-        :param read_mode_weighting: /pi_t^i, (R,3)
+        :param read_modes: /pi_t^i, (R,3)
         :return: read_weightings: w^r_t, (N,R)
         '''
 
-        content_weighting=self.read_content_weighting(read_keys,read_key_strengths)
-        print()
-        read_weightings=read_mode_weighting[0]*backward_weighting+\
-                         read_mode_weighting[1]*content_weighting+\
-                         read_mode_weighting[2]*forward_weighting
-
-        return read_weightings
+        content_weighting=self.read_content_weighting(read_keys,read_strengths)
+        # has dimension (3,N,R)
+        all_weightings=torch.stack([backward_weighting,content_weighting,forward_weighting])
+        # permute to dimension (R,N,3)
+        all_weightings=all_weightings.permute(2,1,0)
+        # this is becuase torch.matmul is designed to iterate all dimension excluding the last two
+        # dimension (R,3,1)
+        read_modes=read_modes.unsqueeze(2)
+        # dimension (N,R)
+        self.read_weightings=torch.matmul(all_weightings,read_modes).squeeze(2).t()
+        return self.read_weightings
 
     def read_memory(self):
         # this is currently the formula of a single read head TODO
@@ -234,39 +239,69 @@ class Memory(nn.Module):
 
         :return: read_vectors: r^i_t
         '''
-        return self.memory.t()*self.read_weightings
+        return torch.matmul(self.memory.t(),self.read_weightings)
 
     def write_to_memory(self,write_weighting,erase_vector,write_vector):
         '''
 
         :param write_weighting: the strength of writing
-        :param erase_vector:
-        :param write_vector: what to write, a cat picture, e.g.
+        :param erase_vector: e_t, (W), [0,1]
+        :param write_vector: w^w_t, (W), R
         :return:
         '''
 
-        self.memory=self.memory*(torch.ones((param.N,param.W))-write_weighting*
-                                 erase_vector.t())+write_weighting*write_vector.t()
+        term1_2=torch.ger(write_weighting,erase_vector)
+        term1=self.memory*(torch.ones((param.N,param.W))-term1_2)
+        term2=torch.ger(write_weighting,write_vector)
 
-    def forward(self,read_keys,read_key_strengths,read_mode_vectors,write_key,write_strength,allocation_gate,
-                write_gate,erase_vector,write_vector,free_gate):
+        self.memory=term1+term2
+
+
+    def forward(self,read_keys, read_strengths, write_key, write_strength,
+                erase_vector, write_vector, free_gates, allocation_gate,
+                write_gate, read_modes):
         # read from memory first
-        #TODO list is not okay, and we are going to separate read and write weighting functions
-        self.rwis=[]
-        for read_key, read_key_strength, read_mode_vector in zip(read_keys,read_key_strengths,read_mode_vectors):
-            self.rwis.append(self.read_weighting_i(self.forward_weighting(), self.backward_weighting()),
-                            read_key,read_key_strength, read_mode_vector)
-        read_weighting=torch.Tensor(self.rwis)
-        ri=[]
-        for rwi in self.rwis:
-            ri.append(self.read_memory_i(read_weighting_i=rwi))
-        # write to memory
-        allocation_weighting=self.allocation_weighting(self.usage_vector)
-        write_weighting=self.write_weighting(write_key,write_strength,allocation_gate,write_gate,allocation_weighting)
-        self.write_to_memory(write_weighting=write_weighting,erase_vector=erase_vector,write_vector=write_vector)
-
-        # update memory
-        memory_retention=self.memory_retention(free_gate,read_weighting)
-        self.update_usage_vector(write_weighting,memory_retention)
-        self.update_temporal_linkage_matrix(write_weighting,self.precedence_weighting)
+        read_vectors=self.read_memory()
+        # then write
+        allocation_weighting=self.allocation_weighting()
+        write_weighting=self.write_weighting(write_key,write_strength,
+                                             allocation_gate,write_gate,allocation_weighting)
+        self.write_to_memory(write_weighting,erase_vector,write_vector)
+        # update some
+        memory_retention = self.memory_retention(free_gates)
+        self.update_usage_vector(write_weighting, memory_retention)
+        self.update_temporal_linkage_matrix(write_weighting)
         self.update_precedence_weighting(write_weighting)
+
+        forward_weighting=self.forward_weighting()
+        backward_weighting=self.backward_weighting()
+
+        self.update_read_weightings(forward_weighting,backward_weighting,read_keys,read_strengths,
+                    read_modes)
+
+        return read_vectors
+
+
+        # OLD CODE:
+        #
+        # #TODOO list is not okay, and we are going to separate read and write weighting functions
+        # read_weightings=self.read_weightings
+        # self.rwis=[]
+        # for read_key, read_key_strength, read_mode_vector in zip(read_keys,read_strengths,read_modes):
+        #     self.rwis.append(self.read_weighting_i(self.forward_weighting(), self.backward_weighting()),
+        #                     read_key,read_key_strength, read_modes)
+        # read_weighting=torch.Tensor(self.rwis)
+        # ri=[]
+        # for rwi in self.rwis:
+        #     ri.append(self.read_memory_i(read_weighting_i=rwi))
+        #
+        # # write to memory
+        # allocation_weighting=self.allocation_weighting(self.usage_vector)
+        # write_weighting=self.write_weighting(write_key,write_strength,allocation_gate,write_gate,allocation_weighting)
+        # self.write_to_memory(write_weighting=write_weighting,erase_vector=erase_vector,write_vector=write_vector)
+        #
+        # # update memory
+        # memory_retention=self.memory_retention(free_gate,read_weighting)
+        # self.update_usage_vector(write_weighting,memory_retention)
+        # self.update_temporal_linkage_matrix(write_weighting,self.precedence_weighting)
+        # self.update_precedence_weighting(write_weighting)

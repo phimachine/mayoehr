@@ -63,9 +63,10 @@ class Interface(nn.Module):
         last_index=last_index+1
         write_gate=self.Sigmoid(write_gate)
 
-        # read modes [R]
-        read_modes=interface_input[last_index:last_index+param.R]
+        # read modes [R,3]
+        read_modes=interface_input[last_index:last_index+param.R*3]
         read_modes=self.softmax(read_modes)
+        read_modes=read_modes.view(param.R,3)
 
         # total dimension: param.W*param.R+3*param.W+5*param.R+3
         # TODO I count a param.W fewer than it's supposed to have.
