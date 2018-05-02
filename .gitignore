@@ -1,5 +1,5 @@
 .idea
-
+training/data/
 # Compiled Lua sources
 luac.out
 

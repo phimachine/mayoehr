@@ -31,26 +31,26 @@ def create_dictionary(babi_sets):
             line = line.replace(',', ' ')
 
             for word in line.split():
-                if not word.lower() in lexicons_dict and word.isalpha():
+                if not word.lower() in lexicons_dict and not word.isdigit():
                     lexicons_dict[word.lower()] = id_counter
                     id_counter += 1
-    # around 22
+    lexicons_dict["-"]=id_counter
     return lexicons_dict
 
-def encode_data(babi_sets, lexicons_dictionary, length_limit=None):
+def encode_data(babi_sets, lexicons_dictionary):
 
-    files = {}
     story_inputs = None
     story_outputs = None
     stories_lengths = []
-    answers_flag = False  # a flag to specify when to put data into outputs list
-    limit = length_limit if not length_limit is None else float("inf")
+
+    set_inputs = []
+    set_outputs = []
 
     for story in babi_sets:
 
         for line in story:
 
-            # first seperate . and ? away from words into seperate lexicons
+            # first seperate . and ? away from words into separate lexicons
             line = line.replace('.', ' .')
             line = line.replace('?', ' ?')
             line = line.replace(',', ' ')
@@ -61,13 +61,10 @@ def encode_data(babi_sets, lexicons_dictionary, length_limit=None):
 
                 if word == '1' and i == 0:
                     # beginning of a new story
-                    if not story_inputs is None:
-                        stories_lengths.append(len(story_inputs))
-                        if len(story_inputs) <= limit:
-                            files[filename].append({
-                                'inputs':story_inputs,
-                                'outputs': story_outputs
-                            })
+                    if story_inputs!=None:
+                        set_inputs.append(story_inputs)
+                        set_outputs.append(story_outputs)
+
                     story_inputs = []
                     story_outputs = []
 
@@ -82,10 +79,10 @@ def encode_data(babi_sets, lexicons_dictionary, length_limit=None):
                     if not answers_flag:
                         answers_flag = (word == '?')
 
-
     print ("\rEncoding Data ... Done!")
-    return files, stories_lengths
+    return set_inputs, set_outputs, stories_lengths
 
 if __name__=="__main__":
-    print(list_of_babi(10,10))
-    create_dictionary(list_of_babi(10,1000))
+    lob=list_of_babi(10,1000)
+    dit=create_dictionary(lob)
+    set_inputs, set_outputs, stories_lengths=encode_data(lob,dit)
