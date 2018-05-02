@@ -46,7 +46,6 @@ def encode_data(babi_sets, lexicons_dictionary, length_limit=None):
     answers_flag = False  # a flag to specify when to put data into outputs list
     limit = length_limit if not length_limit is None else float("inf")
 
-
     for story in babi_sets:
 
         for line in story:
