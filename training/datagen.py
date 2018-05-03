@@ -24,7 +24,6 @@ def babi_command(task, sets, write_to_disk=True,train=True, files_count=1):
 
         process = subprocess.Popen(babiGen.split(), stdout=subprocess.PIPE)
         output, error = process.communicate()
-        print('generated file '+ str(files_count))
 
 def list_of_babi(task, sets):
     raw_output=babi_command(task, sets).decode("utf-8")
@@ -67,7 +66,7 @@ def create_dictionary(files_list):
     return lexicons_dict
 
 
-def encode_data(files_list, lexicons_dictionary, length_limit=None):
+def encode_data(files_list, lexicons_dictionary, padding_to_length=None):
     """
     encodes the dataset into its numeric form given a constructed dictionary
 
@@ -87,8 +86,12 @@ def encode_data(files_list, lexicons_dictionary, length_limit=None):
     story_outputs = None
     stories_lengths = []
     answers_flag = False  # a flag to specify when to put data into outputs list
-    limit = length_limit if not length_limit is None else float("inf")
+    limit = padding_to_length if not padding_to_length is None else float("inf")
 
+    # add a padding symbol
+    plus_index=len(lexicons_dictionary)
+    # lexicons_dictionary["+"]=plus_index
+    # lexicons_dictionary["="]=plus_index+1
 
     for indx, filename in enumerate(files_list):
 
@@ -109,8 +112,14 @@ def encode_data(files_list, lexicons_dictionary, length_limit=None):
                     if word == '1' and i == 0:
                         # beginning of a new story
                         if not story_inputs is None:
-                            stories_lengths.append(len(story_inputs))
-                            if len(story_inputs) <= limit:
+                            story_len=len(story_inputs)
+                            stories_lengths.append(story_len)
+                            if story_len<= limit:
+                                # if below limit, padding starts
+                                # input is a symbol &
+                                story_inputs+=[plus_index]*(limit-story_len)
+                                story_outputs+=[plus_index+1]*(limit-story_len)
+
                                 files[filename].append({
                                     'inputs':story_inputs,
                                     'outputs': story_outputs
@@ -146,8 +155,8 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
     list_of_seq_len=[]
 
     for i in range(batch_size):
-
-        # this is an array of 152 elements, with hyphen
+        # input_vector is a story.
+        # this is an array of ~120 elements, with hyphen
         input_vec = np.array(sample[i]['inputs'], dtype=np.float32)
         # this is an array that will have 152 elements, wihtout hyphen
         output_vec = np.array(sample[i]['inputs'], dtype=np.float32)
@@ -157,6 +166,7 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
         # target_mask is where an answer is required
         target_mask = (input_vec == target_code)
         output_vec[target_mask] = sample[0]['outputs']
+        # weights is where the hyphen is and requires an answer.
         weights_vec[target_mask] = 1.0
 
         input_vec = np.array([onehot(code, word_space_size) for code in input_vec])
@@ -184,16 +194,20 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
 
 def write_babi_to_disk(task, sets, train_files_count=1):
     babi_command(task,sets,True,train=True, files_count=train_files_count)
-    babi_command(task,sets,True,train=False, files_count=int(train_files_count/10))
+    babi_command(task,sets,True,train=False, files_count=int(train_files_count/5))
 
-def datagen(batch_size):
+def datagen(batch_size,length_limit=150,padding=True):
     # batch processing has problem, because story length is uneven.
 
     task_dir = os.path.dirname(abspath(__file__))
-    data_dir = "./data"
+    data_dir = "."
     joint_train = True
-    length_limit = None
     files_list = []
+
+    if batch_size!=1 and padding==False:
+        # if batch is wanted but padding is not allowed
+        raise("You must pad the input if you want to use batch.\n"
+              "Story length is uneven.")
 
     if not exists(join(task_dir, 'data')):
         mkdir(join(task_dir, 'data'))
@@ -202,6 +216,7 @@ def datagen(batch_size):
     if data_dir is None:
         raise ValueError("data_dir argument cannot be None")
 
+    print(os.getcwd())
     for entryname in listdir(data_dir):
         entry_path = join(data_dir, entryname)
         if isfile(entry_path):
@@ -263,5 +278,5 @@ def datagen(batch_size):
 
 
 if __name__ == '__main__':
-    # write_babi_to_disk(10, 2000, train_files_count=5)
-    datagen(100)
+    write_babi_to_disk(10, 1200, train_files_count=5)
+    datagen(5)
