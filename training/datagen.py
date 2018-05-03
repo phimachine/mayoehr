@@ -25,6 +25,7 @@ def babi_command(task, sets, write_to_disk=True,train=True, files_count=1):
         process = subprocess.Popen(babiGen.split(), stdout=subprocess.PIPE)
         output, error = process.communicate()
         print('generated file '+ str(files_count))
+    os.chdir("../")
 
 def list_of_babi(task, sets):
     raw_output=babi_command(task, sets).decode("utf-8")
@@ -202,6 +203,7 @@ def datagen(batch_size):
     if data_dir is None:
         raise ValueError("data_dir argument cannot be None")
 
+    print(os.getcwd())
     for entryname in listdir(data_dir):
         entry_path = join(data_dir, entryname)
         if isfile(entry_path):
