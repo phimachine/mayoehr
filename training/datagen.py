@@ -1,4 +1,5 @@
 # adapted from github.com/Mostafa-Samir/DNC-tensorflow
+# added padding functionalities for batch_processing
 
 import sys
 import pickle
@@ -71,6 +72,7 @@ def create_dictionary(files_list):
 def encode_data(files_list, lexicons_dictionary, padding_to_length=None):
     """
     encodes the dataset into its numeric form given a constructed dictionary
+    padding the vectors to the padding_to_length, by adding dummy symbols in the end
 
     Parameters:
     ----------
@@ -88,12 +90,12 @@ def encode_data(files_list, lexicons_dictionary, padding_to_length=None):
     story_outputs = None
     stories_lengths = []
     answers_flag = False  # a flag to specify when to put data into outputs list
+
     limit = padding_to_length if not padding_to_length is None else float("inf")
 
     # add a padding symbol
     plus_index=len(lexicons_dictionary)
-    # lexicons_dictionary["+"]=plus_index
-    # lexicons_dictionary["="]=plus_index+1
+    lexicons_dictionary["+"]=plus_index
 
     for indx, filename in enumerate(files_list):
 
@@ -120,7 +122,6 @@ def encode_data(files_list, lexicons_dictionary, padding_to_length=None):
                                 # if below limit, padding starts
                                 # input is a symbol &
                                 story_inputs+=[plus_index]*(limit-story_len)
-                                story_outputs+=[plus_index+1]*(limit-story_len)
 
                                 files[filename].append({
                                     'inputs':story_inputs,
@@ -167,7 +168,7 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
 
         # target_mask is where an answer is required
         target_mask = (input_vec == target_code)
-        output_vec[target_mask] = sample[0]['outputs']
+        output_vec[target_mask] = sample[i]['outputs']
         # weights is where the hyphen is and requires an answer.
         weights_vec[target_mask] = 1.0
 
@@ -184,8 +185,8 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
     input_vec=np.stack(list_of_input_vec)
     output_vec=np.stack(list_of_output_vec)
     seq_len=list_of_seq_len[0]
-    if not all(seq_len==seq for seq in list_of_seq_len):
-        raise("Sequence length not even.")
+    # if not all(seq_len==seq for seq in list_of_seq_len):
+    #     raise("Sequence length not even.")
     weights_vec=np.stack(list_of_weight_vec)
     return (
         np.reshape(input_vec, (batch_size, -1, word_space_size)),
@@ -198,22 +199,22 @@ def write_babi_to_disk(task, sets, train_files_count=1):
     babi_command(task,sets,True,train=True, files_count=train_files_count)
     babi_command(task,sets,True,train=False, files_count=int(train_files_count/5))
 
-def datagen(batch_size,length_limit=150,padding=True):
-    # batch processing has problem, because story length is uneven.
+def datagen(batch_size,length_limit=150):
+    '''
+    The main function to generate data.
+
+    :param batch_size:
+    :param length_limit: padding the input/output vectors to length.
+    :return:
+    '''
 
     task_dir = os.path.dirname(abspath(__file__))
-    data_dir = "."
+    data_dir = "./data"
     joint_train = True
     files_list = []
 
-    if batch_size!=1 and padding==False:
-        # if batch is wanted but padding is not allowed
-        raise("You must pad the input if you want to use batch.\n"
-              "Story length is uneven.")
-
     if not exists(join(task_dir, 'data')):
         mkdir(join(task_dir, 'data'))
-
 
     if data_dir is None:
         raise ValueError("data_dir argument cannot be None")
@@ -273,12 +274,11 @@ def datagen(batch_size,length_limit=150,padding=True):
 
     sample = np.random.choice(data, batch_size)
     input_data, target_output, seq_len, weights = prepare_sample(sample, lexicon_dict['-'], word_space_size, batch_size)
-    print("examination")
 
     # (batch_size, story_word_count, one_hot_dictionary_size)
     return input_data,target_output,seq_len,weights
 
 
 if __name__ == '__main__':
-    write_babi_to_disk(10, 1200, train_files_count=5)
-    datagen(5)
+    #write_babi_to_disk(10, 1200, train_files_count=5)
+    input_data, target_output, seq_len, weights=datagen(5)
