@@ -23,16 +23,16 @@ class Controller(nn.Module):
         self.W_E=nn.Linear(param.L*param.h,param.E_t)
 
     def forward(self, input_x):
-        # the units cannot be calculated with a big matrix.
-        # since each unit will need previous unit's output, the calculation must
-        # be time-differentiated
-        # not sure whether this is the most efficient loop implementation.
+        '''
+
+        :param input_x: raw input concatenated with flattened memory input
+        :return:
+        '''
         hidden_previous_layer=torch.Tensor(param.h).zero_()
         hidden_this_timestep=torch.Tensor(param.L,param.h)
         for i in range(param.L):
             hidden_output=self.RNN_list[i](input_x, self.hidden_previous_timestep[i],
                              hidden_previous_layer)
-            # TODO verify this line, see if slicing is possible. torch.narrow()
             hidden_this_timestep[i]=hidden_output
             hidden_previous_layer=hidden_output
 
@@ -43,8 +43,15 @@ class Controller(nn.Module):
         return output, interface
 
     def reset_parameters(self):
-        pass
+        for module in self.RNN_list:
+            # this should iterate over RNN_Units only
+            module.reset_parameters()
+        self.W_y.reset_parameters()
+        self.W_E.reset_parameters()
 
+    def new_sequence_reset(self):
+        # TODO review this function. Is there more that need to be reset with a new seq?
+        self.hidden_previous_timestep.zero_()
 
 class RNN_Unit(nn.Module):
     """
@@ -77,9 +84,9 @@ class RNN_Unit(nn.Module):
         stdv= 1.0 /math.sqrt(param.h)
         for weight in self.parameters():
             weight.data.uniform_(-stdv,stdv)
-        for module in self.modules():
-            if isinstance(module,nn.Linear):
-                module.reset_parameters()
+        for module in self.children():
+            # do not use self.modules(), because it would be recursive
+            module.reset_parameters()
 
 
     def forward(self,input_x,previous_time,previous_layer):

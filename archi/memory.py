@@ -234,11 +234,14 @@ class Memory(nn.Module):
         return self.read_weightings
 
     def read_memory(self):
-        # this is currently the formula of a single read head TODO
         '''
 
-        :return: read_vectors: r^i_t
+        memory: (N,W)
+        read weightings: (N,R)
+
+        :return: read_vectors: [r^i_R], (W,R)
         '''
+
         return torch.matmul(self.memory.t(),self.read_weightings)
 
     def write_to_memory(self,write_weighting,erase_vector,write_vector):
@@ -260,6 +263,10 @@ class Memory(nn.Module):
     def forward(self,read_keys, read_strengths, write_key, write_strength,
                 erase_vector, write_vector, free_gates, allocation_gate,
                 write_gate, read_modes):
+
+        # return read_vectors: [r^i_R], (W,R)
+
+
         # read from memory first
         read_vectors=self.read_memory()
         # then write

@@ -13,8 +13,6 @@ class Interface(nn.Module):
         self.softmax=nn.Softmax(dim=0)
         
     def forward(self, interface_input):
-        # TODO no initiation on assigned tensor here, see if it works
-
         last_index=param.W*param.R
 
         # Read keys, each W dimensions, [W*R] in total
@@ -69,19 +67,6 @@ class Interface(nn.Module):
         read_modes=read_modes.view(param.R,3)
 
         # total dimension: param.W*param.R+3*param.W+5*param.R+3
-        # TODO I count a param.W fewer than it's supposed to have.
         return read_keys, read_strengths, write_key, write_strength, \
                erase_vector, write_vector, free_gates, allocation_gate, \
                write_gate, read_modes
-
-
-# Maybe not, this means all the values will be stored in objects. No.
-# class Detupler(interface):
-#
-#     def __init__(self,interface):
-#         self.read_keys, self.read_strengths, self.write_key, self.write_strength, \
-#         self.erase_vector, self.write_vector, self.free_gates, self.allocation_gate, \
-#         self.write_gate, self.read_modes = interface
-#
-#
-

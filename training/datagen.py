@@ -199,12 +199,12 @@ def write_babi_to_disk(task, sets, train_files_count=1):
     babi_command(task,sets,True,train=True, files_count=train_files_count)
     babi_command(task,sets,True,train=False, files_count=int(train_files_count/5))
 
-def datagen(batch_size,length_limit=150):
+def gendata(batch_size, story_limit=150):
     '''
     The main function to generate data.
 
     :param batch_size:
-    :param length_limit: padding the input/output vectors to length.
+    :param story_limit: padding the input/output vectors to length.
     :return:
     '''
 
@@ -233,7 +233,7 @@ def datagen(batch_size,length_limit=150):
     lexicon_dictionary['.'] = lexicon_count + 1
     lexicon_dictionary['-'] = lexicon_count + 2
 
-    encoded_files, stories_lengths = encode_data(files_list, lexicon_dictionary, length_limit)
+    encoded_files, stories_lengths = encode_data(files_list, lexicon_dictionary, story_limit)
 
     processed_data_dir = join(task_dir, 'data', basename(normpath(data_dir)))
     train_data_dir = join(processed_data_dir, 'train')
@@ -281,4 +281,4 @@ def datagen(batch_size,length_limit=150):
 
 if __name__ == '__main__':
     #write_babi_to_disk(10, 1200, train_files_count=5)
-    input_data, target_output, seq_len, weights=datagen(5)
+    input_data, target_output, seq_len, weights=gendata(5)

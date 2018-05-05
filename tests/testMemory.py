@@ -102,7 +102,6 @@ class Test_Memory_Necessary(unittest.TestCase):
     def test_write_to_memory(self):
         memory=self.overwrite_memory()
         write_key=torch.Tensor([1,2,3])
-        write_strength=0.5
         allocation_gate=0.56
         write_gate=0.47
         allocation_weighting=memory.write_content_weighting(write_key,write_strength)
@@ -131,3 +130,4 @@ class Test_Memory_Necessary(unittest.TestCase):
         memory(read_keys, read_strengths, write_key, write_strength,
                erase_vector, write_vector, free_gates, allocation_gate,
                write_gate, read_modes)
+        print("controller, interface, memory flow is done")
