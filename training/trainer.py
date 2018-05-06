@@ -3,15 +3,16 @@ from archi.computer import Computer
 import torch
 import numpy
 
-def train(model, criterion, optimizer,story_limit):
+def train(computer, criterion, optimizer, story_limit):
 
     for epoch in range(epochs_count):
 
-        for batch in epoch_batches_count:
+        for batch in range(epoch_batches_count):
+            # TODO this needs to be separated from training.
             input_data, target_output, seq_len, weights=gendata(batch_size,story_limit)
 
-            for step in story_limit:
-
+            for timestep in story_limit:
+                running_loss = 0
                 # feed the batch into the machine
                 # Expected input dimension: (150, 27)
                 # output: (150,27)
@@ -19,7 +20,13 @@ def train(model, criterion, optimizer,story_limit):
                 # TODO see whether the batch is truly independent: it should
                 # usually batch does not interfere with each other's logic
 
-                output=model()
+                # slice data
+
+                batch_output_of_same_timestep=computer(batch_input_of_same_timestep)
+                running_loss+=criterion(batch_output_of_same_timestep,batch_target_output_of_same_timestep)
+                running_loss.backward()
+                optimizer.step()
+            computer.new_sequence_reset()
 
 
 
@@ -30,7 +37,9 @@ if __name__=="__main__":
     epoch_batches_count=1024
     epochs_count=100
     lr=1e-3
-    model=Computer()
-    model.reset_parameters()
+    computer=Computer()
+    computer.reset_parameters()
     criterion=torch.nn.modules.loss.CrossEntropyLoss()
     optimizer=torch.optim.Adam(lr=lr)
+
+    train(computer,criterion,optimizer,story_limit)
