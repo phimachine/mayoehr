@@ -25,49 +25,44 @@ class Test_Memory_Necessary(unittest.TestCase):
         self.assertTrue(val.size()==(param.bs, param.N, param.N))
 
     def test_write_content_weighting(self):
-        temp_param_N = param.N
-        param.N = 2
-        temp_param_W = param.W
-        param.W = 3
-        memory = Memory()
-        memory.memory=Variable(torch.Tensor([[1,1,1],[-1,-1,-1]]))
-        val=memory.write_content_weighting(Variable(torch.Tensor([1,1,1])),1)
-        self.assertTrue(val.equal(torch.nn.functional.softmax(Variable(torch.Tensor([1,-1])),dim=0)))
-        param.N=temp_param_N
-        param.W=temp_param_W
+        memory = self.overwrite_memory()
+        val=memory.write_content_weighting(torch.Tensor(param.bs,param.W),torch.Tensor(param.bs))
+        self.assertTrue(val.size()==(param.bs,param.N))
 
     def test_read_content_weighting(self):
         # two locations, width of three
-        param.N=2
-        param.W=3
-        param.R=2
-        memory=Memory()
-        memory.memory=torch.Tensor([[1,1,1],[-1,-1,-1]])
-        read_keys=torch.Tensor([[1,1,1],[2,3,4]]).t()
-        rcw=(memory.read_content_weighting(read_keys,torch.Tensor([0.5,1])))
-        self.assertTrue(rcw.data.size()==(param.N, param.R))
+        memory=self.overwrite_memory()
+        read_keys=torch.Tensor(param.bs,param.W,param.R)
+        key_strengths=torch.Tensor(param.bs,param.R)
+        rcw=memory.read_content_weighting(read_keys,key_strengths)
+        self.assertTrue(rcw.size()==(param.bs, param.N, param.R))
 
     def test_forward_backward_weighting(self):
         memory=self.overwrite_memory()
         bw=memory.backward_weighting()
         fw=memory.forward_weighting()
-        self.assertTrue((fw == torch.Tensor([[8, 8, 8, 8, 8, 8, 8], [8, 8, 8, 8, 8, 8, 8]])).all())
-        self.assertTrue((bw == torch.Tensor([[8, 8, 8, 8, 8, 8, 8], [8, 8, 8, 8, 8, 8, 8]])).all())
+        self.assertTrue(fw.size()==(param.bs, param.N, param.R))
+        self.assertTrue(bw.size()==(param.bs, param.N, param.R))
 
     def test_read_weighting(self):
         memory=self.overwrite_memory()
         fw=memory.forward_weighting()
         bw=memory.backward_weighting()
-        read_keys=torch.Tensor(param.W,param.R).normal_()
-        read_key_strengths=torch.Tensor(param.R).normal_()
-        read_modes=torch.Tensor(param.R,3).normal_()
-        rw=memory.update_read_weightings(fw,bw,read_keys,read_key_strengths,read_modes)
+        read_keys=torch.Tensor(param.bs,param.W,param.R).normal_()
+        read_key_strengths=torch.Tensor(param.bs,param.R).normal_()
+        read_modes=torch.Tensor(param.bs,param.R,3).normal_()
+        rw=memory.read_weightings(fw, bw, read_keys, read_key_strengths, read_modes)
+        self.assertTrue(rw.size()==(param.bs,param.N,param.R))
 
-        self.assertTrue(rw.size()==(param.N,param.R))
+    def test_retention(self):
+        memory=self.overwrite_memory()
+        free_gate=torch.Tensor(param.bs,param.R)
+        ret=memory.memory_retention(free_gate)
+        self.assertTrue(ret.size()==(param.bs, param.N))
 
     def test_retenion_usage_allocation_flow(self):
         memory=self.overwrite_memory()
-        free_gate=torch.Tensor(param.R).normal_()
+        free_gate=torch.Tensor(param.bs,param.R).normal_()
         memory_retention=memory.memory_retention(free_gate)
         write_weighting=torch.Tensor(param.N).normal_()
         memory.update_usage_vector(write_weighting,memory_retention)

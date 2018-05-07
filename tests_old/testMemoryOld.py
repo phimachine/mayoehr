@@ -75,7 +75,7 @@ class Test_Memory_Necessary(unittest.TestCase):
         read_keys=torch.Tensor(param.W,param.R).normal_()
         read_key_strengths=torch.Tensor(param.R).normal_()
         read_modes=torch.Tensor(param.R,3).normal_()
-        rw=memory.update_read_weightings(fw,bw,read_keys,read_key_strengths,read_modes)
+        rw=memory.read_weightings(fw, bw, read_keys, read_key_strengths, read_modes)
 
         self.assertTrue(rw.size()==(param.N,param.R))
 
