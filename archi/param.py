@@ -34,4 +34,4 @@ N=3
 
 # I am going to bake batch_processing in the DNC.
 # This is going to be a very tough week.
-batch_size=16
+bs=16
