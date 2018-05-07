@@ -219,7 +219,6 @@ def gendata(batch_size, story_limit=150):
     if data_dir is None:
         raise ValueError("data_dir argument cannot be None")
 
-    print(os.getcwd())
     for entryname in listdir(data_dir):
         entry_path = join(data_dir, entryname)
         if isfile(entry_path):
@@ -282,3 +281,4 @@ def gendata(batch_size, story_limit=150):
 if __name__ == '__main__':
     #write_babi_to_disk(10, 1200, train_files_count=5)
     input_data, target_output, seq_len, weights=gendata(5)
+    print("done")
