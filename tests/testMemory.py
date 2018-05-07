@@ -5,11 +5,13 @@ import unittest
 from torch.autograd import Variable
 from archi.interface import Interface
 from archi.controller import Controller
+import pdb
+
 
 class Test_Memory_Necessary(unittest.TestCase):
-    # includes a set of necessary tests
-    # there is no way I know beforehand what the values should be
-    # step over the debugger and see for yourself
+    # Note that only memory should be retained with each new sequence.
+    # Everything else resets at t=0
+    # A question is that should read weights be used this timestep or next timestep.
     
     def overwrite_memory(self):
         memory=Memory()
@@ -20,7 +22,7 @@ class Test_Memory_Necessary(unittest.TestCase):
         memory=self.overwrite_memory()
         write_weighting = torch.Tensor(param.bs, param.N)
         val = memory.update_temporal_linkage_matrix(write_weighting)
-        self.assertTrue()
+        self.assertTrue(val.size()==(param.bs, param.N, param.N))
 
     def test_write_content_weighting(self):
         temp_param_N = param.N

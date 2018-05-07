@@ -32,6 +32,13 @@ class Memory(nn.Module):
         self.memory.zero_()
         self.read_weightings.fill_(1)
 
+    def new_sequence_reset(self):
+        # study this function
+        # memory is the only value that is not reset after new sequence
+        self.temporal_memory_linkage.zero_()
+        self.precedence_weighting.zero_()
+        self.usage_vector.zero_()
+
     def write_content_weighting(self, write_key, key_strength):
         '''
 
@@ -182,14 +189,15 @@ class Memory(nn.Module):
 
         :param write_weighting: (N)
         :param precedence_weighting: (N), simplex bound
-        :return:
+        :return: updated_temporal_linkage_matrix
         '''
 
-        ww_j=write_weighting.unsqueeze(0).expand(param.N,-1)
-        ww_i=write_weighting.unsqueeze(1).expand(-1,param.N)
+        ww_j=write_weighting.unsqueeze(1).expand(-1,param.N,-1)
+        ww_i=write_weighting.unsqueeze(2).expand(-1,-1,param.N)
         p_j=self.precedence_weighting.unsqueeze(0).expand(param.N,-1)
+        batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
 
-        self.temporal_memory_linkage= (1 - ww_j - ww_i) * self.temporal_memory_linkage + ww_i * p_j
+        self.temporal_memory_linkage= (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
         return self.temporal_memory_linkage
 
     def backward_weighting(self):

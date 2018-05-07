@@ -31,4 +31,5 @@ class Computer(nn.Module):
         # I have not found a reference to this function, but I think it's reasonable
         # to reset the values that depends on a particular sequence.
         self.controller.new_sequence_reset()
+        self.memory.new_sequence_reset()
         self.last_read_vector.zero_()
