@@ -10,6 +10,8 @@ import os
 from os import listdir, mkdir
 from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
 import subprocess
+import pdb
+
 
 def babi_command(task, sets, write_to_disk=True,train=True, files_count=1):
     # this command is run on my remote interpreter
@@ -195,21 +197,21 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
         np.reshape(weights_vec, (batch_size, -1, 1))
     )
 
-def write_babi_to_disk(task, sets, train_files_count=1):
+def write_babi_to_disk(task, sets, train_files_count=1, story_limit=150):
+    '''
+    calls raw babi commands
+    pickles train and test data
+    :param task:
+    :param sets:
+    :param train_files_count:
+    :return:
+    '''
     babi_command(task,sets,True,train=True, files_count=train_files_count)
     babi_command(task,sets,True,train=False, files_count=int(train_files_count/5))
 
-def gendata(batch_size, story_limit=150):
-    '''
-    The main function to generate data.
-
-    :param batch_size:
-    :param story_limit: padding the input/output vectors to length.
-    :return:
-    '''
 
     task_dir = os.path.dirname(abspath(__file__))
-    data_dir = "./data"
+    data_dir = join(task_dir,'data')
     joint_train = True
     files_list = []
 
@@ -260,14 +262,29 @@ def gendata(batch_size, story_limit=150):
     if joint_train:
         pickle.dump(joint_train_data, open(join(train_data_dir, 'train.pkl'), 'wb'))
 
+
+def gendata(batch_size, validate=False):
+    '''
+    The main function to generate data.
+
+    :param batch_size:
+    :param story_limit: padding the input/output vectors to length.
+    :return:
+    '''
+
     print('start preparing sample')
 
 
     dirname = os.path.dirname(__file__)
+
     data_dir = os.path.join(dirname, 'data','data')
 
-    lexicon_dict = load(os.path.join(data_dir, 'lexicon-dict.pkl'))
-    data = load(os.path.join(data_dir, 'train', 'train.pkl'))
+    lexicon_dict = load(join(data_dir, 'lexicon-dict.pkl'))
+    if validate==False:
+        file_path = join(data_dir, 'train', 'train.pkl')
+    else:
+        file_path = join(data_dir,'test','test.pkl')
+    data = load(file_path)
 
     word_space_size = len(lexicon_dict)
 
@@ -279,6 +296,6 @@ def gendata(batch_size, story_limit=150):
 
 
 if __name__ == '__main__':
-    #write_babi_to_disk(10, 1200, train_files_count=5)
+    # write_babi_to_disk(task=10, sets=1000, train_files_count=10, story_limit=150)
     input_data, target_output, seq_len, weights=gendata(5)
     print("done")
