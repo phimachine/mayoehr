@@ -21,7 +21,7 @@ L=64
 # Controller output v_t size
 v_t=32
 
-# Memory location width W
+# Memory location width
 # Memory read heads count R
 # Controller interface epsilon_t size, derived
 W=5

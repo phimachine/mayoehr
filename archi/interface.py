@@ -18,53 +18,53 @@ class Interface(nn.Module):
         # Read keys, each W dimensions, [W*R] in total
         # no processing needed
         # this is the address keys, not the contents
-        read_keys=interface_input[0:last_index].view(param.W,-1)
+        read_keys=interface_input[:,0:last_index].view(param.bs,param.W,-1)
 
         # Read strengths, [R]
         # 1 to infinity
         # slightly different equation from the paper, should be okay
-        read_strengths=interface_input[last_index:last_index+param.R]
+        read_strengths=interface_input[:,last_index:last_index+param.R]
         last_index=last_index+param.R
         read_strengths=1-self.logSigmoid(read_strengths)
 
         # Write key, [W]
-        write_key=interface_input[last_index:last_index+param.W]
+        write_key=interface_input[:,last_index:last_index+param.W]
         last_index=last_index+param.W
 
         # write strength beta, [1]
-        write_strength=interface_input[last_index:last_index+1]
+        write_strength=interface_input[:,last_index:last_index+1]
         last_index=last_index+1
         write_strength=1-self.logSigmoid(write_strength)
 
         # erase strength, [W]
-        erase_vector=interface_input[last_index:last_index+param.W]
+        erase_vector=interface_input[:,last_index:last_index+param.W]
         last_index=last_index+param.W
         erase_vector=self.Sigmoid(erase_vector)
 
         # write vector, [W]
-        write_vector=interface_input[last_index:last_index+param.W]
+        write_vector=interface_input[:,last_index:last_index+param.W]
         last_index=last_index+param.W
 
         # R free gates? [R] TODO what is this?
-        free_gates=interface_input[last_index:last_index+param.R]
+        free_gates=interface_input[:,last_index:last_index+param.R]
 
         last_index=last_index+param.R
         free_gates=self.Sigmoid(free_gates)
 
         # allocation gate [1]
-        allocation_gate=interface_input[last_index:last_index+1]
+        allocation_gate=interface_input[:,last_index:last_index+1]
         last_index=last_index+1
         allocation_gate=self.Sigmoid(allocation_gate)
 
         # write gate [1]
-        write_gate=interface_input[last_index:last_index+1]
+        write_gate=interface_input[:,last_index:last_index+1]
         last_index=last_index+1
         write_gate=self.Sigmoid(write_gate)
 
         # read modes [R,3]
-        read_modes=interface_input[last_index:last_index+param.R*3]
+        read_modes=interface_input[:,last_index:last_index+param.R*3]
         read_modes=self.softmax(read_modes)
-        read_modes=read_modes.view(param.R,3)
+        read_modes=read_modes.view(param.bs,param.R,3)
 
         # total dimension: param.W*param.R+3*param.W+5*param.R+3
         return read_keys, read_strengths, write_key, write_strength, \

@@ -13,11 +13,11 @@ class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
         # u_0
-        self.usage_vector=torch.Tensor(param.N).zero_()
-        # p, (W), should be simplex bound
-        self.precedence_weighting=torch.Tensor(param.N).zero_()
+        self.usage_vector=torch.Tensor(param.N)
+        # p, (N), should be simplex bound
+        self.precedence_weighting=torch.Tensor(param.N)
         # (N,N)
-        self.temporal_memory_linkage=torch.Tensor(param.N, param.N).zero_()
+        self.temporal_memory_linkage=torch.Tensor(param.N, param.N)
         #TODO will autograd alter memory? Should autograd alter memory?
         # (N,W)
         self.memory=Variable(torch.Tensor(param.N,param.W),requires_grad=False)
