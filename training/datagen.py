@@ -209,7 +209,6 @@ def write_babi_to_disk(task, sets, train_files_count=1, story_limit=150):
     babi_command(task,sets,True,train=True, files_count=train_files_count)
     babi_command(task,sets,True,train=False, files_count=int(train_files_count/5))
 
-
     task_dir = os.path.dirname(abspath(__file__))
     data_dir = join(task_dir,'data')
     joint_train = True
@@ -252,7 +251,7 @@ def write_babi_to_disk(task, sets, train_files_count=1, story_limit=150):
 
     for filename in encoded_files:
         if filename.endswith("test.txt"):
-            pickle.dump(encoded_files[filename], open(join(test_data_dir, basename(filename) + '.pkl'), 'wb'))
+            pickle.dump(encoded_files[filename], open(join(test_data_dir, "test" + '.pkl'), 'wb'))
         elif filename.endswith("train.txt"):
             if not joint_train:
                 pickle.dump(encoded_files[filename], open(join(train_data_dir, basename(filename) + '.pkl'), 'wb'))
@@ -296,6 +295,6 @@ def gendata(batch_size, validate=False):
 
 
 if __name__ == '__main__':
-    # write_babi_to_disk(task=10, sets=1000, train_files_count=10, story_limit=150)
+    write_babi_to_disk(task=10, sets=10, train_files_count=1, story_limit=150)
     input_data, target_output, seq_len, weights=gendata(5)
     print("done")
