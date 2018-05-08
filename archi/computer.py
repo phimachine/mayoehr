@@ -18,7 +18,7 @@ class Computer(nn.Module):
         input_x_t=torch.cat((input,self.last_read_vector.view(param.bs,-1)),dim=1)
         output, interface=self.controller(input_x_t)
         interface_output_tuple=self.interface(interface)
-        self.last_read_vector=self.memory(interface_output_tuple)
+        self.last_read_vector=self.memory(*interface_output_tuple)
         return output
 
     def reset_parameters(self):

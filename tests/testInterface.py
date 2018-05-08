@@ -9,7 +9,7 @@ from torch.nn.modules import LSTM
 
 class test_interface(unittest.TestCase):
 
-    def test_forward_necessary(self):
+    def test_forward(self):
         # tests some necessary but insufficient range constraints
         interface_dimension_count=param.W*param.R+param.R+param.W+1+param.W+\
                                   param.W+param.R+1+1+param.R*3
@@ -43,11 +43,9 @@ class test_interface(unittest.TestCase):
     def test_controller_to_interface(self):
         # wires controller to interface and see if it works.
 
-        interface_dimension_count=param.W*param.R+param.R+param.W+1+param.W+\
-                                  param.W+param.R+1+1+param.R
         ctrl=Controller()
         ctrl.reset_parameters()
-        test_input=torch.Tensor(16,10)
+        test_input=torch.Tensor(param.bs,param.x+param.R*param.W)
         output,interface_vector=ctrl(test_input)
 
         interface=Interface()

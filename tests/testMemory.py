@@ -103,7 +103,7 @@ class Test_Memory_Necessary(unittest.TestCase):
     def test_controller_interface_memory_flow(self):
         ctrl=Controller()
         ctrl.reset_parameters()
-        test_input=torch.Tensor(param.bs,param.x).normal_()
+        test_input=torch.Tensor(param.bs,param.x+param.R*param.W).normal_()
         output,interface_vector=ctrl(test_input)
 
         interface=Interface()

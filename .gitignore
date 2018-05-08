@@ -1,5 +1,6 @@
 .idea
 training/data/
+*/__pycache__
 # Compiled Lua sources
 luac.out
 

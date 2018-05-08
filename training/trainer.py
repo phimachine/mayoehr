@@ -2,6 +2,9 @@ from training.datagen import gendata
 from archi.computer import Computer
 import torch
 import numpy
+import archi.param as param
+
+batch_size=param.bs
 
 class dummy_context_mgr():
     def __enter__(self):
@@ -134,7 +137,6 @@ def train(computer, optimizer, story_length, batch_size):
 
 if __name__=="__main__":
 
-    batch_size=64
     story_limit=150
     epoch_batches_count=1024
     epochs_count=100
