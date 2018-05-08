@@ -82,14 +82,15 @@ class Test_Memory_Necessary(unittest.TestCase):
 
     def test_write_to_memory(self):
         memory=self.overwrite_memory()
-        write_key=torch.Tensor([1,2,3])
-        allocation_gate=0.56
-        write_gate=0.47
+        write_key=torch.Tensor(param.bs,param.W)
+        write_strength=torch.Tensor(param.bs)
+        allocation_gate=torch.Tensor(param.bs)
+        write_gate=torch.Tensor(param.bs)
         allocation_weighting=memory.write_content_weighting(write_key,write_strength)
         write_weighting=memory.write_weighting(write_key,write_strength,allocation_gate,
                                   write_gate,allocation_weighting)
-        write_vector=torch.Tensor(param.W).normal_()
-        erase_vector=torch.Tensor(param.W).normal_()
+        write_vector=torch.Tensor(param.bs,param.W).normal_()
+        erase_vector=torch.Tensor(param.bs,param.W).normal_()
         memory.write_to_memory(write_weighting,erase_vector,write_vector)
         self.assertTrue(memory.memory.size()==(param.N,param.W))
 
