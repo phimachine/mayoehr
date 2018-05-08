@@ -1,7 +1,7 @@
 import unittest
-from archi import param
-from archi.interface import Interface
-from archi.controller import Controller
+from archi_hard_batch import param
+from archi_hard_batch.interface import Interface
+from archi_hard_batch.controller import Controller
 import torch
 from torch.autograd import Variable
 import math

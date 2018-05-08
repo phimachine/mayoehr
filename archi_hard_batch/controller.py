@@ -1,10 +1,10 @@
 # reference Methods, controller network
 
-from archi.param import *
+from archi_hard_batch.param import *
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
-import archi.param as param
+import archi_hard_batch.param as param
 import math
 from torch.nn.modules.rnn import LSTM
 

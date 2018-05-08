@@ -1,5 +1,5 @@
 import torch.nn as nn
-import archi.param as param
+import archi_hard_batch.param as param
 import torch.nn.functional as F
 
 class Interface(nn.Module):

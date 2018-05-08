@@ -5,7 +5,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.functional import cosine_similarity, softmax, normalize
-import archi.param as param
+import archi_hard_batch.param as param
 from torch.autograd import Variable
 
 class Memory(nn.Module):

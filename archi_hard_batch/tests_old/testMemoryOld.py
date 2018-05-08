@@ -1,10 +1,10 @@
 import torch
-from archi.memory import Memory
-import archi.param as param
+from archi_hard_batch.memory import Memory
+import archi_hard_batch.param as param
 import unittest
 from torch.autograd import Variable
-from archi.interface import Interface
-from archi.controller import Controller
+from archi_hard_batch.interface import Interface
+from archi_hard_batch.controller import Controller
 
 class Test_Memory_Necessary(unittest.TestCase):
     # includes a set of necessary tests

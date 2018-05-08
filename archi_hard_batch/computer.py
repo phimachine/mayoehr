@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from archi.interface import Interface
-from archi.controller import Controller
-from archi.memory import Memory
-import archi.param as param
+from archi_hard_batch.interface import Interface
+from archi_hard_batch.controller import Controller
+from archi_hard_batch.memory import Memory
+import archi_hard_batch.param as param
 
 class Computer(nn.Module):
 

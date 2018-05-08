@@ -63,7 +63,7 @@ class Memory(nn.Module):
         # (param.N, param.bs)
         normalizer=torch.ger(memnorm,writenorm)
         similarties=innerprod/normalizer.t().clamp(min=eps)
-        similarties=similarties*key_strength.unsqueeze(1).expand(-1,param.N)
+        similarties=similarties*key_strength.expand(-1,param.N)
         normalized= softmax(similarties,dim=1)
         return normalized
 
@@ -181,7 +181,7 @@ class Memory(nn.Module):
 
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
-        write_weighting=write_gate.unsqueeze(1)*(allocation_gate.unsqueeze(1)*allocation_weighting+(1-allocation_gate.unsqueeze(1))*content_weighting)
+        write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
         return write_weighting
 
     def update_precedence_weighting(self,write_weighting):
@@ -204,7 +204,7 @@ class Memory(nn.Module):
 
         ww_j=write_weighting.unsqueeze(1).expand(-1,param.N,-1)
         ww_i=write_weighting.unsqueeze(2).expand(-1,-1,param.N)
-        p_j=self.precedence_weighting.unsqueeze(0).expand(param.N,-1)
+        p_j=self.precedence_weighting.unsqueeze(1).expand(-1,param.N,-1)
         batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
 
         self.temporal_memory_linkage= (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
@@ -268,15 +268,16 @@ class Memory(nn.Module):
 
         :param write_weighting: the strength of writing
         :param erase_vector: e_t, (W), [0,1]
-        :param write_vector: w^w_t, (W), R
+        :param write_vector: w^w_t, (W),
+        TODO I am afraid that writing to memory would make batches processings
+        interfere with each other
         :return:
         '''
 
-        term1_2=torch.ger(write_weighting,erase_vector)
-        term1=self.memory*(torch.ones((param.N,param.W))-term1_2)
-        term2=torch.ger(write_weighting,write_vector)
-
-        self.memory=term1+term2
+        term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
+        term1=self.memory.unsqueeze(0)*(torch.ones((param.bs,param.N,param.W))-term1_2)
+        term2=torch.matmul(write_weighting.unsqueeze(2),write_vector.unsqueeze(1))
+        self.memory=torch.sum(term1+term2, dim=0)
 
 
     def forward(self,read_keys, read_strengths, write_key, write_strength,

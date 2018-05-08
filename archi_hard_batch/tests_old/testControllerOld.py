@@ -1,6 +1,6 @@
 import unittest
-from archi_old.param import *
-from archi_old.controller import *
+from archi_hard_batch.param import *
+from archi_hard_batch.controller import *
 import torch
 
 class testRNNUnit(unittest.TestCase):

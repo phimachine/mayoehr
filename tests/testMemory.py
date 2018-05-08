@@ -26,7 +26,7 @@ class Test_Memory_Necessary(unittest.TestCase):
 
     def test_write_content_weighting(self):
         memory = self.overwrite_memory()
-        val=memory.write_content_weighting(torch.Tensor(param.bs,param.W),torch.Tensor(param.bs))
+        val=memory.write_content_weighting(torch.Tensor(param.bs,param.W),torch.Tensor(param.bs,1))
         self.assertTrue(val.size()==(param.bs,param.N))
 
     def test_read_content_weighting(self):
@@ -72,9 +72,9 @@ class Test_Memory_Necessary(unittest.TestCase):
     def test_write_weighting(self):
         memory=self.overwrite_memory()
         write_key=torch.Tensor(param.bs,param.W)
-        write_strength=torch.Tensor(param.bs)
-        allocation_gate=torch.Tensor(param.bs)
-        write_gate=torch.Tensor(param.bs)
+        write_strength=torch.Tensor(param.bs,1)
+        allocation_gate=torch.Tensor(param.bs,1)
+        write_gate=torch.Tensor(param.bs,1)
         allocation_weighting=memory.write_content_weighting(write_key,write_strength)
         write_weighting=memory.write_weighting(write_key,write_strength,allocation_gate,
                                   write_gate,allocation_weighting)
@@ -83,9 +83,9 @@ class Test_Memory_Necessary(unittest.TestCase):
     def test_write_to_memory(self):
         memory=self.overwrite_memory()
         write_key=torch.Tensor(param.bs,param.W)
-        write_strength=torch.Tensor(param.bs)
-        allocation_gate=torch.Tensor(param.bs)
-        write_gate=torch.Tensor(param.bs)
+        write_strength=torch.Tensor(param.bs,1)
+        allocation_gate=torch.Tensor(param.bs,1)
+        write_gate=torch.Tensor(param.bs,1)
         allocation_weighting=memory.write_content_weighting(write_key,write_strength)
         write_weighting=memory.write_weighting(write_key,write_strength,allocation_gate,
                                   write_gate,allocation_weighting)
@@ -94,10 +94,16 @@ class Test_Memory_Necessary(unittest.TestCase):
         memory.write_to_memory(write_weighting,erase_vector,write_vector)
         self.assertTrue(memory.memory.size()==(param.N,param.W))
 
+    def test_read_memory(self):
+        memory=self.overwrite_memory()
+        read_weightings=torch.Tensor(param.bs,param.N,param.R)
+        read_vectors=memory.read_memory(read_weightings)
+        self.assertTrue(read_vectors.size()==(param.bs,param.W,param.R))
+
     def test_controller_interface_memory_flow(self):
         ctrl=Controller()
         ctrl.reset_parameters()
-        test_input=torch.Tensor(param.x).normal_()
+        test_input=torch.Tensor(param.bs,param.x).normal_()
         output,interface_vector=ctrl(test_input)
 
         interface=Interface()
