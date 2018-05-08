@@ -21,7 +21,7 @@ class Memory(nn.Module):
         self.temporal_memory_linkage=torch.Tensor(param.bs,param.N, param.N)
         #TODO will autograd alter memory? Should autograd alter memory?
         # (N,W)
-        self.memory=torch.Tensor(param.N,param.W,requires_grad=True)
+        self.memory=torch.Tensor(param.N,param.W)
         # (N, R). Does this require gradient?
         self.last_read_weightings=torch.Tensor(param.bs, param.N, param.R)
 
@@ -29,8 +29,8 @@ class Memory(nn.Module):
         self.usage_vector.zero_()
         self.precedence_weighting.zero_()
         self.temporal_memory_linkage.zero_()
-        # I did not find reference here:
         self.memory.zero_()
+        self.memory.requires_grad_()
         self.last_read_weightings.fill_(1.0/param.N)
 
     def new_sequence_reset(self):

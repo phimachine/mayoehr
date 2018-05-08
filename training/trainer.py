@@ -3,6 +3,7 @@ from archi.computer import Computer
 import torch
 import numpy
 import archi.param as param
+import pdb
 
 # task 10 of babi
 
@@ -47,6 +48,9 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
 
             # usually batch does not interfere with each other's logic
             batch_output=computer(batch_input_of_same_timestep)
+            if torch.isnan(batch_output).any():
+                pdb.set_trace()
+                raise ValueError("nan is found in the batch output.")
             story_output[:, timestep,:] = batch_output
 
         target_output=target_output.view(-1)
@@ -62,8 +66,7 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
             optimizer.step()
         computer.new_sequence_reset()
 
-    # new pytorch support
-    return story_loss[0]
+    return story_loss
 
 #
 # def validate_one_batch_story(computer, story_length):
@@ -129,7 +132,6 @@ def train(computer, optimizer, story_length, batch_size):
         running_loss=0
 
         for batch in range(epoch_batches_count):
-            # TODO this needs to be separated from training.
 
             train_story_loss=run_one_story(computer, optimizer, story_length, batch_size)
 
