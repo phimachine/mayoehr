@@ -12,10 +12,10 @@ class Computer(nn.Module):
         self.memory=Memory()
         self.controller=Controller()
         self.interface=Interface()
-        self.last_read_vector=torch.Tensor(param.W, param.R)
+        self.last_read_vector=torch.Tensor(param.bs,param.W, param.R)
 
     def forward(self, input):
-        input_x_t=input.cat(self.last_read_vector.view(-1))
+        input_x_t=torch.cat((input,self.last_read_vector.view(param.bs,-1)),dim=1)
         output, interface=self.controller(input_x_t)
         interface_output_tuple=self.interface(interface)
         self.last_read_vector=self.memory(interface_output_tuple)

@@ -60,14 +60,10 @@ class RNN_Unit(nn.Module):
 
     def __init__(self):
         super(RNN_Unit, self).__init__()
-        self.W_input=nn.Linear(param.x+2*param.h,param.h)
-        self.b_input=Parameter(torch.Tensor(param.bs,param.h))
-        self.W_forget=nn.Linear(param.x+2*param.h,param.h)
-        self.b_forget=Parameter(torch.Tensor(param.bs,param.h))
-        self.W_output=nn.Linear(param.x+2*param.h,param.h)
-        self.b_output=nn.Parameter(torch.Tensor(param.bs,param.h))
-        self.W_state=nn.Linear(param.x+2*param.h,param.h)
-        self.b_state=nn.Parameter(torch.Tensor(param.bs,param.h))
+        self.W_input=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
+        self.W_forget=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
+        self.W_output=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
+        self.W_state=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
 
         # state or cell, initialized in place to zero.
         self.old_state=Parameter(torch.Tensor(param.h).zero_())
@@ -96,11 +92,11 @@ class RNN_Unit(nn.Module):
         semicolon_input=torch.cat([input_x,previous_time,previous_layer],dim=1)
 
         # 5 equations
-        input_gate=torch.sigmoid(self.W_input(semicolon_input)+self.b_input)
-        forget_gate=torch.sigmoid(self.W_forget(semicolon_input)+self.b_forget)
+        input_gate=torch.sigmoid(self.W_input(semicolon_input))
+        forget_gate=torch.sigmoid(self.W_forget(semicolon_input))
         new_state=forget_gate * self.old_state + input_gate * \
-                   torch.tanh(self.W_state(semicolon_input)+ self.b_state)
-        output_gate=torch.sigmoid(self.W_output(semicolon_input)+self.b_output)
+                   torch.tanh(self.W_state(semicolon_input))
+        output_gate=torch.sigmoid(self.W_output(semicolon_input))
         new_hidden=output_gate*torch.tanh(new_state)
 
         return new_hidden
