@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.nn.functional import cosine_similarity, softmax, normalize
 import archi.param as param
 from torch.autograd import Variable
+import pdb
 
 class Memory(nn.Module):
 
@@ -148,7 +149,7 @@ class Memory(nn.Module):
         Verify backprop.
 
         :param usage_vector: u_t, (N), [0,1]
-        :return:
+        :return: allocation_wighting: a_t, (N), simplex bound
         '''
 
         # this should not be an in place sort.
@@ -156,11 +157,13 @@ class Memory(nn.Module):
         cum_prod=torch.cumprod(sorted,1)
         # notice the index on the product
         # TODO this does not deal with batch inputs
-        cum_prod=torch.cat([torch.ones(param.bs),cum_prod],0)[:-1]
+        cum_prod=torch.cat([torch.ones(param.bs,1),cum_prod],1)[:,:-1]
         sorted_inv=1-sorted
         allocation_weighting=sorted_inv*cum_prod
         # to shuffle back in place
-        return allocation_weighting.index_select(0, indices)
+        ret=torch.gather(allocation_weighting,1,indices)
+        return ret
+        # return allocation_weighting.index_select(0, indices)
 
 
     def write_weighting(self, write_key, write_strength, allocation_gate, write_gate, allocation_weighting):
@@ -178,7 +181,7 @@ class Memory(nn.Module):
 
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
-        write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
+        write_weighting=write_gate.unsqueeze(1)*(allocation_gate.unsqueeze(1)*allocation_weighting+(1-allocation_gate.unsqueeze(1))*content_weighting)
         return write_weighting
 
     def update_precedence_weighting(self,write_weighting):

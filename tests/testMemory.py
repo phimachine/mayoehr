@@ -60,25 +60,25 @@ class Test_Memory_Necessary(unittest.TestCase):
         ret=memory.memory_retention(free_gate)
         self.assertTrue(ret.size()==(param.bs, param.N))
 
-    def test_retenion_usage_allocation_flow(self):
+    def test_retention_usage_allocation_flow(self):
         memory=self.overwrite_memory()
         free_gate=torch.Tensor(param.bs,param.R).normal_()
         memory_retention=memory.memory_retention(free_gate)
         write_weighting=torch.Tensor(param.N).normal_()
         memory.update_usage_vector(write_weighting,memory_retention)
         aw=memory.allocation_weighting()
-        self.assertTrue(aw.size()==(param.N,))
+        self.assertTrue(aw.size()==(param.bs,param.N))
 
     def test_write_weighting(self):
         memory=self.overwrite_memory()
-        write_key=torch.Tensor([1,2,3])
-        write_strength=0.5
-        allocation_gate=0.56
-        write_gate=0.47
+        write_key=torch.Tensor(param.bs,param.W)
+        write_strength=torch.Tensor(param.bs)
+        allocation_gate=torch.Tensor(param.bs)
+        write_gate=torch.Tensor(param.bs)
         allocation_weighting=memory.write_content_weighting(write_key,write_strength)
         write_weighting=memory.write_weighting(write_key,write_strength,allocation_gate,
                                   write_gate,allocation_weighting)
-        self.assertTrue(write_weighting.size()==(param.N,))
+        self.assertTrue(write_weighting.size()==(param.bs,param.N))
 
     def test_write_to_memory(self):
         memory=self.overwrite_memory()
