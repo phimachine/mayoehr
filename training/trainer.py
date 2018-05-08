@@ -4,7 +4,12 @@ import torch
 import numpy
 import archi.param as param
 
+# task 10 of babi
+
 batch_size=param.bs
+word_space=27
+param.x=word_space
+param.v_t=word_space
 
 class dummy_context_mgr():
     def __enter__(self):
@@ -28,7 +33,7 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
 
     with torch.no_grad if validate else dummy_context_mgr():
 
-        story_output = torch.Tensor(batch_size, story_length)
+        story_output = torch.Tensor(batch_size, story_length,word_space)
 
         # a single story
         for timestep in range(story_length):
@@ -38,8 +43,10 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
             batch_input_of_same_timestep = input_data[:, timestep, :]
 
             # usually batch does not interfere with each other's logic
-            story_output[:, timestep] = computer(batch_input_of_same_timestep)
-
+            batch_output=computer(batch_input_of_same_timestep)
+            story_output[:, timestep,:] = batch_output
+        # shouldn't have made it one hot, but let's do some redundant work here
+        _,target_output=target_output.max(dim=2)
         story_loss = criterion(story_output, target_output)
         if not validate:
             # I chose to backward a derivative only after a whole story has been taken in

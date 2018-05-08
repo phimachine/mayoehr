@@ -5,7 +5,7 @@
 Controller parameters
 '''
 # input vector size x_t
-x=10
+x=27
 
 # single hidden unit output size h^l_t
 # state size

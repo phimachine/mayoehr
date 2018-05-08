@@ -18,7 +18,7 @@ class Interface(nn.Module):
         # Read keys, each W dimensions, [W*R] in total
         # no processing needed
         # this is the address keys, not the contents
-        read_keys=interface_input[:,0:last_index].view(param.bs,param.W,-1)
+        read_keys=interface_input[:,0:last_index].view(param.bs,param.W,param.R)
 
         # Read strengths, [R]
         # 1 to infinity

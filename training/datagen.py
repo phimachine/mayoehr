@@ -175,6 +175,7 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
         weights_vec[target_mask] = 1.0
 
         input_vec = np.array([onehot(code, word_space_size) for code in input_vec])
+        #
         output_vec = np.array([onehot(code, word_space_size) for code in output_vec])
         # most of the output squence is the same with the input sequence
         # except for the - part, where the machine is prompt to answer
