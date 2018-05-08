@@ -18,6 +18,27 @@ class Test_Memory_Necessary(unittest.TestCase):
         memory.reset_parameters()
         return memory
 
+    def assertSimplexBound(self,batch_output):
+        # This tests that a value is simplex bound as it's supposed to
+        # It's assumed that the last dimension is the simplex bound vector
+
+        last_dim=batch_output.size()[-1]
+        batch_output=batch_output.view(-1,last_dim)
+        self.assertTrue((batch_output.sum(1)<1).all())
+        self.assertTrue((batch_output>0).all())
+
+    def assertUnitSimplex(self,batch_output):
+        last_dim=batch_output.size()[-1]
+        batch_output=batch_output.contiguous().view(-1,last_dim)
+        self.assertTrue(((batch_output.sum(1)-1)<0.0001).all())
+        self.assertTrue((batch_output>0).all())
+
+    def assertZeroOne(self,batch_output):
+        last_dim=batch_output.size()[-1]
+        batch_output=batch_output.view(-1,last_dim)
+        self.assertTrue((batch_output<1).all())
+        self.assertTrue((batch_output>0).all())
+
     def test_update_temporal_linkage_matrix(self):
         memory=self.overwrite_memory()
         write_weighting = torch.Tensor(param.bs, param.N)
@@ -28,14 +49,16 @@ class Test_Memory_Necessary(unittest.TestCase):
         memory = self.overwrite_memory()
         val=memory.write_content_weighting(torch.Tensor(param.bs,param.W),torch.Tensor(param.bs,1))
         self.assertTrue(val.size()==(param.bs,param.N))
+        self.assertSimplexBound(val)
 
     def test_read_content_weighting(self):
         # two locations, width of three
         memory=self.overwrite_memory()
-        read_keys=torch.Tensor(param.bs,param.W,param.R)
-        key_strengths=torch.Tensor(param.bs,param.R)
+        read_keys=torch.Tensor(param.bs,param.W,param.R).fill_(1)
+        key_strengths=torch.Tensor(param.bs,param.R).fill_(2)
         rcw=memory.read_content_weighting(read_keys,key_strengths)
         self.assertTrue(rcw.size()==(param.bs, param.N, param.R))
+        self.assertUnitSimplex(rcw.permute(2,0,1))
 
     def test_forward_backward_weighting(self):
         memory=self.overwrite_memory()
@@ -53,6 +76,7 @@ class Test_Memory_Necessary(unittest.TestCase):
         read_modes=torch.Tensor(param.bs,param.R,3).normal_()
         rw=memory.read_weightings(fw, bw, read_keys, read_key_strengths, read_modes)
         self.assertTrue(rw.size()==(param.bs,param.N,param.R))
+        self.assertSimplexBound(rw)
 
     def test_retention(self):
         memory=self.overwrite_memory()
@@ -63,11 +87,15 @@ class Test_Memory_Necessary(unittest.TestCase):
     def test_retention_usage_allocation_flow(self):
         memory=self.overwrite_memory()
         free_gate=torch.Tensor(param.bs,param.R).normal_()
-        memory_retention=memory.memory_retention(free_gate)
-        write_weighting=torch.Tensor(param.N).normal_()
+        memory_retention=memory.memory_retention(free_gate).uniform_()
+        memory_retention/memory_retention.sum()
+        write_weighting=torch.Tensor(param.N).uniform_()
+        write_weighting=write_weighting/write_weighting.sum()
         memory.update_usage_vector(write_weighting,memory_retention)
+        self.assertZeroOne(memory.usage_vector)
         aw=memory.allocation_weighting()
         self.assertTrue(aw.size()==(param.bs,param.N))
+
 
     def test_write_weighting(self):
         memory=self.overwrite_memory()
@@ -79,6 +107,7 @@ class Test_Memory_Necessary(unittest.TestCase):
         write_weighting=memory.write_weighting(write_key,write_strength,allocation_gate,
                                   write_gate,allocation_weighting)
         self.assertTrue(write_weighting.size()==(param.bs,param.N))
+        self.assertSimplexBound(write_weighting)
 
     def test_write_to_memory(self):
         memory=self.overwrite_memory()

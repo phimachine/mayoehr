@@ -8,6 +8,7 @@ from torch.nn.functional import cosine_similarity, softmax, normalize
 import archi.param as param
 from torch.autograd import Variable
 import pdb
+import numpy
 
 class Memory(nn.Module):
 
@@ -19,9 +20,9 @@ class Memory(nn.Module):
         self.precedence_weighting=torch.Tensor(param.bs,param.N)
         # (N,N)
         self.temporal_memory_linkage=torch.Tensor(param.bs,param.N, param.N)
-        #TODO will autograd alter memory? Should autograd alter memory?
         # (N,W)
         self.memory=torch.Tensor(param.N,param.W)
+        self.previous_memory=None
         # (N, R). Does this require gradient?
         self.last_read_weightings=torch.Tensor(param.bs, param.N, param.R)
 
@@ -77,7 +78,6 @@ class Memory(nn.Module):
         :return: most similar weighted: C(M,k,\beta), (N, R), (0,1)
         '''
 
-        # TODO make sure the dimensions are correct.
         '''
             torch definition
             def cosine_similarity(x1, x2, dim=1, eps=1e-8):
@@ -102,7 +102,8 @@ class Memory(nn.Module):
         # if transposed then similiarities[0] refers to the first read key
         similarties= innerprod/normalizer.clamp(min=eps)
         weighted=similarties*key_strengths.unsqueeze(1).expand(-1,param.N,-1)
-        return softmax(weighted,dim=1)
+        ret= softmax(weighted,dim=1)
+        return ret
 
     # the highest freed will be retained? What does it mean?
     def memory_retention(self,free_gate):
@@ -111,7 +112,7 @@ class Memory(nn.Module):
         :param free_gate: f, (R), [0,1], from interface vector
         :param read_weighting: w^r_t, (N, R), simplex bounded,
                note it's from previous timestep.
-        :return: \psi, (N), simplex bounded
+        :return: \psi, (N), [0,1]
         '''
 
         # a free gate belongs to a read head.
@@ -119,11 +120,13 @@ class Memory(nn.Module):
 
         # (N, R) TODO make sure this is pointwise multiplication, not matmul
         inside_bracket = 1 - self.last_read_weightings * free_gate.unsqueeze(1).expand(-1,param.N,-1)
-        return torch.prod(inside_bracket, 2)
+        ret= torch.prod(inside_bracket, 2)
+        if (ret<0).any() or (ret>1).any():
+            raise ValueError("memory retention exceeded limit")
+        return ret
 
     def update_usage_vector(self, write_wighting, memory_retention):
         '''
-        TODO need to review the meaning of this vector
 
         :param previous_usage: u_{t-1}, (N), [0,1]
         :param write_wighting: w^w_{t-1}, (N), simplex bound
@@ -132,6 +135,8 @@ class Memory(nn.Module):
         '''
 
         ret= (self.usage_vector+write_wighting-self.usage_vector*write_wighting)*memory_retention
+        if (ret>1).any() or (ret<0).any():
+            raise ValueError("A usage vector exceeded the bound")
         self.usage_vector=ret
         return ret
 
@@ -151,17 +156,18 @@ class Memory(nn.Module):
         :param usage_vector: u_t, (N), [0,1]
         :return: allocation_wighting: a_t, (N), simplex bound
         '''
-
+        # TODO This function has a bug
         # this should not be an in place sort.
         sorted, indices= self.usage_vector.sort(dim=1)
         cum_prod=torch.cumprod(sorted,1)
         # notice the index on the product
-        # TODO this does not deal with batch inputs
         cum_prod=torch.cat([torch.ones(param.bs,1),cum_prod],1)[:,:-1]
         sorted_inv=1-sorted
         allocation_weighting=sorted_inv*cum_prod
         # to shuffle back in place
         ret=torch.gather(allocation_weighting,1,indices)
+        if (ret.sum(1)>1).any() or (ret<0).any():
+            raise ValueError("allocation weighting simplex bound problem.")
         return ret
         # return allocation_weighting.index_select(0, indices)
 
@@ -178,10 +184,12 @@ class Memory(nn.Module):
         :param allocation_weighting: see above.
         :return: write_weighting: (N), simplex bound
         '''
-
+        # TODO this function has a bug
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
+        if (write_weighting.sum(1)>1).any() or (write_weighting<0).any():
+            raise ValueError("write weighting simplex bound problem.")
         return write_weighting
 
     def update_precedence_weighting(self,write_weighting):
@@ -237,6 +245,10 @@ class Memory(nn.Module):
         :param read_key_strengths: (R)
         :param read_modes: /pi_t^i, (R,3)
         :return: read_weightings: w^r_t, (N,R)
+
+        TODO how is there even a bug?
+        read modes add up to 1
+        all weightings are simplex bound. This is ridiculous.
         '''
 
         content_weighting=self.read_content_weighting(read_keys,read_strengths)
@@ -250,6 +262,8 @@ class Memory(nn.Module):
         # dimension (N,R)
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1,2)
         self.last_read_weightings=read_weightings
+        # last read weightings
+        if (self.last_read_weightings)
         return read_weightings
 
     def read_memory(self,read_weightings):
@@ -273,20 +287,18 @@ class Memory(nn.Module):
         interfere with each other
         :return:
         '''
-
         term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
+        #problem code
         term1=self.memory.unsqueeze(0)*(torch.ones((param.bs,param.N,param.W))-term1_2)
         term2=torch.matmul(write_weighting.unsqueeze(2),write_vector.unsqueeze(1))
-        self.memory=torch.sum(term1+term2, dim=0)
-
+        self.memory=torch.mean(term1+term2, dim=0)
+        if numpy.isinf(self.memory.detach().numpy()).any():
+            raise ValueError("nan is found")
+        self.previous_memory=self.memory
 
     def forward(self,read_keys, read_strengths, write_key, write_strength,
                 erase_vector, write_vector, free_gates, allocation_gate,
                 write_gate, read_modes):
-
-        # return read_vectors: [r^i_R], (W,R)
-
-
 
         # then write
         allocation_weighting=self.allocation_weighting()

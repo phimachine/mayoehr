@@ -156,7 +156,7 @@ if __name__=="__main__":
     story_limit=150
     epoch_batches_count=1024
     epochs_count=100
-    lr=1e-3
+    lr=1e-5
     computer=Computer()
     computer.reset_parameters()
     optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
