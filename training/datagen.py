@@ -11,6 +11,7 @@ from os import listdir, mkdir
 from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
 import subprocess
 import pdb
+import archi.param as param
 
 
 def babi_command(task, sets, write_to_disk=True,train=True, files_count=1):
@@ -156,7 +157,7 @@ def onehot(index, size):
 def prepare_sample(sample, target_code, word_space_size, batch_size):
     list_of_input_vec=[]
     list_of_output_vec=[]
-    list_of_weight_vec=[]
+    list_of_ignore_index=[]
     list_of_seq_len=[]
 
     for i in range(batch_size):
@@ -170,32 +171,28 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
 
         # target_mask is where an answer is required
         target_mask = (input_vec == target_code)
+        critical_index=np.where(target_mask==True)
         output_vec[target_mask] = sample[i]['outputs']
-        # weights is where the hyphen is and requires an answer.
-        weights_vec[target_mask] = 1.0
 
         input_vec = np.array([onehot(code, word_space_size) for code in input_vec])
         #
-        output_vec = np.array([onehot(code, word_space_size) for code in output_vec])
-        # most of the output squence is the same with the input sequence
+        output_vec = output_vec.astype("long")
+        # most of the output sequence is the same with the input sequence
         # except for the - part, where the machine is prompt to answer
 
         list_of_input_vec.append(input_vec)
         list_of_output_vec.append(output_vec)
         list_of_seq_len.append(seq_len)
-        list_of_weight_vec.append(weights_vec)
+        list_of_ignore_index.append(critical_index)
 
     input_vec=np.stack(list_of_input_vec)
     output_vec=np.stack(list_of_output_vec)
-    seq_len=list_of_seq_len[0]
-    # if not all(seq_len==seq for seq in list_of_seq_len):
-    #     raise("Sequence length not even.")
-    weights_vec=np.stack(list_of_weight_vec)
+    critical_index=np.stack(list_of_ignore_index)
+    critical_index=critical_index.squeeze(1)
     return (
         np.reshape(input_vec, (batch_size, -1, word_space_size)),
-        np.reshape(output_vec, (batch_size, -1, word_space_size)),
-        seq_len,
-        np.reshape(weights_vec, (batch_size, -1, 1))
+        output_vec,
+        critical_index
     )
 
 def write_babi_to_disk(task, sets, train_files_count=1, story_limit=150):
@@ -289,13 +286,13 @@ def gendata(batch_size, validate=False):
     word_space_size = len(lexicon_dict)
 
     sample = np.random.choice(data, batch_size)
-    input_data, target_output, seq_len, weights = prepare_sample(sample, lexicon_dict['-'], word_space_size, batch_size)
+    input_data, target_output, ignore_index = prepare_sample(sample, lexicon_dict['-'], word_space_size, batch_size)
 
     # (batch_size, story_word_count, one_hot_dictionary_size)
-    return input_data,target_output,seq_len,weights
+    return input_data,target_output,ignore_index
 
 
 if __name__ == '__main__':
-    write_babi_to_disk(task=10, sets=10, train_files_count=1, story_limit=150)
-    input_data, target_output, seq_len, weights=gendata(5)
+    write_babi_to_disk(task=10, sets=1000, train_files_count=1, story_limit=150)
+    input_data, target_output, ignore_index=gendata(batch_size=param.bs)
     print("done")

@@ -24,12 +24,15 @@ def save_model():
 
 def run_one_story(computer, optimizer, story_length, batch_size, validate=False):
     # to promote code reuse
-    input_data, target_output, seq_len, weights = gendata(batch_size, validate=validate)
+    input_data, target_output, critical_index = gendata(batch_size, validate=validate)
     input_data=torch.Tensor(input_data)
     target_output=torch.Tensor(target_output)
-    weights=torch.Tensor(weights)
+    stairs=torch.Tensor(numpy.arange(0,param.bs*story_length,story_length))
+    critical_index=critical_index+stairs.unsqueeze(1)
+    critical_index=critical_index.view(-1)
+    critical_index=critical_index.long()
 
-    criterion=torch.nn.CrossEntropyLoss(weight=weights)
+    criterion=torch.nn.CrossEntropyLoss()
 
     with torch.no_grad if validate else dummy_context_mgr():
 
@@ -45,8 +48,12 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
             # usually batch does not interfere with each other's logic
             batch_output=computer(batch_input_of_same_timestep)
             story_output[:, timestep,:] = batch_output
-        # shouldn't have made it one hot, but let's do some redundant work here
-        _,target_output=target_output.max(dim=2)
+
+        target_output=target_output.view(-1)
+        story_output=story_output.view(-1,word_space)
+        story_output=story_output[critical_index,:]
+        target_output=target_output[critical_index].long()
+
         story_loss = criterion(story_output, target_output)
         if not validate:
             # I chose to backward a derivative only after a whole story has been taken in
