@@ -10,7 +10,7 @@ from os.path import abspath
 # task 10 of babi
 
 batch_size=param.bs
-word_space=36
+word_space=27
 param.x=word_space
 param.v_t=word_space
 
@@ -145,16 +145,17 @@ def train(computer, optimizer, story_length, batch_size):
         for batch in range(epoch_batches_count):
 
             train_story_loss=run_one_story(computer, optimizer, story_length, batch_size)
-            print("success! epoch: ",epoch,"batch number: ", batch,"loss: ",train_story_loss.item())
+            print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
+                  (epoch+1, batch+1, train_story_loss.item()))
             running_loss+=train_story_loss
-
-            if batch%256==255:
-                print('[%d, %5d] loss: %.3f' %
-                      (epoch + 1, batch + 1, running_loss / 256))
+            val_freq=64
+            if batch%val_freq==val_freq-1:
+                print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f' %
+                      (epoch + 1, batch + 1, running_loss / val_freq))
                 running_loss=0
                 # also test the model
                 val_loss=run_one_story(computer, optimizer, story_length, batch_size, validate=False)
-                print('[%d, %5d] loss: %.3f: Validation' %
+                print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                       (epoch + 1, batch + 1, val_loss))
                 test_history+=[val_loss]
 
@@ -170,7 +171,7 @@ if __name__=="__main__":
     story_limit=150
     epoch_batches_count=1024
     epochs_count=100
-    lr=1e-3
+    lr=1e-5
     computer=Computer()
     computer=computer.cuda()
 

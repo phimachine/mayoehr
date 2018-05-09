@@ -87,7 +87,6 @@ class Memory(nn.Module):
         '''
 
         innerprod=torch.matmul(self.memory.unsqueeze(0),read_keys)
-
         # this is confusing. matrix[n] access nth row, not column
         # this is very counter-intuitive, since columns have meaning,
         # because they represent vectors
@@ -117,11 +116,9 @@ class Memory(nn.Module):
         # a free gate belongs to a read head.
         # a single read head weighting is a (N) dimensional simplex bounded value
 
-        # (N, R) TODO make sure this is pointwise multiplication, not matmul
+        # (N, R)
         inside_bracket = 1 - self.last_read_weightings * free_gate.unsqueeze(1).expand(-1,param.N,-1)
         ret= torch.prod(inside_bracket, 2)
-        # if (ret<0).any() or (ret>1).any():
-        #     raise ValueError("memory retention exceeded limit")
         return ret
 
     def update_usage_vector(self, write_wighting, memory_retention):
@@ -134,8 +131,7 @@ class Memory(nn.Module):
         '''
 
         ret= (self.usage_vector+write_wighting-self.usage_vector*write_wighting)*memory_retention
-        # if (ret>1).any() or (ret<0).any():
-        #     raise ValueError("A usage vector exceeded the bound")
+
         self.usage_vector.data=ret
         return ret
 
@@ -155,8 +151,6 @@ class Memory(nn.Module):
         :param usage_vector: u_t, (N), [0,1]
         :return: allocation_wighting: a_t, (N), simplex bound
         '''
-        # TODO This function has a bug
-        # this should not be an in place sort.
         sorted, indices= self.usage_vector.sort(dim=1)
         cum_prod=torch.cumprod(sorted,1)
         # notice the index on the product
@@ -165,10 +159,7 @@ class Memory(nn.Module):
         allocation_weighting=sorted_inv*cum_prod
         # to shuffle back in place
         ret=torch.gather(allocation_weighting,1,indices)
-        # if (ret.sum(1)>1).any() or (ret<0).any():
-        #     raise ValueError("allocation weighting simplex bound problem.")
         return ret
-        # return allocation_weighting.index_select(0, indices)
 
 
     def write_weighting(self, write_key, write_strength, allocation_gate, write_gate, allocation_weighting):
@@ -183,7 +174,6 @@ class Memory(nn.Module):
         :param allocation_weighting: see above.
         :return: write_weighting: (N), simplex bound
         '''
-        # TODO this function has a bug
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
@@ -252,9 +242,6 @@ class Memory(nn.Module):
         :param read_modes: /pi_t^i, (bs,R,3)
         :return: read_weightings: w^r_t, (bs,N,R)
 
-        TODO how is there even a bug?
-        read modes add up to 1
-        all weightings are simplex bound. This is ridiculous.
         '''
 
         content_weighting=self.read_content_weighting(read_keys,read_strengths)
@@ -292,17 +279,13 @@ class Memory(nn.Module):
         :param write_weighting: the strength of writing
         :param erase_vector: e_t, (W), [0,1]
         :param write_vector: w^w_t, (W),
-        TODO I am afraid that writing to memory would make batches processings
         interfere with each other
         :return:
         '''
         term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
-        #problem code
         term1=self.memory.unsqueeze(0)*(torch.ones((param.bs,param.N,param.W)).cuda()-term1_2)
         term2=torch.matmul(write_weighting.unsqueeze(2),write_vector.unsqueeze(1))
         self.memory.data=torch.mean(term1+term2, dim=0)
-        # if numpy.isinf(self.memory.detach().numpy()).any():
-        #     raise ValueError("nan is found")
 
     def forward(self,read_keys, read_strengths, write_key, write_strength,
                 erase_vector, write_vector, free_gates, allocation_gate,
