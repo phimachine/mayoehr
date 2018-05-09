@@ -27,6 +27,7 @@ def save_model(net, optim, epoch):
     task_dir = os.path.dirname(abspath(__file__))
     print(task_dir)
     pickle_file=Path("saves/DNC_"+str(epoch)+".pkl")
+    pickle_file=pickle_file.open('w')
 
     torch.save({
         'epoch': epoch,
@@ -169,8 +170,8 @@ def train(computer, optimizer, story_length, batch_size):
 if __name__=="__main__":
 
     story_limit=150
-    epoch_batches_count=1024
-    epochs_count=100
+    epoch_batches_count=10
+    epochs_count=10
     lr=1e-5
     computer=Computer()
     computer=computer.cuda()

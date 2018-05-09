@@ -1,17 +1,15 @@
 # adapted from github.com/Mostafa-Samir/DNC-tensorflow
 # added padding functionalities for batch_processing
 
-import sys
 import pickle
-import getopt
 import numpy as np
 from shutil import rmtree
 import os
 from os import listdir, mkdir
 from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
 import subprocess
-import pdb
 import archi.param as param
+from multiprocessing import Process
 
 
 def babi_command(task, sets, write_to_disk=True,train=True, files_count=1):
@@ -286,6 +284,27 @@ def gendata(batch_size, validate=False):
 
     # (batch_size, story_word_count, one_hot_dictionary_size)
     return input_data,target_output,ignore_index
+
+class PreGenData():
+    # the purpose of this class is to generate data before it's required to use.
+    # this will reduce 11% of my code run time according to cProfiler.
+    def __init__(self, batch_size):
+        self.train_ready_flag=False
+        self.batch_size=batch_size
+        self.val_ready_flag=True
+        self.next_train=gendata(self.batch_size,validate=False)
+        self.next_validate=gendata(self.batch_size,validate=True)
+
+    def get_validate(self):
+        self.val_ready_flag=False
+
+        return self.next_validate
+
+    def gen_validate(self):
+        # gen validate generate a validate with a call back method.
+        self.next_validate=
+
+
 
 
 if __name__ == '__main__':

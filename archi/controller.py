@@ -9,26 +9,6 @@ import math
 from torch.nn.modules.rnn import LSTM
 from torch.nn.parameter import Parameter
 
-class ControllerWrapper():
-    # Controller wrapper is designed to reset the values that are not model parameters with each new sequence
-    # If those values are inside of a nn.Module, then the autograd mechanism will not allow
-    # these values to be reset after the sequence, reporting error
-    '''
-    File "/home/jasonhu/Git/DNC_MAC/training/trainer.py", line 164, in <module>
-        train(computer,optimizer,story_limit, batch_size)
-    File "/home/jasonhu/Git/DNC_MAC/training/trainer.py", line 136, in train
-        train_story_loss=run_one_story(computer, optimizer, story_length, batch_size)
-    File "/home/jasonhu/Git/DNC_MAC/training/trainer.py", line 65, in run_one_story
-        story_loss.backward()
-    File "/home/jasonhu/anaconda3/envs/python36/lib/python3.6/site-packages/torch/tensor.py", line 93, in backward
-        torch.autograd.backward(self, gradient, retain_graph, create_graph)
-    File "/home/jasonhu/anaconda3/envs/python36/lib/python3.6/site-packages/torch/autograd/__init__.py", line 89, in backward
-        allow_unreachable=True)  # allow_unreachable flag
-    RuntimeError: one of the variables needed for gradient computation has been modified by an inplace operation
-    '''
-    def __init__(self):
-        pass
-
 class Controller(nn.Module):
     """
         Deep RNN model that passes on layer by layer
