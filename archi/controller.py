@@ -31,7 +31,7 @@ class Controller(nn.Module):
         hidden_previous_layer=torch.Tensor(param.bs,param.h).zero_()
         hidden_this_timestep=torch.Tensor(param.bs,param.L,param.h)
         for i in range(param.L):
-            hidden_output=self.RNN_list[i](input_x, self.hidden_previous_timestep[:,i,:],
+            hidden_output=self.RNN_list[i](input_x, self.hidden_previous_timestep[:,i,:].clone(),
                              hidden_previous_layer)
             hidden_this_timestep[:,i,:]=hidden_output
             hidden_previous_layer=hidden_output
@@ -65,10 +65,8 @@ class RNN_Unit(nn.Module):
         self.W_output=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
         self.W_state=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
 
-        # state or cell, initialized in place to zero.
-        self.old_state=Parameter(torch.Tensor(param.h).zero_())
+        self.old_state=torch.Tensor(param.h)
 
-        # critical
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -76,7 +74,7 @@ class RNN_Unit(nn.Module):
         # initial state and cell are empty
 
         # if this is not run, any output might be nan
-
+        self.old_state.zero_()
         stdv= 1.0 /math.sqrt(param.h)
         for weight in self.parameters():
             weight.data.uniform_(-stdv,stdv)
@@ -98,6 +96,8 @@ class RNN_Unit(nn.Module):
                    torch.tanh(self.W_state(semicolon_input))
         output_gate=torch.sigmoid(self.W_output(semicolon_input))
         new_hidden=output_gate*torch.tanh(new_state)
+
+        self.old_state=new_state
 
         return new_hidden
 
