@@ -5,6 +5,7 @@ from archi.controller import Controller
 from archi.memory import Memory
 import archi.param as param
 import pdb
+from torch.nn.parameter import Parameter
 
 class Computer(nn.Module):
 
@@ -13,13 +14,13 @@ class Computer(nn.Module):
         self.memory=Memory()
         self.controller=Controller()
         self.interface=Interface()
-        self.last_read_vector=torch.Tensor(param.bs,param.W, param.R)
+        self.last_read_vector=Parameter(torch.Tensor(param.bs,param.W, param.R).zero_())
 
     def forward(self, input):
         input_x_t=torch.cat((input,self.last_read_vector.view(param.bs,-1)),dim=1)
         output, interface=self.controller(input_x_t)
         interface_output_tuple=self.interface(interface)
-        self.last_read_vector=self.memory(*interface_output_tuple)
+        self.last_read_vector.data=self.memory(*interface_output_tuple)
         if torch.isnan(self.last_read_vector).any():
             read_keys, read_strengths, write_key, write_strength, \
             erase_vector, write_vector, free_gates, allocation_gate, \
@@ -47,7 +48,6 @@ class Computer(nn.Module):
     def reset_parameters(self):
         self.memory.reset_parameters()
         self.controller.reset_parameters()
-        self.last_read_vector.zero_()
         # no parameter in interface
 
     def new_sequence_reset(self):
@@ -55,4 +55,4 @@ class Computer(nn.Module):
         # to reset the values that depends on a particular sequence.
         self.controller.new_sequence_reset()
         self.memory.new_sequence_reset()
-        self.last_read_vector.zero_()
+        self.last_read_vector.data=torch.Tensor(param.bs,param.W, param.R).zero_().cuda()

@@ -26,18 +26,18 @@ def save_model():
 def run_one_story(computer, optimizer, story_length, batch_size, validate=False):
     # to promote code reuse
     input_data, target_output, critical_index = gendata(batch_size, validate=validate)
-    input_data=torch.Tensor(input_data)
-    target_output=torch.Tensor(target_output)
+    input_data=torch.Tensor(input_data).cuda()
+    target_output=torch.Tensor(target_output).cuda()
     stairs=torch.Tensor(numpy.arange(0,param.bs*story_length,story_length))
     critical_index=critical_index+stairs.unsqueeze(1)
     critical_index=critical_index.view(-1)
-    critical_index=critical_index.long()
+    critical_index=critical_index.long().cuda()
 
     criterion=torch.nn.CrossEntropyLoss()
 
     with torch.no_grad if validate else dummy_context_mgr():
 
-        story_output = torch.Tensor(batch_size, story_length,word_space)
+        story_output = torch.Tensor(batch_size, story_length,word_space).cuda()
 
         # a single story
         for timestep in range(story_length):
@@ -158,7 +158,8 @@ if __name__=="__main__":
     epochs_count=100
     lr=1e-5
     computer=Computer()
-    computer.reset_parameters()
+    computer=computer.cuda()
+
     optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
 
     train(computer,optimizer,story_limit, batch_size)
