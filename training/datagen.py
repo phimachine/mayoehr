@@ -26,9 +26,7 @@ def babi_command(task, sets, write_to_disk=True,train=True, files_count=1):
         else:
             babiGen="/home/jasonhu/Git/distro/install/bin/babi-tasks "+str(task)+" "+str(sets)
 
-        process = subprocess.Popen(babiGen.split(), stdout=subprocess.PIPE)
-        output, error = process.communicate()
-        print('generated file '+ str(files_count))
+        subprocess.Popen(babiGen.split(), stdout=subprocess.PIPE)
     os.chdir("../")
 
 def list_of_babi(task, sets):
@@ -135,7 +133,7 @@ def encode_data(files_list, lexicons_dictionary, padding_to_length=None):
 
                     if word.isalpha() or word == '?' or word == '.':
                         if not answers_flag:
-                            story_inputs.append(lexicons_dictionary[word.lower()])
+                                story_inputs.append(lexicons_dictionary[word.lower()])
                         else:
                             story_inputs.append(lexicons_dictionary['-'])
                             story_outputs.append(lexicons_dictionary[word.lower()])
@@ -269,8 +267,6 @@ def gendata(batch_size, validate=False):
     :return:
     '''
 
-    print('start preparing sample')
-
 
     dirname = os.path.dirname(__file__)
 
@@ -293,6 +289,6 @@ def gendata(batch_size, validate=False):
 
 
 if __name__ == '__main__':
-    write_babi_to_disk(task=10, sets=1000, train_files_count=1, story_limit=150)
+    write_babi_to_disk(task=10, sets=1000, train_files_count=20, story_limit=150)
     input_data, target_output, ignore_index=gendata(batch_size=param.bs)
     print("done")

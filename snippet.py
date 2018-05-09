@@ -1,15 +1,25 @@
+from archi.computer import Computer
 import torch
-#
-# unsorted=torch.Tensor([[1,2,3,4],[9,8,7,6]])
-# print(unsorted)
-# sorted,indices=unsorted.sort(dim=1)
-# print(sorted)
-# print(indices)
-# ret=torch.gather(sorted,1,indices)
-# print(ret)
+from pathlib import Path
+import os
+from torch.optim import SGD
+from os.path import abspath
 
-a=torch.Tensor([[1,2,3],[2,3,4]])
-b=torch.Tensor([[2,3]])
-print(a)
-print(b)
-print(a*b.t())
+def save_model(net, optim, epoch):
+    state_dict = net.state_dict()
+    for key in state_dict.keys():
+        state_dict[key] = state_dict[key].cpu()
+    task_dir = os.path.dirname(abspath(__file__))
+    print(task_dir)
+    pickle_file=Path("saves/DNC_"+str(epoch)+".pkl")
+
+    torch.save({
+        'epoch': 10,
+        'state_dict': state_dict,
+        'optimizer': optim},
+        pickle_file)
+
+computer=Computer()
+optim=SGD(computer.parameters(),lr=0.1)
+
+save_model(computer,optim,10)

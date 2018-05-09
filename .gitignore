@@ -3,6 +3,7 @@ training/data/
 */__pycache__
 # Compiled Lua sources
 luac.out
+saves
 
 # luarocks build files
 *.src.rock

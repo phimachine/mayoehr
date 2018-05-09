@@ -4,11 +4,13 @@ import torch
 import numpy
 import archi.param as param
 import pdb
-
+from pathlib import Path
+import os
+from os.path import abspath
 # task 10 of babi
 
 batch_size=param.bs
-word_space=27
+word_space=36
 param.x=word_space
 param.v_t=word_space
 
@@ -18,10 +20,19 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-# TODO save model parameters
+def save_model(net, optim, epoch):
+    state_dict = net.state_dict()
+    for key in state_dict.keys():
+        state_dict[key] = state_dict[key].cpu()
+    task_dir = os.path.dirname(abspath(__file__))
+    print(task_dir)
+    pickle_file=Path("saves/DNC_"+str(epoch)+".pkl")
 
-def save_model():
-    pass
+    torch.save({
+        'epoch': epoch,
+        'state_dict': state_dict,
+        'optimizer': optim},
+        pickle_file)
 
 def run_one_story(computer, optimizer, story_length, batch_size, validate=False):
     # to promote code reuse
@@ -134,7 +145,7 @@ def train(computer, optimizer, story_length, batch_size):
         for batch in range(epoch_batches_count):
 
             train_story_loss=run_one_story(computer, optimizer, story_length, batch_size)
-
+            print("success! epoch: ",epoch,"batch number: ", batch,"loss: ",train_story_loss.item())
             running_loss+=train_story_loss
 
             if batch%256==255:
@@ -149,6 +160,9 @@ def train(computer, optimizer, story_length, batch_size):
 
             train_loss_history+=[train_story_loss]
 
+        save_model(computer,optimizer,epoch)
+        print("model saved for epoch ", epoch)
+
 
 
 if __name__=="__main__":
@@ -156,7 +170,7 @@ if __name__=="__main__":
     story_limit=150
     epoch_batches_count=1024
     epochs_count=100
-    lr=1e-5
+    lr=1e-3
     computer=Computer()
     computer=computer.cuda()
 
