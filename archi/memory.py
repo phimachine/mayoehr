@@ -166,7 +166,7 @@ class Memory(nn.Module):
         sorted, indices= self.usage_vector.sort(dim=1)
         cum_prod=torch.cumprod(sorted,1)
         # notice the index on the product
-        cum_prod=torch.cat([torch.ones(param.bs,1),cum_prod],1)[:,:-1].clone()
+        cum_prod=torch.cat([torch.ones(param.bs,1),cum_prod],1)[:,:-1]
         sorted_inv=1-sorted
         allocation_weighting=sorted_inv*cum_prod
         # to shuffle back in place

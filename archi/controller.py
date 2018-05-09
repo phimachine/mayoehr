@@ -31,7 +31,7 @@ class Controller(nn.Module):
         hidden_previous_layer=torch.Tensor(param.bs,param.h).zero_()
         hidden_this_timestep=torch.Tensor(param.bs,param.L,param.h)
         for i in range(param.L):
-            hidden_output=self.RNN_list[i](input_x, self.hidden_previous_timestep[:,i,:].clone(),
+            hidden_output=self.RNN_list[i](input_x, self.hidden_previous_timestep[:,i,:],
                              hidden_previous_layer)
             hidden_this_timestep[:,i,:]=hidden_output
             hidden_previous_layer=hidden_output
