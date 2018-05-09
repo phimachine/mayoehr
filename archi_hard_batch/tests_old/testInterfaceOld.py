@@ -15,7 +15,7 @@ class test_interface(unittest.TestCase):
                                   param.W+param.R+1+1+param.R*3
         # must warp everything into a variable. even if gradient is not required
         interface_vector=torch.Tensor(interface_dimension_count)
-        interface_vector=Variable(interface_vector,requires_grad=False)
+        interface_vector=Variable(interface_vector)
         stdv=1.0/math.sqrt(interface_dimension_count)
         interface_vector.data.uniform_(-stdv,stdv)
         interface=Interface()

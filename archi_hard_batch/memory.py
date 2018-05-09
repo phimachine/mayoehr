@@ -20,7 +20,7 @@ class Memory(nn.Module):
         self.temporal_memory_linkage=torch.Tensor(param.N, param.N).zero_()
         #TODO will autograd alter memory? Should autograd alter memory?
         # (N,W)
-        self.memory=Variable(torch.Tensor(param.N,param.W),requires_grad=False)
+        self.memory=Variable(torch.Tensor(param.N,param.W),requires_grad=True)
         # (N, R). Does this require gradient?
         self.read_weightings=torch.Tensor(param.N,param.R)
 

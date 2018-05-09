@@ -11,7 +11,10 @@ import pdb
 import numpy
 
 def test_simplex_bound(tensor,dim):
-
+    t=tensor.contiguous().view(-1,dim)
+    if (t.sum(1)>1).any() or (t.sum(1)<0).any() or (t<0).any() or (t>1).any():
+        raise ValueError("test simplex bound failed")
+    return True
 
 class Memory(nn.Module):
 
@@ -25,7 +28,6 @@ class Memory(nn.Module):
         self.temporal_memory_linkage=torch.Tensor(param.bs,param.N, param.N)
         # (N,W)
         self.memory=torch.Tensor(param.N,param.W)
-        self.previous_memory=None
         # (N, R). Does this require gradient?
         self.last_read_weightings=torch.Tensor(param.bs, param.N, param.R)
 
@@ -191,8 +193,7 @@ class Memory(nn.Module):
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
-        if (write_weighting.sum(1)>1).any() or (write_weighting<0).any():
-            raise ValueError("write weighting simplex bound problem.")
+        test_simplex_bound(write_weighting,1)
         return write_weighting
 
     def update_precedence_weighting(self,write_weighting):
@@ -201,8 +202,12 @@ class Memory(nn.Module):
         :param write_weighting: (N)
         :return: self.precedence_weighting: (N), simplex bound
         '''
-        sum_ww=sum(write_weighting)
-        self.precedence_weighting=(1-sum_ww)*self.precedence_weighting+write_weighting
+        # this is the bug. I called the python default sum() instead of torch.sum()
+        # Took me 3 hours.
+        # sum_ww=sum(write_weighting,1)
+        sum_ww=torch.sum(write_weighting,dim=1)
+        self.precedence_weighting=(1-sum_ww).unsqueeze(1)*self.precedence_weighting+write_weighting
+        test_simplex_bound(self.precedence_weighting,1)
         return self.precedence_weighting
 
     def update_temporal_linkage_matrix(self,write_weighting):
@@ -217,8 +222,9 @@ class Memory(nn.Module):
         ww_i=write_weighting.unsqueeze(2).expand(-1,-1,param.N)
         p_j=self.precedence_weighting.unsqueeze(1).expand(-1,param.N,-1)
         batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
-
         self.temporal_memory_linkage= (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
+        test_simplex_bound(self.temporal_memory_linkage,1)
+        test_simplex_bound(self.temporal_memory_linkage,2)
         return self.temporal_memory_linkage
 
     def backward_weighting(self):
@@ -226,28 +232,31 @@ class Memory(nn.Module):
 
         :return: backward_weighting: b^i_t, (N,R)
         '''
-        return torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
+        ret= torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
+        test_simplex_bound(ret,1)
+        return ret
 
     def forward_weighting(self):
         '''
 
         :return: forward_weighting: f^i_t, (N,R)
         '''
-        return torch.matmul(self.temporal_memory_linkage.transpose(1,2), self.last_read_weightings)
-
+        ret= torch.matmul(self.temporal_memory_linkage.transpose(1,2), self.last_read_weightings)
+        test_simplex_bound(ret,1)
+        return ret
     # TODO sparse update, skipped because it's for performance improvement.
 
     def read_weightings(self, forward_weighting, backward_weighting, read_keys,
                         read_strengths, read_modes):
         '''
 
-        :param forward_weighting: (N,R)
-        :param backward_weighting: (N,R)
-        ****** read_content_weighting: C, (N,R), (0,1)
-        :param read_keys: k^w_t, (W,R)
-        :param read_key_strengths: (R)
-        :param read_modes: /pi_t^i, (R,3)
-        :return: read_weightings: w^r_t, (N,R)
+        :param forward_weighting: (bs,N,R)
+        :param backward_weighting: (bs,N,R)
+        ****** content_weighting: C, (bs,N,R), (0,1)
+        :param read_keys: k^w_t, (bs,W,R)
+        :param read_key_strengths: (bs,R)
+        :param read_modes: /pi_t^i, (bs,R,3)
+        :return: read_weightings: w^r_t, (bs,N,R)
 
         TODO how is there even a bug?
         read modes add up to 1
@@ -255,19 +264,21 @@ class Memory(nn.Module):
         '''
 
         content_weighting=self.read_content_weighting(read_keys,read_strengths)
-        # has dimension (3,N,R)
+        test_simplex_bound(content_weighting,1)
+        test_simplex_bound(backward_weighting,1)
+        test_simplex_bound(forward_weighting,1)
+        # has dimension (bs,3,N,R)
         all_weightings=torch.stack([backward_weighting,content_weighting,forward_weighting],dim=1)
-        # permute to dimension (R,N,3)
+        # permute to dimension (bs,R,N,3)
         all_weightings=all_weightings.permute(0,3,2,1)
         # this is becuase torch.matmul is designed to iterate all dimension excluding the last two
-        # dimension (R,3,1)
+        # dimension (bs,R,3,1)
         read_modes=read_modes.unsqueeze(3)
-        # dimension (N,R)
+        # dimension (bs,N,R)
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1,2)
         self.last_read_weightings=read_weightings
         # last read weightings
-        if (read_weightings.sum(1)>1).any():
-            raise("read weightings simplex bound condition false")
+        test_simplex_bound(self.last_read_weightings,1)
         return read_weightings
 
     def read_memory(self,read_weightings):
@@ -298,7 +309,6 @@ class Memory(nn.Module):
         self.memory=torch.mean(term1+term2, dim=0)
         if numpy.isinf(self.memory.detach().numpy()).any():
             raise ValueError("nan is found")
-        self.previous_memory=self.memory
 
     def forward(self,read_keys, read_strengths, write_key, write_strength,
                 erase_vector, write_vector, free_gates, allocation_gate,
