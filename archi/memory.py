@@ -10,6 +10,9 @@ from torch.autograd import Variable
 import pdb
 import numpy
 
+def test_simplex_bound(tensor,dim):
+
+
 class Memory(nn.Module):
 
     def __init__(self):
@@ -263,7 +266,8 @@ class Memory(nn.Module):
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1,2)
         self.last_read_weightings=read_weightings
         # last read weightings
-        if (self.last_read_weightings)
+        if (read_weightings.sum(1)>1).any():
+            raise("read weightings simplex bound condition false")
         return read_weightings
 
     def read_memory(self,read_weightings):
