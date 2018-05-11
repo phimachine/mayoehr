@@ -9,6 +9,8 @@ import math
 from torch.nn.modules.rnn import LSTM
 from torch.nn.parameter import Parameter
 
+
+
 class Controller(nn.Module):
     """
         Deep RNN model that passes on layer by layer
@@ -21,6 +23,7 @@ class Controller(nn.Module):
         self.hidden_previous_timestep=Parameter(torch.Tensor(param.bs,param.L,param.h).zero_())
         self.W_y=nn.Linear(param.L*param.h,param.v_t)
         self.W_E=nn.Linear(param.L*param.h,param.E_t)
+
 
     def forward(self, input_x):
         '''
@@ -100,6 +103,3 @@ class RNN_Unit(nn.Module):
         self.old_state.data=new_state
 
         return new_hidden
-
-
-

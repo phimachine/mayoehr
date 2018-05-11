@@ -9,7 +9,8 @@ from os import listdir, mkdir
 from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
 import subprocess
 import archi.param as param
-from multiprocessing import Process
+from threading import Thread
+import time
 
 
 def babi_command(task, sets, write_to_disk=True,train=True, files_count=1):
@@ -289,25 +290,42 @@ class PreGenData():
     # the purpose of this class is to generate data before it's required to use.
     # this will reduce 11% of my code run time according to cProfiler.
     def __init__(self, batch_size):
-        self.train_ready_flag=False
         self.batch_size=batch_size
-        self.val_ready_flag=True
-        self.next_train=gendata(self.batch_size,validate=False)
-        self.next_validate=gendata(self.batch_size,validate=True)
+        self.val_ready=False
+        self.train_ready=False
+        self.next_train=None
+        self.next_validate=None
+        self.__gendata_train()
+        self.__gendata_val()
+        param.x=self.next_train[0].shape[2]
+        param.v_t=param.x
+
+    def get_train(self):
+        Thread(target=self.__gendata_train).start()
+        while not self.train_ready:
+            print('train data is not ready?')
+            time.sleep(1)
+        return self.next_train
 
     def get_validate(self):
-        self.val_ready_flag=False
+        Thread(target=self.__gendata_val).start()
+        while not self.val_ready:
+            print('val dat is not ready?')
+            time.sleep(1)
+        return self.next_train
 
-        return self.next_validate
+    def __gendata_train(self):
+        self.next_train=gendata(self.batch_size,False)
+        self.train_ready=True
 
-    def gen_validate(self):
-        # gen validate generate a validate with a call back method.
-        self.next_validate=
-
+    def __gendata_val(self):
+        self.next_validate=gendata(self.batch_size,True)
+        self.val_ready=True
 
 
 
 if __name__ == '__main__':
     write_babi_to_disk(task=10, sets=1000, train_files_count=20, story_limit=150)
-    input_data, target_output, ignore_index=gendata(batch_size=param.bs)
+    pgd=PreGenData(param.bs)
+    input_data, target_output, ignore_index=pgd.get_train()
     print("done")

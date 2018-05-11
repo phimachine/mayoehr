@@ -1,4 +1,4 @@
-from training.datagen import gendata
+from training.datagen import PreGenData
 from archi.computer import Computer
 import torch
 import numpy
@@ -7,12 +7,10 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
+import time
 # task 10 of babi
 
 batch_size=param.bs
-word_space=27
-param.x=word_space
-param.v_t=word_space
 
 class dummy_context_mgr():
     def __enter__(self):
@@ -35,9 +33,13 @@ def save_model(net, optim, epoch):
         'optimizer': optim},
         pickle_file)
 
-def run_one_story(computer, optimizer, story_length, batch_size, validate=False):
+def run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False):
     # to promote code reuse
-    input_data, target_output, critical_index = gendata(batch_size, validate=validate)
+    if not validate:
+        input_data, target_output, critical_index=pgd.get_train()
+    else:
+        input_data, target_output, critical_index=pgd.get_validate()
+
     input_data=torch.Tensor(input_data).cuda()
     target_output=torch.Tensor(target_output).cuda()
     stairs=torch.Tensor(numpy.arange(0,param.bs*story_length,story_length))
@@ -49,7 +51,7 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
 
     with torch.no_grad if validate else dummy_context_mgr():
 
-        story_output = torch.Tensor(batch_size, story_length,word_space).cuda()
+        story_output = torch.Tensor(batch_size, story_length, param.x).cuda()
 
         # a single story
         for timestep in range(story_length):
@@ -66,7 +68,7 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
             story_output[:, timestep,:] = batch_output
 
         target_output=target_output.view(-1)
-        story_output=story_output.view(-1,word_space)
+        story_output=story_output.view(-1,param.x)
         story_output=story_output[critical_index,:]
         target_output=target_output[critical_index].long()
 
@@ -80,63 +82,7 @@ def run_one_story(computer, optimizer, story_length, batch_size, validate=False)
 
     return story_loss
 
-#
-# def validate_one_batch_story(computer, story_length):
-#     input_data, target_output, seq_len, weights = gendata(batch_size, validate=True)
-#     criterion=torch.nn.CrossEntropyLoss(weights=weights)
-#
-#     with torch.no_grad:
-#
-#         story_output = torch.Tensor(batch_size, story_length)
-#
-#         # a single story
-#         for timestep in range(story_length):
-#             # feed the batch into the machine
-#             # Expected input dimension: (150, 27)
-#             # output: (150,27)
-#             batch_input_of_same_timestep = input_data[:, timestep, :]
-#
-#             # usually batch does not interfere with each other's logic
-#             story_output[:, timestep] = computer(batch_input_of_same_timestep)
-#
-#         story_loss = criterion(story_output, target_output)
-#         computer.new_sequence_reset()
-#
-#         # new pytorch support
-#         return story_loss[0]
-#
-#
-# def train_one_batch_story(computer, optimizer, story_length, batch_size):
-#     input_data, target_output, seq_len, weights = gendata(batch_size, story_length)
-#     weights=torch.Tensor(weights)
-#     criterion=torch.nn.CrossEntropyLoss(weight=weights)
-#
-#     optimizer.zero_grad()
-#
-#     story_output=torch.Tensor(batch_size, story_length)
-#
-#     # a single story
-#     for timestep in range(story_length):
-#         # feed the batch into the machine
-#         # Expected input dimension: (150, 27)
-#         # output: (150,27)
-#         batch_input_of_same_timestep = input_data[:, timestep, :]
-#
-#         # usually batch does not interfere with each other's logic
-#         story_output[:, timestep] = computer(batch_input_of_same_timestep)
-#
-#
-#     story_loss=criterion(story_output,target_output)
-#     # I chose to backward a derivative only after a whole story has been taken in
-#     # This should lead to a more stable, but initially slower convergence.
-#     story_loss.backward()
-#     optimizer.step()
-#     computer.new_sequence_reset()
-#
-#     # new pytorch support
-#     return story_loss[0]
-
-def train(computer, optimizer, story_length, batch_size):
+def train(computer, optimizer, story_length, batch_size, pgd):
     train_loss_history=[]
     test_history=[]
     for epoch in range(epochs_count):
@@ -145,7 +91,7 @@ def train(computer, optimizer, story_length, batch_size):
 
         for batch in range(epoch_batches_count):
 
-            train_story_loss=run_one_story(computer, optimizer, story_length, batch_size)
+            train_story_loss=run_one_story(computer, optimizer, story_length, batch_size, pgd)
             print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
                   (epoch+1, batch+1, train_story_loss.item()))
             running_loss+=train_story_loss
@@ -155,7 +101,7 @@ def train(computer, optimizer, story_length, batch_size):
                       (epoch + 1, batch + 1, running_loss / val_freq))
                 running_loss=0
                 # also test the model
-                val_loss=run_one_story(computer, optimizer, story_length, batch_size, validate=False)
+                val_loss=run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
                 print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                       (epoch + 1, batch + 1, val_loss))
                 test_history+=[val_loss]
@@ -170,12 +116,12 @@ def train(computer, optimizer, story_length, batch_size):
 if __name__=="__main__":
 
     story_limit=150
-    epoch_batches_count=10
-    epochs_count=10
+    epoch_batches_count=32
+    epochs_count=1024
     lr=1e-5
+    pgd=PreGenData(param.bs)
     computer=Computer()
     computer=computer.cuda()
-
     optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
 
-    train(computer,optimizer,story_limit, batch_size)
+    train(computer,optimizer,story_limit, batch_size, pgd)

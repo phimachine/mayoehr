@@ -6,7 +6,7 @@ Controller parameters
 '''
 # input vector size x_t
 # dataset specific
-x=27
+x=None
 
 # single hidden unit output size h^l_t
 # state size
@@ -21,7 +21,7 @@ L=64
 
 # Controller output v_t size
 # dataset specific
-v_t=32
+v_t=None
 
 # Memory location width
 # Memory read heads count R
