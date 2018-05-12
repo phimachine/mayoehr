@@ -7,6 +7,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
+import gc
 import time
 # task 10 of babi
 
@@ -18,20 +19,75 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-def save_model(net, optim, epoch):
+def save_model(net,optim,epoch):
+    task_dir = os.path.dirname(abspath(__file__))
+    print(task_dir)
+    pickle_file=Path("../saves/DNCfull_"+str(epoch)+".pkl")
+    pickle_file=pickle_file.open('wb')
+    torch.save((net,optim,epoch),pickle_file)
+
+def load_model():
+    task_dir = os.path.dirname(abspath(__file__))
+    save_dir=Path(task_dir).parent/"saves"
+    highestepoch=-1
+    for child in save_dir.iterdir():
+        epoch=str(child).split("_")[1].split('.')[0]
+        # some files are open but not written to yet.
+        if int(epoch) > highestepoch and child.stat().st_size>2048:
+            highestepoch=int(epoch)
+    pickle_file=Path("../saves/DNCfull_"+str(highestepoch)+".pkl")
+    pickle_file=pickle_file.open('rb')
+    model, optim, epoch=torch.load(pickle_file)
+
+    print('Loaded model at epoch ', highestepoch)
+
+    for child in save_dir.iterdir():
+        epoch=str(child).split("_")[1].split('.')[0]
+        if int(epoch)!=highestepoch:
+            os.remove(child)
+    print('Removed incomplete save file and all else.')
+
+    return model, optim, epoch
+
+def save_model_old(net, optim, epoch):
     state_dict = net.state_dict()
     for key in state_dict.keys():
         state_dict[key] = state_dict[key].cpu()
     task_dir = os.path.dirname(abspath(__file__))
     print(task_dir)
-    pickle_file=Path("saves/DNC_"+str(epoch)+".pkl")
-    pickle_file=pickle_file.open('w')
+    pickle_file=Path("../saves/DNC_"+str(epoch)+".pkl")
+    pickle_file=pickle_file.open('wb')
 
     torch.save({
         'epoch': epoch,
         'state_dict': state_dict,
         'optimizer': optim},
         pickle_file)
+
+
+def load_model_old(net):
+    task_dir = os.path.dirname(abspath(__file__))
+    save_dir=Path(task_dir).parent/"saves"
+    highestepoch=-1
+    for child in save_dir.iterdir():
+        epoch=str(child).split("_")[1].split('.')[0]
+        # some files are open but not written to yet.
+        if int(epoch) > highestepoch and child.stat().st_size>2048:
+            highestepoch=int(epoch)
+    pickle_file=Path("../saves/DNC_"+str(highestepoch)+".pkl")
+    pickle_file=pickle_file.open('rb')
+    ret=torch.load(pickle_file)
+
+    net.load_state_dict(ret['state_dict'])
+    print('Loaded model at epoch ', highestepoch)
+
+    for child in save_dir.iterdir():
+        epoch=str(child).split("_")[1].split('.')[0]
+        if int(epoch)!=highestepoch:
+            os.remove(child)
+    print('Removed incomplete save file and all else.')
+
+    return ret['epoch'], ret['optimizer']
 
 def run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False):
     # to promote code reuse
@@ -82,10 +138,10 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=F
 
     return story_loss
 
-def train(computer, optimizer, story_length, batch_size, pgd):
+def train(computer, optimizer, story_length, batch_size, pgd, starting_epoch):
     train_loss_history=[]
     test_history=[]
-    for epoch in range(epochs_count):
+    for epoch in range(starting_epoch,epochs_count):
 
         running_loss=0
 
@@ -93,35 +149,45 @@ def train(computer, optimizer, story_length, batch_size, pgd):
 
             train_story_loss=run_one_story(computer, optimizer, story_length, batch_size, pgd)
             print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
-                  (epoch+1, batch+1, train_story_loss.item()))
+                  (epoch, batch, train_story_loss.item()))
             running_loss+=train_story_loss
-            val_freq=64
+            val_freq=16
             if batch%val_freq==val_freq-1:
                 print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f' %
-                      (epoch + 1, batch + 1, running_loss / val_freq))
+                      (epoch, batch, running_loss / val_freq))
                 running_loss=0
                 # also test the model
                 val_loss=run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
                 print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
-                      (epoch + 1, batch + 1, val_loss))
+                      (epoch, batch, val_loss))
                 test_history+=[val_loss]
 
             train_loss_history+=[train_story_loss]
 
-        save_model(computer,optimizer,epoch)
+        save_model(computer, epoch)
         print("model saved for epoch ", epoch)
 
 
 
 if __name__=="__main__":
 
+
     story_limit=150
-    epoch_batches_count=32
+    epoch_batches_count=64
     epochs_count=1024
     lr=1e-5
     pgd=PreGenData(param.bs)
     computer=Computer()
-    computer=computer.cuda()
-    optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
+    optim=None
+    starting_epoch=-1
 
-    train(computer,optimizer,story_limit, batch_size, pgd)
+    # if load model
+    # computer, optim, starting_epoch = load_model()
+
+    computer=computer.cuda()
+    if optim is None:
+        optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
+    else:
+        optimizer=optim
+    # starting with the epoch after the loaded one
+    train(computer,optimizer,story_limit, batch_size, pgd, starting_epoch+1)

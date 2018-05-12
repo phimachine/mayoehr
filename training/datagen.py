@@ -310,7 +310,7 @@ class PreGenData():
     def get_validate(self):
         Thread(target=self.__gendata_val).start()
         while not self.val_ready:
-            print('val dat is not ready?')
+            print('val data is not ready?')
             time.sleep(1)
         return self.next_train
 

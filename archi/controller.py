@@ -68,7 +68,7 @@ class RNN_Unit(nn.Module):
         self.W_output=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
         self.W_state=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
 
-        self.old_state=Parameter(torch.Tensor(param.h).zero_())
+        self.old_state=Parameter(torch.Tensor(param.bs,param.h).zero_())
 
         self.reset_parameters()
 
