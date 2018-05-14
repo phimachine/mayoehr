@@ -175,6 +175,7 @@ def train(computer, optimizer, story_length, batch_size, pgd, starting_epoch):
 
 if __name__=="__main__":
 
+
     story_limit=150
     epoch_batches_count=64
     epochs_count=1024
@@ -191,8 +192,7 @@ if __name__=="__main__":
     if optim is None:
         optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
     else:
-        print('use new optimizer')
-        optimizer=torch.optim.Adam(computer.parameters(),lr=1e-7)
-    
+        print('loaded optimizer')
+        optimizer=optim
     # starting with the epoch after the loaded one
     train(computer,optimizer,story_limit, batch_size, pgd, int(starting_epoch)+1)

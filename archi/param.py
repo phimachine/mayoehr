@@ -13,7 +13,7 @@ x=None
 # output size, forget gate size, input gate size are all equal to state size s
 # all weight matrices in equation 1-5 then has dimension (s, x+2*h)
 # by equation 5, h=s=o
-h=64
+h=128
 
 # Controller RNN layers count
 # refers to the number of parallel RNN units
