@@ -55,6 +55,8 @@ class Controller(nn.Module):
 
     def new_sequence_reset(self):
         self.hidden_previous_timestep.data=torch.Tensor(param.bs,param.L,param.h).zero_().cuda()
+        for RNN in self.RNN_list:
+            RNN.new_sequence_reset()
 
 class RNN_Unit(nn.Module):
     """
@@ -68,9 +70,8 @@ class RNN_Unit(nn.Module):
         self.W_output=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
         self.W_state=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
 
-        self.old_state=Parameter(torch.Tensor(param.bs,param.h).zero_())
+        self.old_state=Parameter(torch.Tensor(param.bs,param.h).zero_().cuda())
 
-        self.reset_parameters()
 
     def reset_parameters(self):
         # initialized the way pytorch LSTM is initialized, from normal
@@ -103,3 +104,6 @@ class RNN_Unit(nn.Module):
         self.old_state.data=new_state
 
         return new_hidden
+
+    def new_sequence_reset(self):
+        self.old_state=Parameter(torch.Tensor(param.bs,param.h).zero_().cuda())

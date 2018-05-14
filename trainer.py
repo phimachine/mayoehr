@@ -112,7 +112,7 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=F
     with torch.no_grad if validate else dummy_context_mgr():
 
         story_output = torch.Tensor(batch_size, story_length, param.x).cuda()
-
+        computer.new_sequence_reset()
         # a single story
         for timestep in range(story_length):
             # feed the batch into the machine
@@ -138,13 +138,10 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=F
             # This should lead to a more stable, but initially slower convergence.
             story_loss.backward()
             optimizer.step()
-        computer.new_sequence_reset()
 
     return story_loss
 
 def train(computer, optimizer, story_length, batch_size, pgd, starting_epoch):
-    train_loss_history=[]
-    test_history=[]
     for epoch in range(starting_epoch,epochs_count):
 
         running_loss=0
@@ -164,9 +161,6 @@ def train(computer, optimizer, story_length, batch_size, pgd, starting_epoch):
                 val_loss=run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
                 print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                       (epoch, batch, val_loss))
-                test_history+=[val_loss]
-
-            train_loss_history+=[train_story_loss]
 
         save_model(computer, optimizer, epoch)
         print("model saved for epoch ", epoch)
@@ -191,8 +185,8 @@ if __name__=="__main__":
     if optim is None:
         optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
     else:
-        print('use new optimizer')
-        optimizer=torch.optim.Adam(computer.parameters(),lr=1e-7)
+        print('use Adadelta optimizer with learning rate ', lr)
+        optimizer=torch.optim.Adadelta(computer.parameters(),lr=lr)
     
     # starting with the epoch after the loaded one
     train(computer,optimizer,story_limit, batch_size, pgd, int(starting_epoch)+1)

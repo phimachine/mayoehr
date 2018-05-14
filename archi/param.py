@@ -36,7 +36,9 @@ N=32
 
 # I am going to bake batch_processing in the DNC.
 # This is going to be a very tough week.
-bs=32
+bs=24
+
+global_reset_flag=False
 
 
 '''
