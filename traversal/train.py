@@ -147,7 +147,9 @@ def run_one_story(computer, optimizer, difficulty, batch_size, pgd, validate=Fal
 
         story_loss = criterion(story_output, target_output)
 
-        precision = 0
+        pred=torch.argmax(story_output,dim=1)
+        correct=torch.sum(pred==target_output)
+        precision=float(correct)/target_output.size()[0]
         if precision>0.9:
             difficulty+=1
         if not validate:
@@ -156,29 +158,32 @@ def run_one_story(computer, optimizer, difficulty, batch_size, pgd, validate=Fal
             story_loss.backward()
             optimizer.step()
 
-    return story_loss
+    return story_loss,precision
 
 
 def train(computer, optimizer, difficulty, batch_size, pgd, starting_epoch):
     for epoch in range(starting_epoch, epochs_count):
 
         running_loss = 0
+        running_prec=0
 
         for batch in range(epoch_batches_count):
 
-            train_story_loss = run_one_story(computer, optimizer, difficulty, batch_size, pgd)
-            print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
-                  (epoch, batch, train_story_loss.item()))
+            train_story_loss,precision = run_one_story(computer, optimizer, difficulty, batch_size, pgd)
+            print("learning. epoch: %4d, batch number: %4d, training loss: %.4f, precision: %.4f" %
+                  (epoch, batch, train_story_loss.item(),precision))
             running_loss += train_story_loss
+            running_prec+=precision
             val_freq = 16
             if batch % val_freq == val_freq - 1:
-                print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f' %
-                      (epoch, batch, running_loss / val_freq))
+                print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f, running prec: %.4f' %
+                      (epoch, batch, running_loss / val_freq, running_prec/val_freq))
                 running_loss = 0
+                running_prec=0
                 # also test the model
-                val_loss = run_one_story(computer, optimizer, difficulty, batch_size, pgd, validate=False)
-                print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
-                      (epoch, batch, val_loss))
+                val_loss,precision = run_one_story(computer, optimizer, difficulty, batch_size, pgd, validate=False)
+                print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f, precision: %.4f' %
+                      (epoch, batch, val_loss, precision))
 
         save_model(computer, optimizer, epoch)
         print("model saved for epoch ", epoch)
@@ -188,7 +193,7 @@ if __name__ == "__main__":
 
     epoch_batches_count = 64
     epochs_count = 1024
-    lr = 1e-5
+    lr = 1e-7
     starting_epoch = -1
     difficulty=1
     param.x = 92
