@@ -1,27 +1,20 @@
-from threading import Thread
+from multiprocessing import Pool
 import time
 
-class cachedYielder():
-    # this function runs a value generator when it's initiated, then everytime it's called, it returns the previous value and replenishes a new one
+def f(x):
+    return x*x
 
-    def __init__(self):
-        self.cache=None
-        self.count=0
-        self.gen()
+if __name__ == '__main__':
+    with Pool(processes=4) as pool:         # start 4 worker processes
+        result = pool.apply_async(f, (10,)) # evaluate "f(10)" asynchronously in a single process
+        print(result.get(timeout=100))        # prints "100" unless your computer is *very* slow
 
-    def gen(self):
-        # This is the slow generator
-        time.sleep(1)
-        self.cache=self.count
-        self.count+=1
-        print('generated and replaced')
+        print(pool.map(f, range(10)))       # prints "[0, 1, 4,..., 81]"
 
-    def get_val(self):
-        Thread(target=self.gen).start()
-        return self.cache
+        it = pool.imap(f, range(10))
+        print(next(it))                     # prints "0"
+        print(next(it))                     # prints "1"
+        print(it.next(timeout=1))           # prints "4" unless your computer is *very* slow
 
-hello=cachedYielder()
-while(True):
-    needed=hello.get_val()
-    print("needed value accessed")
-    time.sleep(1)
+        result = pool.apply_async(time.sleep, (10,))
+        print(result.get(timeout=1))
