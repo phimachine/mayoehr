@@ -1,9 +1,9 @@
 .idea
-training/data/
+*/training/data/
 */__pycache__
 # Compiled Lua sources
 luac.out
-saves
+*/saves
 
 # luarocks build files
 *.src.rock
