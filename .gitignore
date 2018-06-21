@@ -2,3 +2,6 @@
 */.Rdata
 .RDataTmp
 */.RdataTmp
+.*
+!/.gitignore
+
