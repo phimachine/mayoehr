@@ -139,5 +139,28 @@ splitted[is.nan(bigger),'bigger']<-0
 # for the last step, we can feed the abnormality flag to be a value, but I will not do it.
 fwrite(splitted,"/infodev1/rep/projects/jason/mylabs.csv")
 
-#
+####### PRESCRIPTION
+pres<-fread('/infodev1/rep/data/prescriptions.csv')
+# I was not given a formula to precisely normalize the prescriptions.
+# I have found that the med_route can be different for a med_rxnorm_code, but muchof the variations are free text, hard to analyze, and mostly mean the same, >60% are actually unique
+mypres<-pres[med_rxnorm_code!=""]
+# take a look at those rows where sanity is TRUE
+mypres<-mypres %>% mutate(sanity=nchar(med_rxnorm_code)>10) %>% setDT()
+mypres<-mypres[sanity==FALSE]%>% select (-sanity) %>% setDT()
+pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>% mutate (count=n()) %>% distinct(med_rxnorm_code, .keep_all=TRUE) %>% arrange(count) %>% setDT()
+
+
+# I decided to throw out medications that are not used for more than 1000 times.
+
+
+####### SERVICES
+# my intuition tells me that sevices will not beo too vital
+# I will filter our the tail of the dataset to control input complexity.
+services_table <- serv %>% select(srv_px_code) %>% group_by(srv_px_code) %>% mutate(count=n()) %>% distinct(srv_px_code, .keep_all=TRUE) %>%  arrange(count) %>%  setDT()
+services_table<- services_table[count>1000]
+myserv<-serv %>% select (rep_person_id, SRV_DATE, srv_month, srv_px_code_type, srv_px_count, srv_px_code, SRV_LOCATION, srv_quantity, srv_age_years, SRV_ADT_DATE, srv_admit_type, srv_admit_src, SRV_DISCH_DATE, srv_disch_stat)
+myserv<- myserv[rep_person_id %in% services_table]
+# I did not throw away any other dimensions' values. They are mainly noise
+fwrite(mysev,"/infodev1/rep/projects/jason/myserv.csv")
+
 

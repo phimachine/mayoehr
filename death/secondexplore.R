@@ -80,3 +80,27 @@ hello[sample(132636,10),]
 # the lab dataset is messier than you think.
 # some does not have a range, but still has lab_abn_flag
 # I can only deal with it case by case.
+
+# I am happy with the work in the end. It took 4 hours though.
+
+# does med_rxnorm determine the med_route? This needs to be investigated
+pres %>% group_by(med_rx_normcode) %>% select(med_route) %>% mutate(n=N()) %>% setDT()
+
+# going to normalize the services
+# I decided to cut out services that are performed less than 1000 times. This is very aggressive, but it should be worth it.
+# this decision will have significant adverse effect if our sample size is big enough to shed light into rare events. Rare events carry significant information, but I chose to discard it because I have no confidence.
+services_table <- serv %>% select(srv_px_code) %>% group_by(srv_px_code) %>% mutate(count=n()) %>% distinct(srv_px_code, .keep_all=TRUE) %>%  arrange(count) %>%  setDT()
+services_table<- services_table[count>1000]
+
+# we want to see if one med_rxnorm_code could have several med route
+# the conclusion is that much of this free text variations mean the same thing. so many ways to say the same thing.
+# we will discard med_routes completely.
+uu<-pres %>% distinct(med_route,med_rxnorm_code)%>% group_by(med_rxnorm_code) %>% mutate (n=n()) %>% distinct(med_rxnorm_code,n) %>% arrange(desc(n))  %>%
+setDT()
+
+# I have discovered some parse issues this time
+# it turned out that NA test is wrong, since most of the fields are strings.
+# see prescription files especially. Those with med_rxnorm_code=="" needs to be thrown out
+# we will run multiple sanity checks. this file seems to be very problematic.
+# this means we probably need to go back and coerce formats on previous files. I bet there are problems. TODO
+
