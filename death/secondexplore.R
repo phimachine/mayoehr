@@ -57,53 +57,11 @@ table(cod$code_type)
 # etc. the data is very clean.
 
 # actually, we do not have the diagnoses for all the rep demos
-> max(dia$rep_person_id)
-[1] "99997"
 
 # I looked up some lab coes in lab_src_code and lab_loinc_code, and I found that they are redundant
 # most information are coded in lab_loinc_code already
 
 # I am trying to split range, but it turns out that there is one lab that cannot be splitted elegantly. One lab only.
-> splitted<-labs %>% separate(lab_range, c("A","B","C","D","E","F","G","H","I")) %>% setDT()
-Warning messages:
-1: Expected 9 pieces. Additional pieces discarded in 12382 rows [405629, 405649, 418569, 579751, 867494, 974283, 974337, 1056220, 1056224, 1374802, 1374828, 1374861, 1374871, 1374913, 1438051, 2041360, 2041506, 2041725, 2041967, 2042192, ...].
-2: Expected 9 pieces. Missing pieces filled with `NA` in 86183174 rows [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...].
-> labs[405629,]
-   rep_person_id               lab_date lab_src lab_src_code
-1:          2329 21SEP2015:03:41:00.000    Mayo 81749-ROCLIS
-            lab_src_desc lab_loinc_code
-1: Vancomycin, Random, S        20578-1
-                                lab_loinc_desc lab_result
-1: Vancomycin [Mass/volume] in Serum or Plasma       10.3
-                                lab_range lab_units lab_abn_flag
-1: Peak: 25.0 - 50.0; Trough: 10.0 - 20.0    mcg/mL
-> labs[974283,]
-   rep_person_id               lab_date lab_src lab_src_code
-1:          4197 06JAN2016:11:19:00.000    Mayo 81749-ROCLIS
-            lab_src_desc lab_loinc_code
-1: Vancomycin, Random, S        20578-1
-                                lab_loinc_desc lab_result
-1: Vancomycin [Mass/volume] in Serum or Plasma       28.3
-                                lab_range lab_units lab_abn_flag
-1: Peak: 25.0 - 50.0; Trough: 10.0 - 20.0    mcg/mL
-> labs[2042192,]
-   rep_person_id               lab_date lab_src lab_src_code
-1:          6637 10NOV2016:18:01:00.000    Mayo 81749-ROCLIS
-            lab_src_desc lab_loinc_code
-1: Vancomycin, Random, S        20578-1
-                                lab_loinc_desc lab_result
-1: Vancomycin [Mass/volume] in Serum or Plasma       19.5
-                                lab_range lab_units lab_abn_flag
-1: Peak: 25.0 - 50.0; Trough: 10.0 - 20.0    mcg/mL
-> labs[1438051,]
-   rep_person_id               lab_date lab_src lab_src_code
-1:          5331 01OCT2016:04:48:00.000    Mayo 81749-ROCLIS
-            lab_src_desc lab_loinc_code
-1: Vancomycin, Random, S        20578-1
-                                lab_loinc_desc lab_result
-1: Vancomycin [Mass/volume] in Serum or Plasma        5.9
-                                lab_range lab_units lab_abn_flag
-1: Peak: 25.0 - 50.0; Trough: 10.0 - 20.0    mcg/mL
 
 # this test needs to be treated specifically
 
@@ -117,3 +75,8 @@ hello[sample(132636,10),]
 # other than that, I don't see much from the sample.
 # Given that the dirty splitts are 0.1%, it's safe to just throw them away, but cleaning it is also very simple
 # This should yield a 0.01-0.001% dirty rows, within 30 minutes of work.
+
+# well, there goes my 30 minutes
+# the lab dataset is messier than you think.
+# some does not have a range, but still has lab_abn_flag
+# I can only deal with it case by case.

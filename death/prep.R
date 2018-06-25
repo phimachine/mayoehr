@@ -68,8 +68,6 @@ mylabs<-mylabs%>%select(-lab_src_code)%>%setDT()
 # I am going to normalize lab_range, lab_results and lab_units very naively. I believe this naive normalization method would work better than feeding it directly in.
 # I assume that all lab results are normal distribution. I assumet that all lab_ranges are intervals based on sigmas.
 # normalized_measure=(lab_result-up_or_lower_bound)/lab_range_interval_size
-# some other lab measures are treated as binary,
-
 ## this code stucks at one core
 #lab_length<-nrow(mylabs)
 #foreach(i=mylabs$lab_range,.combine='c')%dopar%{
@@ -97,6 +95,47 @@ parLapply(cl,mylabs$lab_range,function(range){
 #}
 
 # no parallel, 4 columns cover all.
-splitted<-labs %>% separate(lab_range, c("A","B","C","D"),sep='-',remove=FALSE) %>% setDT()
 
-#
+splitted<- mylabs[1:100000] %>% separate(lab_range, c("X","Y"), sep="to", remove=FALSE) %>% setDT()
+splitted<- splitted %>% separate(X,c("A","B","C","D"), sep='-', remove=FALSE) %>% setDT()
+splitted<-splitted[,A:=as.double(A)][,B:=as.double(B)][,C:=as.double(C)][,D:=as.double(D)][,Y:=as.double(Y)]
+# dirty cleaning:
+# if A is empty and B has value, then we know the lab range start from negative, so we move B to A with negative, C to B, conditioned upon that there is no D value.
+# condition holds that D has no value
+sum(is.na(splitted$A) && !is.na(splitted$D))
+# to mutate, we generate a new column and pass it, this avoids complicated function calls with dplyr
+# we find those that need to converted
+negative<-splitted[is.na(A)][!is.na(B)]
+negative[,A:=-B]
+negative[,B:=C]
+negative[,C:=NA]
+# e.g. -20 to 20
+negative[!is.na(Y)][,"B"]<-negative[!is.na(Y)][,"Y"]
+splitted[is.na(A)][!is.na(B)]<-negative
+# some range are non standard. we will have to rely on the abnormality flag and assume it's +1
+splitted[is.na(B)][!is.na(A)][,'A']<-NA
+# now we have reached a point where extra information is clean.
+# we want to see how abnormal a measurement is, then we will throw away all additional information and only retain the lab_delta and lab_abn_flag
+splitted[,lab_result:=as.double(lab_result)]
+# meaningful if smaller is negative
+splitted_smaller<-splitted$lab_result-splitted$A
+splitted_smaller<-replace_na(splitted_smaller,0)
+splitted_smaller[splitted_smaller>0]<-0
+splitted<-splitted %>% mutate(smaller=splitted_smaller) %>% setDT()
+# meaningful if positive
+splitted_bigger<-splitted$lab_result-splitted$B
+splitted_bigger<-replace_na(splitted_bigger,0)
+splitted_bigger[splitted_bigger<0]<-0
+splitted<-splitted %>% mutate(bigger=splitted_bigger) %>% setDT()
+# get range
+splitted_range<-splitted$B - splitted$A
+splitted_range<-replace_na(splitted_range,0)
+# normalize
+splitted<- splitted %>% mutate(range=splitted_range) %>% setDT()
+splitted<- splitted %>% mutate(smaller=smaller/range, bigger=bigger/range) %>% setDT()
+splitted[is.nan(smaller),'smaller']<-0
+splitted[is.nan(bigger),'bigger']<-0
+# we have finished normalization.
+# for the last step, we can feed the abnormality flag to be a value, but I will not do it.
+fwrite(mylabs,"/infodev1/rep/projects/jason/mylabs.csv")
+
