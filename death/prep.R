@@ -96,7 +96,7 @@ parLapply(cl,mylabs$lab_range,function(range){
 
 # no parallel, 4 columns cover all.
 
-splitted<- mylabs[1:100000] %>% separate(lab_range, c("X","Y"), sep="to", remove=FALSE) %>% setDT()
+splitted<- mylabs %>% separate(lab_range, c("X","Y"), sep="to", remove=FALSE) %>% setDT()
 splitted<- splitted %>% separate(X,c("A","B","C","D"), sep='-', remove=FALSE) %>% setDT()
 splitted<-splitted[,A:=as.double(A)][,B:=as.double(B)][,C:=as.double(C)][,D:=as.double(D)][,Y:=as.double(Y)]
 # dirty cleaning:
@@ -137,5 +137,7 @@ splitted[is.nan(smaller),'smaller']<-0
 splitted[is.nan(bigger),'bigger']<-0
 # we have finished normalization.
 # for the last step, we can feed the abnormality flag to be a value, but I will not do it.
-fwrite(mylabs,"/infodev1/rep/projects/jason/mylabs.csv")
+fwrite(splitted,"/infodev1/rep/projects/jason/mylabs.csv")
+
+#
 
