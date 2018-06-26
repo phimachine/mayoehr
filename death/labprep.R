@@ -5,6 +5,7 @@ require(lubridate)
 require(data.table)
 require(dplyr)
 require(doParallel)
+require(tidyr)
 
 ##### LABS
 labs<-fread("/infodev1/rep/data/labs.dat",fill=TRUE) 
