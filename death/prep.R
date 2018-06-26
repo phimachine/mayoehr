@@ -137,6 +137,7 @@ splitted[is.nan(smaller),'smaller']<-0
 splitted[is.nan(bigger),'bigger']<-0
 # we have finished normalization.
 # for the last step, we can feed the abnormality flag to be a value, but I will not do it.
+plitted<- splitted %>% select(rep_person_id,lab_date,lab_loinc_code,lab_abn_flag,smaller,bigger)
 fwrite(splitted,"/infodev1/rep/projects/jason/mylabs.csv")
 
 ####### PRESCRIPTION
@@ -160,10 +161,7 @@ mypres<-mypres[nchar(med_rxnorm_code)<10]
 mypres<-mypres[nchar(med_length_in_days)<6]
 mypres<-mypres[nchar(med_self_reported)<3]
 pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>% mutate (count=n()) %>% distinct(med_rxnorm_code, .keep_all=TRUE) %>% arrange(count) %>% setDT()
-
-
 # I decided to throw out medications that are not used for more than 1000 times.
-
 
 ####### SERVICES
 # my intuition tells me that sevices will not beo too vital
@@ -177,12 +175,38 @@ fwrite(mysev,"/infodev1/rep/projects/jason/myserv.csv")
 
 ######## SURGERIES
 surg<-fread("/infodev1/rep/data/surgeries.dat")
-mysurg<-mysurg%>%select(rep_person_id,px_date,px_codetype,px_code) %>%setDT()
+mysurg<-surg%>%select(rep_person_id,px_date,px_codetype,px_code) %>%setDT()
 # I am going to conver all I9 codes to ICD10 codes here. For table: https://www.cms.gov/medicare/coding/ICD10/2014-ICD-10-PCS.html
 pcs<-fread("/home/m193194/git/ehr/death/data/gem_i9pcs.txt")
 colnames(pcs)<-c("i9","i10","flag")
-surg <- surg %>% separate(px_code,c("first","second"),remove=FALSE) %>% setDT()
+mysurg <- mysurg %>% separate(px_code,c("first","second"),remove=FALSE) %>% setDT()
 # There is a warning message, but that's because our data base has codes that are very specific.
 # discard because we have no lookup capability and to reduce dimension.
-surg<-surg%>% unite("nodot",c("first","second"),sep="") %>% setDT()
+mysurg<-mysurg%>% unite("nodot",c("first","second"),sep="") %>% setDT()
+# now we convert all I9 codes to I10 codes.
+mysurg <- mysurg %>% mutate(nodot=if_else(px_codetype=="I9",nodot,"")) %>% mutate(nodot=as.integer(nodot)) %>% left_join(pcs, by=c("nodot"="i9")) %>% setDT()
+# stop here, and you should see that all I9 has been converted.
+mysurg <- mysurg %>% mutate(px_code=if_else(px_codetype=="I9",i10,px_code)) %>%  setDT()
+mysurg <- mysurg %>% select (rep_person_id, px_date, px_code) %>% setDT()
+# now we clean data again
+# no error reported. this is a curated dataset.
+mysurg <- mysurg %>% mutate(px_date=mdy(px_date)) %>% setDT()
 
+# we have seen 45821 procedural codes, we need to collapse the dimensions.
+# The algorithm is simple. We see the count for each 7 letter code, and if the count is fewer than 2000, then we aggregate them to a 5 letter code called "other"
+# 2000 and 5 are arbitrary decisions
+mysurg <- mysurg %>% group_by(px_code) %>% mutate(n=n()) %>% setDT()
+mysurg <- mysurg %>% mutate(other=n<2000) %>% setDT()
+# you can estimate how many will remain 7 letter code here. length(unique(count[other==FALSE]$px_code))
+# 8923, reduced from 45821, not precise.
+mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,substr(px_code,1,5),px_code)) %>% setDT()
+# not quite, we still have many codes, 5 letters is not enough. we repeat this process
+mysurg <- mysurg %>% group_by(collapsed_px_code) %>% mutate(n=n()) %>% setDT()
+mysurg <- mysurg %>% mutate(other=n<2000) %>% setDT()
+mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,substr(px_code,1,4),px_code)) %>% setDT()
+# around 20000 is the sweet spot. You cannot compress more than this.
+mysurg<-mysurg%>% select(-n,-other)
+fwrite(mysurg,"/infodev1/rep/projects/jason/mysurg.csv")
+
+
+######## 
