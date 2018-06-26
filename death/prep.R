@@ -5,6 +5,7 @@ require(lubridate)
 require(data.table)
 require(dplyr)
 require(doParallel)
+require(tidyr)
 
 demo<-fread('/infodev1/rep/data/demographics.dat')
 cod<-fread('/infodev1/rep/data/cause_of_death.csv')
@@ -73,10 +74,10 @@ mylabs<-mylabs%>%select(-lab_src_code)%>%setDT()
 #    strsplit(i,"-")
 #}
 ## this code works, but somehow it's very slow.
-cl<-makeCluster(8)
-parLapply(cl,mylabs$lab_range,function(range){
-    strsplit(range,"-")
-})
+#cl<-makeCluster(8)
+#parLapply(cl,mylabs$lab_range,function(range){
+#    strsplit(range,"-")
+#})
 # what's the point of 56 cores if you cannot use it?
 
 ## weird bug
@@ -169,9 +170,19 @@ pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>%
 # I will filter our the tail of the dataset to control input complexity.
 services_table <- serv %>% select(srv_px_code) %>% group_by(srv_px_code) %>% mutate(count=n()) %>% distinct(srv_px_code, .keep_all=TRUE) %>%  arrange(count) %>%  setDT()
 services_table<- services_table[count>1000]
-myserv<-serv %>% select (rep_person_id, SRV_DATE, srv_month, srv_px_code_type, srv_px_count, srv_px_code, SRV_LOCATION, srv_quantity, srv_age_years, SRV_ADT_DATE, srv_admit_type, srv_admit_src, SRV_DISCH_DATE, srv_disch_stat)
+myserv<-serv %>% select (rep_person_id, SRV_DATE, srv_month, srv_px_code_type, srv_px_count, srv_px_code, SRV_LOCATION, srv_quantity, srv_age_years, SRV_ADT_DATE, srv_admit_type, srv_admit_src, SsRV_DISCH_DATE, srv_disch_stat)
 myserv<- myserv[rep_person_id %in% services_table]
 # I did not throw away any other dimensions' values. They are mainly noise
 fwrite(mysev,"/infodev1/rep/projects/jason/myserv.csv")
 
-######
+######## SURGERIES
+surg<-fread("/infodev1/rep/data/surgeries.dat")
+mysurg<-mysurg%>%select(rep_person_id,px_date,px_codetype,px_code) %>%setDT()
+# I am going to conver all I9 codes to ICD10 codes here. For table: https://www.cms.gov/medicare/coding/ICD10/2014-ICD-10-PCS.html
+pcs<-fread("/home/m193194/git/ehr/death/data/gem_i9pcs.txt")
+colnames(pcs)<-c("i9","i10","flag")
+surg <- surg %>% separate(px_code,c("first","second"),remove=FALSE) %>% setDT()
+# There is a warning message, but that's because our data base has codes that are very specific.
+# discard because we have no lookup capability and to reduce dimension.
+surg<-surg%>% unite("nodot",c("first","second"),sep="") %>% setDT()
+
