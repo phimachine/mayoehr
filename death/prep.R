@@ -19,7 +19,11 @@ main<-merge(mycod,main,all=TRUE)
 main<-main[,c("rep_person_id","death_date","underlying","code_type","code")]
 # what is underlying?
 # I will remove all HIC, for reason, see secondexplore.R, and I will convert all ICD9 to ICD10, one way or another.
-main<-setDT(main%>%filter(code_type=="ICD10"))
+# fixed: I will not throw out HIC entries, but I will remove the codes to be "other"
+main<-main%>% mutate(code=if_else(code_type=="ICD10"|code_type=="ICD9",code,"")) %>% setDT()
+# I want to convert all ICD9 to ICD10 
+
+
 # I'm not going to expand 38 dimensions out of it. I think this should be done in python, as we convert to one-hot encoding. This is very straightforward process. Readlines until the rep_person_id/death_rate changes.
 main<-main%>%arrange(rep_person_id)%>%setDT()
 # we convert all the date time strings to date times. Time should not be important.
@@ -27,6 +31,7 @@ main<-main%>%arrange(rep_person_id)%>%setDT()
 main<-main%>% mutate(death_date=substr(death_date,1,9))%>%setDT()
 main<-main%>% mutate(death_date=dmy(death_date))%>%setDT()
 # this is good enough, we have enough for our target.
+
 fwrite(main,"/infodev1/rep/projects/jason/deathtargets.csv")
 
 ##########
@@ -201,4 +206,5 @@ mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,as.integer(px_cod
 # I think it's worth it. The dimension has been collapsed to under 1000, compared to 20000.
 mysurg<-mysurg%>% select(-n,-other)
 fwrite(mysurg,"/infodev1/rep/projects/jason/mysurg.csv")
+
 ######## 
