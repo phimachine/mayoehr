@@ -4,4 +4,4 @@
 */.RdataTmp
 .*
 !/.gitignore
-
+.Rhistory
