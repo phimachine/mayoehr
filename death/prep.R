@@ -182,37 +182,29 @@ fwrite(mysev,"/infodev1/rep/projects/jason/myserv.csv")
 surg<-fread("/infodev1/rep/data/surgeries.dat")
 mysurg<-surg%>%select(rep_person_id,px_date,px_codetype,px_code) %>%setDT()
 # I am going to conver all I9 codes to ICD10 codes here. For table: https://www.cms.gov/medicare/coding/ICD10/2014-ICD-10-PCS.html
-pcs<-fread("/home/m193194/git/ehr/death/data/gem_i9pcs.txt")
-colnames(pcs)<-c("i9","i10","flag")
-mysurg <- mysurg %>% separate(px_code,c("first","second"),remove=FALSE) %>% setDT()
-# There is a warning message, but that's because our data base has codes that are very specific.
-# discard because we have no lookup capability and to reduce dimension.
-mysurg<-mysurg%>% unite("nodot",c("first","second"),sep="") %>% setDT()
-# now we convert all I9 codes to I10 codes.
-mysurg <- mysurg %>% mutate(nodot=if_else(px_codetype=="I9",nodot,"")) %>% mutate(nodot=as.integer(nodot)) %>% left_join(pcs, by=c("nodot"="i9")) %>% setDT()
-# stop here, and you should see that all I9 has been converted.
-mysurg <- mysurg %>% mutate(px_code=if_else(px_codetype=="I9",i10,px_code)) %>%  setDT()
-mysurg <- mysurg %>% select (rep_person_id, px_date, px_code) %>% setDT()
-# now we clean data again
-# no error reported. this is a curated dataset.
+pcs<-fread("/home/m193194/git/ehr/death/data/gem_pcsi9.txt")
+colnames(pcs)<-c("i10","i9","flag")
+pcs<- pcs %>% distinct(i10,.keep_all=T)
+# fixed a bug here for multiple matches
+mysurg <- mysurg %>% left_join(pcs,by=c("px_code"="i10")) %>% setDT()
+# no dot
+mysurg <- mysurg %>% separate(px_code,c("first","second"),remove=FALSE) %>%  setDT()
+mysurg <- mysurg%>% unite("nodot",c("first","second"),sep="") %>% setDT()
+mysurg <- mysurg %>% mutate(nodot=as.integer(nodot)) %>% setDT()
+mysurg <- mysurg %>% mutate(px_code=if_else(px_codetype=="I9",nodot,i9)) %>% setDT()
+mysurg <- mysurg %>% select(-nodot, -i9, -flag, -px_codetype) %>% setDT()
 mysurg <- mysurg %>% mutate(px_date=mdy(px_date)) %>% setDT()
+mysurg <- mysurg[!is.na(px_code)] %>% mutate(rep_person_id=as.integer(rep_person_id)) %>% setDT()
 
-# we have seen 45821 procedural codes, we need to collapse the dimensions.
+# ICD9 is much better.
+# OLD COMMENT, but still makes sense:
 # The algorithm is simple. We see the count for each 7 letter code, and if the count is fewer than 2000, then we aggregate them to a 5 letter code called "other"
 # 2000 and 5 are arbitrary decisions
 mysurg <- mysurg %>% group_by(px_code) %>% mutate(n=n()) %>% setDT()
 mysurg <- mysurg %>% mutate(other=n<2000) %>% setDT()
-# you can estimate how many will remain 7 letter code here. length(unique(count[other==FALSE]$px_code))
-# 8923, reduced from 45821, not precise.
-mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,substr(px_code,1,5),px_code)) %>% setDT()
-# not quite, we still have many codes, 5 letters is not enough. we repeat this process
-mysurg <- mysurg %>% group_by(collapsed_px_code) %>% mutate(n=n()) %>% setDT()
-mysurg <- mysurg %>% mutate(other=n<2000) %>% setDT()
-mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,substr(px_code,1,4),px_code)) %>% setDT()
-# around 20000 is the sweet spot. You cannot compress more than this.
+mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,as.integer(px_code%/%10),px_code)) %>% setDT()
+# I think it's worth it. The dimension has been collapsed to under 1000, compared to 20000.
 mysurg<-mysurg%>% select(-n,-other)
 fwrite(mysurg,"/infodev1/rep/projects/jason/mysurg.csv")
-# we need to rework. I will make a fork here. I should use ICD9 instead of ICD10 here.
-
 
 ######## 
