@@ -34,7 +34,7 @@ fwrite(main,"/infodev1/rep/projects/jason/deathtargets.csv")
 # this will add a O(1) when I convert to oe hot, but this should compensate for the file I/O
 # since this dataset is presorted, the algorithm should be straightforward and optimal.
 
-#####
+##### DIAGNOSIS
 # diagnosis
 dia<-fread('/infodev1/rep/data/diagnosis.csv')
 # slicing necessary columns
@@ -48,7 +48,7 @@ mydia<-mydia %>% arrange(rep_person_id, dx_date) %>% setDT()
 # merge demographics and mydia
 fwrite(mydia,"/infodev1/rep/projects/jason/mydia.csv")
 
-#####
+##### HOSPITALIZATION
 hosp<-fread('/infodev1/rep/data/hospitalizations.dat')
 myhosp<-hosp%>%select(rep_person_id, hosp_admit_dt,hosp_disch_dt,hosp_inout_code,hosp_adm_source,hosp_disch_disp, hosp_primary_dx,starts_with("hosp_secondary_dx"))
 # no dirty data found, this is a carefully curated dataset.
@@ -58,8 +58,7 @@ myhosp<-myhosp%>%arrange(rep_person_id,hosp_admit_dt)%>%setDT()
 # myhosp has all the diagnosis codes expanded as dimensions
 fwrite(myhosp,"/infodev1/rep/projects/jason/myhosp.csv")
 
-#####
-# from this point on, everything else will be repetitive
+##### LABS
 labs<-fread("/infodev1/rep/data/labs.dat",fill=TRUE) 
 mylabs<-labs%>%select(rep_person_id, lab_date, lab_src_code, lab_loinc_code, lab_result, lab_range, lab_units, lab_abn_flag)%>%setDT()
 mylabs<-mylabs%>%mutate(lab_date=substr(lab_date,1,9))%>%setDT()
@@ -144,9 +143,21 @@ pres<-fread('/infodev1/rep/data/prescriptions.csv')
 # I was not given a formula to precisely normalize the prescriptions.
 # I have found that the med_route can be different for a med_rxnorm_code, but muchof the variations are free text, hard to analyze, and mostly mean the same, >60% are actually unique
 mypres<-pres[med_rxnorm_code!=""]
+# this condition filters out 40% of the rows. This is a big problem. Many of the med_generic/med_name does not have corresponding med_rxnorm_code and med_ingr_rxnorm_code.
+# I can write an API in 3 days.
+
 # take a look at those rows where sanity is TRUE
-mypres<-mypres %>% mutate(sanity=nchar(med_rxnorm_code)>10) %>% setDT()
-mypres<-mypres[sanity==FALSE]%>% select (-sanity) %>% setDT()
+# this process needs to be run several times, but there might still be some missing
+# this file is incredibly dirty
+hello<-as.integer(mypres$rep_person_id)
+mypres<-mypres[!is.na(hello)]
+mypres<-mypres[rep_person_id!="0"]
+mypres<-mypres %>% mutate(MED_DATE=dmy(substr(MED_DATE,1,9))) %>% setDT()
+mypres<-mypres[!is.na(MED_DATE)]
+# almost half of the data is gone at this point. I need to know where they are.
+mypres<-mypres[nchar(med_rxnorm_code)<10]
+mypres<-mypres[nchar(med_length_in_days)<6]
+mypres<-mypres[nchar(med_self_reported)<3]
 pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>% mutate (count=n()) %>% distinct(med_rxnorm_code, .keep_all=TRUE) %>% arrange(count) %>% setDT()
 
 
@@ -163,4 +174,4 @@ myserv<- myserv[rep_person_id %in% services_table]
 # I did not throw away any other dimensions' values. They are mainly noise
 fwrite(mysev,"/infodev1/rep/projects/jason/myserv.csv")
 
-
+######
