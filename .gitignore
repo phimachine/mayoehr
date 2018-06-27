@@ -6,3 +6,5 @@
 !/.gitignore
 .Rhistory
 *.txt
+*.csv
+death/data/*
