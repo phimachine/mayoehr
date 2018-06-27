@@ -7,6 +7,8 @@ require(dplyr)
 require(doParallel)
 require(tidyr)
 
+
+########## DEATH TARGETS
 demo<-fread('/infodev1/rep/data/demographics.dat')
 cod<-fread('/infodev1/rep/data/cause_of_death.csv')
 
@@ -21,7 +23,11 @@ main<-main[,c("rep_person_id","death_date","underlying","code_type","code")]
 # I will remove all HIC, for reason, see secondexplore.R, and I will convert all ICD9 to ICD10, one way or another.
 # fixed: I will not throw out HIC entries, but I will remove the codes to be "other"
 main<-main%>% mutate(code=if_else(code_type=="ICD10"|code_type=="ICD9",code,"")) %>% setDT()
-# I want to convert all ICD9 to ICD10 
+# I want to convert all ICD10 to icd9
+gem<-fread('/home/m193194/git/ehr/death/data/2018_I10gem.txt')
+colnames(gem)<-c("i10","i9","flags")
+# this gem file has missing rows, and it's going to be problematic. We need to manually generate more conversions by guessing it.
+# it's better done in python.
 
 
 # I'm not going to expand 38 dimensions out of it. I think this should be done in python, as we convert to one-hot encoding. This is very straightforward process. Readlines until the rep_person_id/death_rate changes.
@@ -197,9 +203,10 @@ mysurg <- mysurg %>% mutate(px_date=mdy(px_date)) %>% setDT()
 mysurg <- mysurg[!is.na(px_code)] %>% mutate(rep_person_id=as.integer(rep_person_id)) %>% setDT()
 
 # ICD9 is much better.
-# OLD COMMENT, but still makes sense:
-# The algorithm is simple. We see the count for each 7 letter code, and if the count is fewer than 2000, then we aggregate them to a 5 letter code called "other"
-# 2000 and 5 are arbitrary decisions
+# we eliminate tail.
+# The algorithm is simple. We see the count for each 4 digit code, and if the count is fewer than 2000, then we aggregate them to a 3 digit code
+# I can do it because ICD code is structured
+# 2000 and 4 are arbitrary decisions
 mysurg <- mysurg %>% group_by(px_code) %>% mutate(n=n()) %>% setDT()
 mysurg <- mysurg %>% mutate(other=n<2000) %>% setDT()
 mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,as.integer(px_code%/%10),px_code)) %>% setDT()
