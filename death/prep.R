@@ -6,6 +6,7 @@ require(data.table)
 require(dplyr)
 require(doParallel)
 require(tidyr)
+require(fuzzyjoin)
 
 
 ########## DEATH TARGETS
@@ -20,14 +21,35 @@ main<-merge(mycod,main,all=TRUE)
 # I also decided to throw out injury_flag, because only 5 records have 1, all others 0.
 main<-main[,c("rep_person_id","death_date","underlying","code_type","code")]
 # what is underlying?
-# I will remove all HIC, for reason, see secondexplore.R, and I will convert all ICD9 to ICD10, one way or another.
-# fixed: I will not throw out HIC entries, but I will remove the codes to be "other"
-main<-main%>% mutate(code=if_else(code_type=="ICD10"|code_type=="ICD9",code,"")) %>% setDT()
+# we will covert HICDA to ICD9, throw away BRK
+hic<-fread('/home/m193194/git/ehr/death/data/hicda_icd9.csv')
+colnames(hic)<-c("hicda","hicda_desc","icd9","icd9_desc","grpnbr")
+main <- main %>% filter(code_type!="BRK") %>% setDT()
+# transform the hic conversion table for our application..
+hello <- hic %>% distinct(hicda, .keep_all=T) %>% setDT()
+hello <- hello %>% select(hicda,icd9) %>% setDT()
+hello <- hello %>% mutate(hicda=as.character(hicda)) %>% setDT()
+hello<- hello %>% mutate(hicda=str_pad(hicda,8,pad="0")) %>% setDT()
+main <- main%>% left_join(hello,by=c("code"="hicda")) %>% setDT()
+# merge back HIC converted
+main <- main %>% mutate(code=if_else(code_type=='HIC',icd9,code)) %>% select(-icd9) %>%  setDT()
+
 # I want to convert all ICD10 to icd9
 gem<-fread('/home/m193194/git/ehr/death/data/2018_I10gem.txt')
 colnames(gem)<-c("i10","i9","flags")
 # this gem file has missing rows, and it's going to be problematic. We need to manually generate more conversions by guessing it.
-# it's better done in python.
+# we probably don't need to do it in python. We have fuzzyjoin library.
+require(fuzzyjoin)
+
+
+# no dot
+main <- main%>% separate(code,c("first","second"),remove=FALSE) %>%  setDT()
+main <- main %>% replace_na(list(first="",second="")) %>% setDT()
+main <- main%>% unite("nodot",c("first","second"),sep="") %>% setDT()
+main <- main%>% mutate(nodot=if_else(code_type=="ICD10",nodot,"")) %>% setDT()
+
+
+
 
 
 # I'm not going to expand 38 dimensions out of it. I think this should be done in python, as we convert to one-hot encoding. This is very straightforward process. Readlines until the rep_person_id/death_rate changes.
@@ -52,7 +74,7 @@ dia<-fread('/infodev1/rep/data/diagnosis.csv')
 # slicing necessary columns
 mydia<-dia[,c("rep_person_id","dx_date","dx_codetype","dx_code_seq","DX_CODE")]
 mydia<-mydia %>% filter(dx_codetype %in% c("I10","I9")) %>% setDT()
-mydia<-mydia%>%mutate(dx_date=mdy(dx_date))%>%setDT()
+mydia<-mydia%>%mutate(dx_date=mdy(dx_date))%>%setDT()
 # convert id to int before sort, otherwise it's string
 hello<-as.integer(mydia$rep_person_id)
 mydia<-mydia %>% mutate(rep_person_id=hello) %>% setDT()
