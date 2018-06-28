@@ -7,6 +7,7 @@ require(dplyr)
 require(doParallel)
 require(tidyr)
 require(fuzzyjoin)
+require(reshape)
 
 ########## DEATH TARGETS
 demo<-fread('/infodev1/rep/data/demographics.dat')
@@ -211,24 +212,64 @@ fwrite(splitted,"/infodev1/rep/projects/jason/mylabs.csv")
 pres<-fread('/infodev1/rep/data/prescriptions.csv')
 # I was not given a formula to precisely normalize the prescriptions.
 # I have found that the med_route can be different for a med_rxnorm_code, but muchof the variations are free text, hard to analyze, and mostly mean the same, >60% are actually unique
-mypres<-pres[med_rxnorm_code!=""]
-# this condition filters out 40% of the rows. This is a big problem. Many of the med_generic/med_name does not have corresponding med_rxnorm_code and med_ingr_rxnorm_code.
-# I can write an API in 3 days.
 
-# take a look at those rows where sanity is TRUE
-# this process needs to be run several times, but there might still be some missing
-# this file is incredibly dirty
-hello<-as.integer(mypres$rep_person_id)
-mypres<-mypres[!is.na(hello)]
+# this file is incredibly dirty, we clean up here before doing anything else.
+# it turns out that this file is very bad, so we are going to do it column by column rigorously.
+mypres<-copy(pres)
+mypres<-mypres%>% mutate(rep_person_id=as.integer(rep_person_id)) %>% filter(!is.na(rep_person_id)) %>% setDT()
 mypres<-mypres[rep_person_id!="0"]
 mypres<-mypres %>% mutate(MED_DATE=dmy(substr(MED_DATE,1,9))) %>% setDT()
+# most of them are I/O errors here. very few rows. must be discarded for time series.
 mypres<-mypres[!is.na(MED_DATE)]
-# almost half of the data is gone at this point. I need to know where they are.
-mypres<-mypres[nchar(med_rxnorm_code)<10]
-mypres<-mypres[nchar(med_length_in_days)<6]
-mypres<-mypres[nchar(med_self_reported)<3]
-pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>% mutate (count=n()) %>% distinct(med_rxnorm_code, .keep_all=TRUE) %>% arrange(count) %>% setDT()
+mypres<-mypres[nchar(med_name)<100]
+mypres<-mypres[nchar(med_generic)<100]
+mypres<-mypres[nchar(med_strength)<100]
+mypres<-mypres[nchar(med_form)<100]
+mypres<-mypres[nchar(med_route)<100]
+mypres<-mypres[nchar(med_dose)<100]
+mypres<-mypres[nchar(med_dose_units)<100]
+mypres<-mypres[nchar(med_frequency)<100]
+# 11980544 rows
+mypres<-mypres[nchar(med_duration)<100]
+mypres<-mypres[nchar(med_total_quantity)<100]
+mypres<-mypres[nchar(med_refills)<100]
+mypres<-mypres[nchar(med_instructions)<100]
+mypres<-mypres[nchar(med_indication)<100]
+mypres<-mypres %>% mutate(med_update_date=dmy(substr(med_update_date,1,9))) %>% setDT()
+mypres<-mypres[nchar(med_notes)<1000]
+mypres<-mypres[nchar(med_rxnorm_code)<100]
+mypres<-mypres[nchar(med_rxnorm_desc)<400]
+
+mypres<-mypres[nchar(med_ndfrt_class)<100]
+mypres<-mypres[nchar(med_ndfrt_class_desc)<100]
+mypres<-mypres[nchar(med_ndfrt_header)<100]
+mypres<-mypres[nchar(med_ndfrt_header_desc)<400]
+mypres<-mypres[nchar(med_ingr_rxnorm_code)<100]
+mypres<-mypres[nchar(med_ingr_rxnorm_desc)<200]
+mypres<-mypres[nchar(med_self_reported)<10]
+mypres<-mypres[nchar(med_length_in_days)<10]
+mypres<-mypres[nchar(med_end_date)<30]
+mypres<-mypres[nchar(med_src)<30]
+# 1196968
+# test med_name dirty data
+test<- mypres %>% group_by(med_name) %>% mutate(n=n()) %>% distinct(med_name, n) %>% arrange(n) %>%  setDT()
+test<-test[n==1]
+test[sample(nrow(test),10)]
+
+
+# pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>% mutate (count=n()) %>% distinct(med_rxnorm_code, .keep_all=TRUE) %>% arrange(count) %>% setDT()
 # I decided to throw out medications that are not used for more than 1000 times.
+
+
+mypres<-pres[med_rxnorm_code!=""]
+# this condition filters out 40% of the rows. This is a big problem. Many of the med_generic/med_name does not have corresponding med_rxnorm_code and med_ingr_rxnorm_code.
+
+
+
+
+
+
+
 
 ####### SERVICES
 # my intuition tells me that sevices will not beo too vital
@@ -270,4 +311,25 @@ mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,as.integer(px_cod
 mysurg<-mysurg%>% select(-n,-other)
 fwrite(mysurg,"/infodev1/rep/projects/jason/mysurg.csv")
 
-######## 
+######## TOBACCO
+# This file cannot be processed at the moment.
+# we need careful NLP feature engineering and extraction
+# or we need actual tobacco labels. Well, we might be able to extract it from our EHR, but that's for another day.
+
+######## VITALS
+# for vitrals, we remove positions, becuase those things are crazy.
+vitals<-fread('/infodev1/rep/data/vitals.dat')
+vitals<-vitals[vital_name!="BP POSITION"]
+# this dataset is rather clean. We don't need to do much.
+vitals<-vitals[!is.na(vitals$vital_value_num)]
+# we will do a pivot table and adhere to our person_date uniqueness, becuase it's possible here.
+# but before that, let's convert the units to metric, needed before reshape.
+# for BP, it's mmHg
+# for height, it's cm
+# for weight, it's kg
+convertion_table<-data.table()
+
+
+require(reshape)
+vitals<-vitals%>% select(-VITAL_VALUE_TXT,-vital_seq,-vital_src,-vital_src_code,-VITAL_SRC_DESC) %>% setDT()
+
