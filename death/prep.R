@@ -256,15 +256,10 @@ test<- mypres %>% group_by(med_name) %>% mutate(n=n()) %>% distinct(med_name, n)
 test<-test[n==1]
 test[sample(nrow(test),10)]
 
-
 # pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>% mutate (count=n()) %>% distinct(med_rxnorm_code, .keep_all=TRUE) %>% arrange(count) %>% setDT()
-# I decided to throw out medications that are not used for more than 1000 times.
-
-
 mypres<-pres[med_rxnorm_code!=""]
 # this condition filters out 40% of the rows. This is a big problem. Many of the med_generic/med_name does not have corresponding med_rxnorm_code and med_ingr_rxnorm_code.
-
-
+# I queried RxMix with strings for their ingredient codes.
 
 
 
