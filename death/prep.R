@@ -8,6 +8,8 @@ require(doParallel)
 require(tidyr)
 require(fuzzyjoin)
 require(reshape)
+require(xml2)
+require(XML)
 
 ########## DEATH TARGETS
 demo<-fread('/infodev1/rep/data/demographics.dat')
@@ -250,7 +252,7 @@ mypres<-mypres[nchar(med_self_reported)<10]
 mypres<-mypres[nchar(med_length_in_days)<10]
 mypres<-mypres[nchar(med_end_date)<30]
 mypres<-mypres[nchar(med_src)<30]
-# 1196968
+# 116228058
 # test med_name dirty data
 test<- mypres %>% group_by(med_name) %>% mutate(n=n()) %>% distinct(med_name, n) %>% arrange(n) %>%  setDT()
 test<-test[n==1]
@@ -260,10 +262,30 @@ test[sample(nrow(test),10)]
 mypres<-pres[med_rxnorm_code!=""]
 # this condition filters out 40% of the rows. This is a big problem. Many of the med_generic/med_name does not have corresponding med_rxnorm_code and med_ingr_rxnorm_code.
 # I queried RxMix with strings for their ingredient codes.
+# Two things:
+# for rows with rxnorm, I queried with rxnorm for ingredients, and I will use mine unless it does not exist. 
+# for rows without rxnorm, I queried with strings.
+# mechanism of action might be useful, but I have no such confidence, and unique ingredients are fewer than I assumed
 
+# I chose to get an XML table because it preserves the structure.
+# this means you need to know XPath, otherwise parsing is a pain.
+require(xml2)
+require(XML)
 
-
-
+# readable print from XML
+hello222<-xmlParse('/infodev1/home/m193194/git/ehr/death/data/missing_string_ingr/04c87de81e305886e5db4d22d7753325.xml')
+hello<-read_xml("/infodev1/home/m193194/git/ehr/death/data/missing_string_ingr/04c87de81e305886e5db4d22d7753325.xml")
+inputs<-xml_find_all(hello,"function/input")
+calls<-xml_find_all(hello,"./function")
+# alternatively rxcui<-xml_find_all(inputs,"./following-sibling::outputs/output/RXCUI")
+# this line does not work, since we don't have a correspondence.
+# rxcui<-xml_find_all(xml_siblings(inputs),"./outputs/output/RXCUI")
+# so we use lapply
+# this line does not work either rxcui<-lapply(xml_siblings(inputs),function(x) xml_find_all(x,"./outputs/output/RXCUI"))
+# take a look at the results, you will see that many are empty and some have more than one
+rxcui<-lapply(inputs,function(x) xml_find_all(x,"./following-sibling::outputs/output/RXCUI"))
+# the percentage of match is not alright. I should call getApproximateMatch API instead of getRXCUIbyString
+# We will query again.
 
 
 ####### SERVICES
