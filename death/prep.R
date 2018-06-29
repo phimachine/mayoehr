@@ -7,7 +7,6 @@ require(dplyr)
 require(doParallel)
 require(tidyr)
 require(fuzzyjoin)
-require(reshape)
 require(xml2)
 require(XML)
 
@@ -336,6 +335,7 @@ fwrite(mysurg,"/infodev1/rep/projects/jason/mysurg.csv")
 ######## VITALS
 # for vitrals, we remove positions, becuase those things are crazy.
 vitals<-fread('/infodev1/rep/data/vitals.dat')
+vitals<-vitals%>% select(-VITAL_VALUE_TXT,-vital_seq,-vital_src,-vital_src_code,-VITAL_SRC_DESC) %>% setDT()
 vitals<-vitals[vital_name!="BP POSITION"]
 # this dataset is rather clean. We don't need to do much.
 vitals<-vitals[!is.na(vitals$vital_value_num)]
@@ -344,9 +344,45 @@ vitals<-vitals[!is.na(vitals$vital_value_num)]
 # for BP, it's mmHg
 # for height, it's cm
 # for weight, it's kg
-convertion_table<-data.table()
+# use this line to confirm that a unit is unique to a vital_name
+# res<-lapply(unique(vitals$vital_name),function(x) table(vitals[vital_name==x,VITAL_UNIT]))
+# no better way to do it but manual
+vitals<-vitals %>% mutate(vital_value_num=if_else(VITAL_UNIT=="lb"|VITAL_UNIT=="LBS",vital_value_num*0.453592,vital_value_num)) %>% setDT()
+vitals<-vitals %>% mutate(vital_value_num=if_else(VITAL_UNIT=="inch(es)",vital_value_num*2.54,vital_value_num)) %>% setDT()
+# see change: vitals[VITAL_UNIT=="LBS"|VITAL_UNIT=="lb"|VITAL_UNIT=="inch(es)"]
 
+### now we pivot
+#require(reshape2)
+## let's parse the date first, in case equivalence is required
+#vitals<-vitals%>% mutate(VITAL_DATE=substr(VITAL_DATE,1,9))%>%setDT()
+#vitals<-vitals%>% mutate(VITAL_DATE=dmy(VITAL_DATE))%>%select(-VITAL_UNIT) %>% setDT()
+## hello<-cast(vitals,rep_person_id+VITAL_DATE ~ vital_name)
+## hello<-hello %>% setDT()
+## as usual, pivot table is very slow, so we are going to run this in parallel
+#library(parallel)
+#cl<-32
+#group<-rep(1:cl,length.out=nrow(vitals))
+#vitals<-vitals%>%mutate(group=rep(1:cl,length.out=nrow(vitals))) %>% setDT()
+#require(multidplyr)
+#cluster<-create_cluster(cores=cl)
+#by_group <- vitals %>% partition(group,cluster=cluster)
+#by_group %>%
+#    # Assign libraries
+#    cluster_library("reshape2") %>%
+#    cluster_library("data.table") %>%
+#    cluster_library("dplyr")
+#    # Assign values (use this to load functions or data to each core)
+#start <- proc.time() # Start clock
+#vitals_pivot_parallel<-by_group %>% dcast(rep_person_id+VITAL_DATE ~ vital_name,fun.aggregate=mean) %>% collect() %>% setDT()
+#time_elapsed<-proc.time()-start
+## reshape/reshap2 are not compatible with multidplyr
 
-require(reshape)
-vitals<-vitals%>% select(-VITAL_VALUE_TXT,-vital_seq,-vital_src,-vital_src_code,-VITAL_SRC_DESC) %>% setDT()
+library(parallel)
+no_cores<-16
+cl<-makeCluster(no_cores)
+vitals<-vitals%>%mutate(group=rep(1:no_cores,length.out=nrow(vitals))) %>% setDT()
+by_group<-split(vitals,by="group",keep.by=F)
+res<-parLapply(cl,by_group,function(table) {
+               dcast(rep_person_id+VITAL_DATE ~ vital_date,mean) %>%
+               setDT()})
 
