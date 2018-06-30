@@ -221,6 +221,7 @@ mypres<-mypres%>% mutate(rep_person_id=as.integer(rep_person_id)) %>% filter(!is
 mypres<-mypres[rep_person_id!="0"]
 mypres<-mypres %>% mutate(MED_DATE=dmy(substr(MED_DATE,1,9))) %>% setDT()
 # most of them are I/O errors here. very few rows. must be discarded for time series.
+# string processing is always very slow. We might want to consider parallel processing here.
 mypres<-mypres[!is.na(MED_DATE)]
 mypres<-mypres[nchar(med_name)<100]
 mypres<-mypres[nchar(med_generic)<100]
@@ -236,7 +237,7 @@ mypres<-mypres[nchar(med_total_quantity)<100]
 mypres<-mypres[nchar(med_refills)<100]
 mypres<-mypres[nchar(med_instructions)<100]
 mypres<-mypres[nchar(med_indication)<100]
-mypres<-mypres %>% mutate(med_update_date=dmy(substr(med_update_date,1,9))) %>% setDT()
+#mypres<-mypres %>% mutate(med_update_date=dmy(substr(med_update_date,1,9))) %>% setDT()
 mypres<-mypres[nchar(med_notes)<1000]
 mypres<-mypres[nchar(med_rxnorm_code)<100]
 mypres<-mypres[nchar(med_rxnorm_desc)<400]
@@ -276,13 +277,9 @@ hello222<-xmlParse('/infodev1/home/m193194/git/ehr/death/data/missing_string_ing
 hello<-read_xml("/infodev1/home/m193194/git/ehr/death/data/missing_string_ingr/04c87de81e305886e5db4d22d7753325.xml")
 inputs<-xml_find_all(hello,"function/input")
 calls<-xml_find_all(hello,"./function")
-# alternatively rxcui<-xml_find_all(inputs,"./following-sibling::outputs/output/RXCUI")
-# this line does not work, since we don't have a correspondence.
-# rxcui<-xml_find_all(xml_siblings(inputs),"./outputs/output/RXCUI")
-# so we use lapply
-# this line does not work either rxcui<-lapply(xml_siblings(inputs),function(x) xml_find_all(x,"./outputs/output/RXCUI"))
-# take a look at the results, you will see that many are empty and some have more than one
-rxcui<-lapply(inputs,function(x) xml_find_all(x,"./following-sibling::outputs/output/RXCUI"))
+# use XPath
+medrxcui<-lapply(inputs,function(x) xml_find_first(x,"./following-sibling::outputs/output/RXCUI"))
+
 # the percentage of match is not alright. I should call getApproximateMatch API instead of getRXCUIbyString
 # We will query again.
 
@@ -290,6 +287,7 @@ rxcui<-lapply(inputs,function(x) xml_find_all(x,"./following-sibling::outputs/ou
 ####### SERVICES
 # my intuition tells me that sevices will not beo too vital
 # I will filter our the tail of the dataset to control input complexity.
+serv<-fread('/infodev1/rep/data/services.dat')
 services_table <- serv %>% select(srv_px_code) %>% group_by(srv_px_code) %>% mutate(count=n()) %>% distinct(srv_px_code, .keep_all=TRUE) %>%  arrange(count) %>%  setDT()
 services_table<- services_table[count>1000]
 myserv<-serv %>% select (rep_person_id, SRV_DATE, srv_month, srv_px_code_type, srv_px_count, srv_px_code, SRV_LOCATION, srv_quantity, srv_age_years, SRV_ADT_DATE, srv_admit_type, srv_admit_src, SsRV_DISCH_DATE, srv_disch_stat)
@@ -324,7 +322,8 @@ mysurg <- mysurg %>% group_by(px_code) %>% mutate(n=n()) %>% setDT()
 mysurg <- mysurg %>% mutate(other=n<2000) %>% setDT()
 mysurg <- mysurg %>% mutate(collapsed_px_code=if_else(other==T,as.integer(px_code%/%10),px_code)) %>% setDT()
 # I think it's worth it. The dimension has been collapsed to under 1000, compared to 20000.
-mysurg<-mysurg%>% select(-n,-other)
+mysurg <- mysurg%>% select(-n,-other)
+mysurg <- mysurg %>% arrange(rep_person_id,px_date) %>% setDT()
 fwrite(mysurg,"/infodev1/rep/projects/jason/mysurg.csv")
 
 ######## TOBACCO
@@ -350,12 +349,13 @@ vitals<-vitals[!is.na(vitals$vital_value_num)]
 vitals<-vitals %>% mutate(vital_value_num=if_else(VITAL_UNIT=="lb"|VITAL_UNIT=="LBS",vital_value_num*0.453592,vital_value_num)) %>% setDT()
 vitals<-vitals %>% mutate(vital_value_num=if_else(VITAL_UNIT=="inch(es)",vital_value_num*2.54,vital_value_num)) %>% setDT()
 # see change: vitals[VITAL_UNIT=="LBS"|VITAL_UNIT=="lb"|VITAL_UNIT=="inch(es)"]
+vitals<-vitals %>% select(-VITAL_UNIT) %>% setDT()
 
 ### now we pivot
 #require(reshape2)
 ## let's parse the date first, in case equivalence is required
-#vitals<-vitals%>% mutate(VITAL_DATE=substr(VITAL_DATE,1,9))%>%setDT()
-#vitals<-vitals%>% mutate(VITAL_DATE=dmy(VITAL_DATE))%>%select(-VITAL_UNIT) %>% setDT()
+vitals<-vitals%>% mutate(VITAL_DATE=substr(VITAL_DATE,1,9))%>%setDT()
+vitals<-vitals%>% mutate(VITAL_DATE=dmy(VITAL_DATE)) %>% setDT()
 ## hello<-cast(vitals,rep_person_id+VITAL_DATE ~ vital_name)
 ## hello<-hello %>% setDT()
 ## as usual, pivot table is very slow, so we are going to run this in parallel
@@ -377,12 +377,26 @@ vitals<-vitals %>% mutate(vital_value_num=if_else(VITAL_UNIT=="inch(es)",vital_v
 #time_elapsed<-proc.time()-start
 ## reshape/reshap2 are not compatible with multidplyr
 
-library(parallel)
-no_cores<-16
-cl<-makeCluster(no_cores)
+#library(parallel)
+#no_cores<-16
+#cl<-makeCluster(no_cores)
 vitals<-vitals%>%mutate(group=rep(1:no_cores,length.out=nrow(vitals))) %>% setDT()
 by_group<-split(vitals,by="group",keep.by=F)
-res<-parLapply(cl,by_group,function(table) {
-               dcast(rep_person_id+VITAL_DATE ~ vital_date,mean) %>%
-               setDT()})
+#clusterExport
+#res<-parLapply(cl,by_group,function(table) {
+#               dcast(rep_person_id+VITAL_DATE ~ vital_value_num, mean) %>%
+#               setDT()})
 
+# there are a few measurements in one day. I don't really get why.
+# for our purpose, we will use a daily precision
+library(doParallel)
+library(foreach)
+cl<-makeCluster(16)
+registerDoParallel(cl)
+res<-foreach(tt=by_group,.combine=rbind, .packages=c('dplyr','data.table') )%dopar% {
+    tt %>%
+    dcast(rep_person_id+VITAL_DATE ~ vital_name, value.var="vital_value_num",fun.aggregate=mean) %>%
+    setDT()}
+stopCluster(cl)
+res <- res%>%arrange(rep_person_id,VITAL_DATE) %>% setDT()
+fwrite(res,'/infodev1/rep/projects/jason/myvitals.csv')
