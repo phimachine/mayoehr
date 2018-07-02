@@ -242,6 +242,7 @@ mypres<-mypres[nchar(med_notes)<1000]
 mypres<-mypres[nchar(med_rxnorm_code)<100]
 mypres<-mypres[nchar(med_rxnorm_desc)<400]
 
+
 mypres<-mypres[nchar(med_ndfrt_class)<100]
 mypres<-mypres[nchar(med_ndfrt_class_desc)<100]
 mypres<-mypres[nchar(med_ndfrt_header)<100]
@@ -254,12 +255,12 @@ mypres<-mypres[nchar(med_end_date)<30]
 mypres<-mypres[nchar(med_src)<30]
 # 116228058
 # test med_name dirty data
-test<- mypres %>% group_by(med_name) %>% mutate(n=n()) %>% distinct(med_name, n) %>% arrange(n) %>%  setDT()
-test<-test[n==1]
-test[sample(nrow(test),10)]
+# test<- mypres %>% group_by(med_name) %>% mutate(n=n()) %>% distinct(med_name, n) %>% arrange(n) %>%  setDT()
+# test<-test[n==1]
+# test[sample(nrow(test),10)]
 
 # pres_table<-mypres %>% select(med_rxnorm_code) %>% group_by(med_rxnorm_code) %>% mutate (count=n()) %>% distinct(med_rxnorm_code, .keep_all=TRUE) %>% arrange(count) %>% setDT()
-mypres<-pres[med_rxnorm_code!=""]
+# mypres<-pres[med_rxnorm_code!=""]
 # this condition filters out 40% of the rows. This is a big problem. Many of the med_generic/med_name does not have corresponding med_rxnorm_code and med_ingr_rxnorm_code.
 # I queried RxMix with strings for their ingredient codes.
 # Two things:
@@ -273,18 +274,85 @@ require(xml2)
 require(XML)
 
 # readable print from XML
-hello222<-xmlParse('/infodev1/home/m193194/git/ehr/death/data/missing_string_ingr/04c87de81e305886e5db4d22d7753325.xml')
-hello<-read_xml("/infodev1/home/m193194/git/ehr/death/data/missing_string_ingr/04c87de81e305886e5db4d22d7753325.xml")
-inputs<-xml_find_all(hello,"function/input")
-calls<-xml_find_all(hello,"./function")
+ 
+readableTree<-xmlParse('/infodev1/home/m193194/git/ehr/death/data/missing_string_approx_ingr_xml/05270cb1aaede71a0bc348d9d0c8ef5f.xml')
+xmldoc<-read_xml('/infodev1/home/m193194/git/ehr/death/data/missing_string_approx_ingr_xml/05270cb1aaede71a0bc348d9d0c8ef5f.xml')
+inputs<-xml_find_all(xmldoc,"function/input")
+calls<-xml_find_all(xmldoc,"./function")
 # use XPath
-medrxcui<-lapply(inputs,function(x) xml_find_first(x,"./following-sibling::outputs/output/RXCUI"))
+# this is very slow without parallel
+# find first returns error
+# there is no way we can do this without core dumps. See below. I tried mclapply foreach and others. No way.
+medrxcui<-lapply(inputs,function(x) xml_find_all(x,"./following-sibling::outputs/output/RXCUI"))
+ingr_cui<-lapply(calls,function(x) xml_find_all(x,".//function[@level='1']//output/RXCUI")
+chosenmedrx<-lapply(calls,function(x) xml_find_all(x,".//function[@level='1']//input"))
 
-# the percentage of match is not alright. I should call getApproximateMatch API instead of getRXCUIbyString
-# We will query again.
+# commented out
+if (False){
+    # glibc throws core dumps
+    # running parallel on this xml2 xmlnodeset object seems to be very problematic
+    # the objects use "externalpointers"?
+    library(doParallel)
+    library(foreach)
+    cl<-makeCluster(16)
+    registerDoParallel(cl)
+
+    by_group<-split(inputs,rep(1:16,length.out=length(inputs)))
+    medrxcui<-foreach(tt=by_group, .packages=c('xml2') )%dopar% {
+        lapply(tt, function(x) xml_find_all(x,"./following-sibling::outputs/output/RXCUI"))}
+    stopCluster(cl)
+
+    cl<-makeCluster(16)
+    registerDoParallel(cl)
+    inputs<- inputs %>% mutate(group=rep(1:16,length.out=nrows(inputs))) %>% setDT()
+    by_group<-split(inputs,by="group",keep.by=F)
+    medrxcui<-foreach(tt=by_group,.combine=rbind, .packages=c('dplyr','data.table') )%dopar% {
+        tt %>%
+        lapply(function(x) xml_find_first(x,"./following_sibling:outputs/output/RXCUI")) %>%
+        setDT()}
+    stopCluster(cl)
+}
+
+# dump results. cannot be dumped as robject
+fwrite(xml_text(inputs)%>%as.list(),'/infodev1/rep/projects/jason/parsed_inputs.csv')
+hello<-lapply(medrxcui, function(x) { xml_text(x)[1] })
+fwrite(hello %>% as.list,'/infodev1/rep/projects/jason/parsed_medrxcui.csv')
+hello<-list()
+hello<-lapply(1:length(inputs), function(x) { hello[[x]]<-xml_text(ingr_cui[[x]])  })
+saveRDS(hello,file='/infodev1/rep/projects/jason/parsed_ingr_rxcui.rds')
+chosen<-c()
+chosen<-lapply(1:length(inputs), function (x) {chosen<-c(chosen,xml_text(chosenmedrx[[x]])[1])})
+fwrite(chosen, '/infodev1/rep/projects/jason/parsed_first_queryed_medrxcui.csv')
+
+# we encounter a problem.
+# the medicine to ingredient is not a one to one mapping. This means we will not be able to store it efficiently in data frame without chopping off, we even have difficulty storing it in a csv table.
+# to do so, I will write the file manually. We will populate med_rxnorm in the prescription file. We will store med_rxnorm to ingr_rxnorm mapping in another file.
+# we will use a bar and comma separation scheme. e.g. 1922med91| 19ingr184, 110ingr1924, 182ingr165
+
+# we first run further cleaning, since I found in my query that there are some dirty rows still
+mypres<-mypres %>% select(rep_person_id,MED_DATE,med_name,med_generic,med_rxnorm_code,med_ingr_rxnorm_code)
+fwrite(mypres,"/infodev1/rep/projects/jason/mypres_temp.csv")
+mypres<- mypres %>% mutate(med_rxnorm_code=if_else(med_rxnorm_code=="","0",med_rxnorm_code))%>%mutate(med_rxnorm_code=as.integer(med_rxnorm_code)) %>% filter(!is.na(med_rxnorm_code)) %>% setDT()
+mypres<- mypres %>% mutate(med_ingr_rxnorm_code=if_else(med_ingr_rxnorm_code=="", "0", med_ingr_rxnorm_code)) %>% mutate(med_ingr_rxnorm_code=as.integer(med_ingr_rxnorm_code)) %>% filter(!is.na(med_ingr_rxnorm_code)) %>% setDT()
+
+# we now populate the missing rxnorms in mypres
+chosen<-unlist(chosen)
+names<-xml_text(inputs)
+nametorxnorm<-data.table(name=names,rxnorm=chosen)
+try <- mypres%>% left_join(nametorxnorm,by=c("med_name"="name")) %>% mutate(rxnorm=as.integer(rxnorm)) %>%setDT()
+try <- try %>% mutate(med_rxnorm_code=if_else(med_rxnorm_code==0,rxnorm,med_rxnorm_code)) %>% setDT()
+# these are really empty rows
+try <- try[!is.na(med_rxnorm_code)] 
+# you will see, there are still dirty data in columns we don't care, but I can guarantee by type that the ones we have should be cleaned.
+try <- try %>% arrange(rep_person_id,MED_DATE) %>% setDT()
+fwrite(try,"/infodev1/rep/projects/jason/verbose_mypres.csv")
+try_min <- try %>% select(-med_name,-med_generic,-rxnorm, -med_ingr_rxnorm_code) %>% setDT()
+fwrite(try_min,'/infodev1/rep/projects/jason/min_mypres.csv')
+
+# we need to create the bar comma file for mapping from med_rxnorm_code to ingr_rxnorm_code
 
 
-####### SERVICES
+###### SERVICES
 # my intuition tells me that sevices will not beo too vital
 # I will filter our the tail of the dataset to control input complexity.
 serv<-fread('/infodev1/rep/data/services.dat')
