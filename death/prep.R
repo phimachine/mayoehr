@@ -345,12 +345,25 @@ try <- try %>% mutate(med_rxnorm_code=if_else(med_rxnorm_code==0,rxnorm,med_rxno
 try <- try[!is.na(med_rxnorm_code)] 
 # you will see, there are still dirty data in columns we don't care, but I can guarantee by type that the ones we have should be cleaned.
 try <- try %>% arrange(rep_person_id,MED_DATE) %>% setDT()
+try[med_rxnorm_code==0]$med_rxnorm_code<-NA
+try[med_ingr_rxnorm_code==0]$med_ingr_rxnorm_code<-NA
 fwrite(try,"/infodev1/rep/projects/jason/verbose_mypres.csv")
 try_min <- try %>% select(-med_name,-med_generic,-rxnorm, -med_ingr_rxnorm_code) %>% setDT()
+try_min[med_rxnorm_code==0]$med_rxnorm_code<-NA
 fwrite(try_min,'/infodev1/rep/projects/jason/min_mypres.csv')
 
 # we need to create the bar comma file for mapping from med_rxnorm_code to ingr_rxnorm_code
+# two lists
+# list of (nonexisting) name, rxnorm, ingrdients mapping
 
+
+# list of (existing) rxnorm, ingrdients mapping
+# left: chosen
+lhs2<-chosen
+# right:
+rhs2<-lapply(ingr_cui,xml_text)
+
+##### YOU NEED TO MANUALLY EXAMINE THE RESULTS!
 
 ###### SERVICES
 # my intuition tells me that sevices will not beo too vital
