@@ -31,6 +31,70 @@ A complete patient history is a unit of data. Sort by time within a patient. Shu
 
 Merged dataset needs to be split by 10G each for faster disk I/O. The whole dataset would fit in our crazy memory, but I should not do that. This means each dataset# needs to be pre-shuffled, with each patient as a unit.
 
+## Data file description
+All data files are stored on /infodev1/rep/projects/jason/, the "data" folder in this repository stores public data.
+The idea is to pull an id from demographics file and query all files for a complete patient record at run time.
+The data is preprocessed specifically for deep learnin architectures.
+
+### Death targets
+deathtargets.csv
+
+Columns:
+* rep_person_i: 18231 cases. sorted on as default.
+* death_date: date, specified to days. sorted secondarily on as default.
+* underlying: binary, is underlying cause of death
+* code: ICD9 code for diseases at death, without dot.
+
+note: Does not contain patients who are alive.
+
+### Demographics
+demo.csv
+
+Columns:
+* rep_person_id: 250056 cases, includes all rep_person_id in other files.
+* male: binary label for sex. B is considered F for model simplicity.
+* race: {1,2,3,4,5,6,98,99}, coding scheme unknown
+* educ_level: {0,1,2,3,4,5}, coding scheme unknown
+
+### Diagnosis
+
+
+
+### Hospitalization
+hosp.csv
+
+
+
+### Prescription
+
+Note: I had difficulty calculate the relative amount of prescription each patient had. Pharmacist pointed at the total_med_quantity column in the original dataset.
+It's not a surprise that it's the only messy column in the dataset, since everything else seems to be automatically generated. The value for total_med_quantity for even the same med_rxnorm can vary incredibly.
+
+```
+                            0              1             10        10 days
+           270            106             16            988              5
+       10 DAYS      10 TAB(S)        10 tabs           10.0            100
+             3             20              1              4              4
+            12             13             14        14 days      14 TAB(S)
+             1             19           1324              2             75
+          14.0             15      15 TAB(S)             16             17
+             6              7              3             21              2
+            18             19              2             20        20 days
+            59            248              5          21771              1
+      20 doses       20 pills      20 TAB(S)        20 tabs       20 tabs0
+             1             11           2107            104              1
+          20.0         20.000             21      22 TAB(S)             23
+            22             18             25             11              2
+            24             28      28 TAB(S)        28 tabs         28.000
+            12           1360             92              4              4
+            29            290              3             30      30 TAB(S)
+            15              3              2            324              6
+        30.000              4        4 weeks             40      40 TAB(S)
+```
+Without NLP this is imposslbe to deal with. I decided not to calculate the relative dosages.
+
+About grouping medicines by their functions, it's necessary to consider not only the ingredients, but the actual medicine, so rxnorm_code is a good idea. It's not certain. We have started with ingredients so I won't go back now.
+
 ## Data runtime processing with Python
 
 Note that much of these are model-independent. I must keep these codes separately from the model.
