@@ -284,7 +284,7 @@ calls<-xml_find_all(xmldoc,"./function")
 # find first returns error
 # there is no way we can do this without core dumps. See below. I tried mclapply foreach and others. No way.
 medrxcui<-lapply(inputs,function(x) xml_find_all(x,"./following-sibling::outputs/output/RXCUI"))
-ingr_cui<-lapply(calls,function(x) xml_find_all(x,".//function[@level='1']//output/RXCUI")
+ingr_cui<-lapply(calls,function(x) xml_find_all(x,".//function[@level='1']//output/RXCUI"))
 chosenmedrx<-lapply(calls,function(x) xml_find_all(x,".//function[@level='1']//input"))
 
 # commented out
@@ -314,15 +314,15 @@ if (False){
 }
 
 # dump results. cannot be dumped as robject
-fwrite(xml_text(inputs)%>%as.list(),'/infodev1/rep/projects/jason/parsed_inputs.csv')
+#fwrite(xml_text(inputs)%>%as.list(),'/infodev1/rep/projects/jason/parsed_inputs.csv')
 hello<-lapply(medrxcui, function(x) { xml_text(x)[1] })
-fwrite(hello %>% as.list,'/infodev1/rep/projects/jason/parsed_medrxcui.csv')
+#fwrite(hello %>% as.list,'/infodev1/rep/projects/jason/parsed_medrxcui.csv')
 hello<-list()
 hello<-lapply(1:length(inputs), function(x) { hello[[x]]<-xml_text(ingr_cui[[x]])  })
-saveRDS(hello,file='/infodev1/rep/projects/jason/parsed_ingr_rxcui.rds')
+#saveRDS(hello,file='/infodev1/rep/projects/jason/parsed_ingr_rxcui.rds')
 chosen<-c()
 chosen<-lapply(1:length(inputs), function (x) {chosen<-c(chosen,xml_text(chosenmedrx[[x]])[1])})
-fwrite(chosen, '/infodev1/rep/projects/jason/parsed_first_queryed_medrxcui.csv')
+#fwrite(chosen, '/infodev1/rep/projects/jason/parsed_first_queryed_medrxcui.csv')
 
 # we encounter a problem.
 # the medicine to ingredient is not a one to one mapping. This means we will not be able to store it efficiently in data frame without chopping off, we even have difficulty storing it in a csv table.
@@ -354,16 +354,88 @@ fwrite(try_min,'/infodev1/rep/projects/jason/min_mypres.csv')
 
 # we need to create the bar comma file for mapping from med_rxnorm_code to ingr_rxnorm_code
 # two lists
-# list of (nonexisting) name, rxnorm, ingrdients mapping
+# list of (existing) name, rxnorm, ingrdients mapping
+readableTree<-xmlParse('/infodev1/home/m193194/git/ehr/death/data/aug_rxnorm_to_ingr/b2e6a98552d25b4b7772b6cc557dc65e.xml')  
+xmldoc<-read_xml('/infodev1/home/m193194/git/ehr/death/data/aug_rxnorm_to_ingr/b2e6a98552d25b4b7772b6cc557dc65e.xml')  
+calls<-xml_find_all(xmldoc,"./function") 
+lhs<-lapply(calls,function(x) {
+            y<-xml_find_all(x,"./input")
+            xml_text(y)
+}
+)
+rhs<-lapply(calls,function(x){
+            y<-xml_find_all(x,".//output/RXCUI")
+            xml_text(y)
+})
 
-
-# list of (existing) rxnorm, ingrdients mapping
+# list of (nonexisting) rxnorm, ingrdients mapping
 # left: chosen
 lhs2<-chosen
 # right:
 rhs2<-lapply(ingr_cui,xml_text)
 
-##### YOU NEED TO MANUALLY EXAMINE THE RESULTS!
+# longlist
+lc<-c(lhs,lhs2)
+rc<-c(rhs,rhs2)
+saveRDS(lc,file='/infodev1/rep/projects/jason/lc.rds')
+saveRDS(rc,file='/infodev1/rep/projects/jason/rc.rds')
+
+try<-data.table(lc=lc,rc=rc)
+try <- try %>% mutate(lc=unlist(lc)) %>% setDT()
+try <- try %>% distinct(lc,.keep_all=T) %>% setDT()
+fwrite(try,'/infodev1/rep/projects/jason/rxnorm_ingr_dt.csv')
+
+# We need to manually examine the results to see if the conversion is sound.
+mypres <- mypres %>% left_join(lookup,by=c(med_rxnorm_code='lc')) %>% setDT()
+# We've come a long way here, and I cannot rule out any mistake.
+# From the conversion table, we have many ingrdients fields missing.
+# I want to ensure that if med_ingr_rxnorm_code exists in the original database and does not get result in the query, then the final table will have its original med_ingr_rxnorm_code
+original_lookup<-mypres%>% select(med_rxnorm_code,med_ingr_rxnorm_code) %>% setDT()
+original_lookup<-original_lookup[!is.na(med_ingr_rxnorm_code)]
+original_lookup<- original_lookup %>% distinct(med_rxnorm_code,.keep_all=T) %>% setDT()
+
+# lookup is read from the file
+lookup<-fread('/infodev1/rep/projects/jason/rxnorm_ingr_dt.csv')
+lookup<- lookup%>%mutate(rc=unlist(rc)) %>% setDT()
+lookup<- lookup[rc!=""]
+notin<-! original_lookup$med_rxnorm_code %in% lookup$lc
+notin<-original_lookup[notin]
+colnames(notin) <- colnames(lookup)
+lookup<-rbind(lookup,notin)
+lookup <- lookup %>% arrange(lc) %>% setDT()
+fwrite(lookup,'/infodev1/rep/projects/jason/new_rxnorm_ingr_dt.csv')
+
+# our lookup is very good, and we examine again and find that some rows are obsolete.
+# You can test by running mypres[med_generic=="ASPIRIN"], some rows use obsolete med_rxnorm_code and therefore has no result for med_ingr_rxnorm_code or anything
+# we will need to deal with such rows.
+
+# Condition:
+# is.na(rc)
+# med_name or med_generic exists in our database, local or lookup
+# run local search so that the med_rxnorm_code is corrected
+
+failsafe<-mypres[,c("med_name","med_rxnorm_code")]
+failsafe<- failsafe %>% group_by(med_name,med_rxnorm_code) %>% mutate(n=n()) %>% setDT()
+failsafe <- failsafe %>% group_by(med_name) %>% mutate(maxn=max(n)) %>% setDT()
+failsafe <- failsafe %>% filter(n==maxn) %>% select (-n) %>% setDT()
+failsafe<- failsafe %>% distinct(med_name,.keep_all=T) %>% setDT()
+failsafe<- failsafe %>% select(-maxn) %>% filter(!is.na(med_rxnorm_code)) %>% setDT()
+
+# now we REPLACE med_rxnorm_code for all those who don't have rc
+mypres[is.na(rc)]
+failsafe<- failsafe %>% mutate(new_med_rxnorm=med_rxnorm_code) %>% select(-med_rxnorm_code) %>% setDT()
+mypres <- mypres %>% left_join(failsafe) %>% setDT()
+mypres <- mypres %>% mutate(med_rxnorm_code=if_else(is.na(rc),new_med_rxnorm,med_rxnorm_code)) %>% setDT()
+mypres <- mypres %>% select(-new_med_rxnorm,-rc) %>% setDT()
+
+# forget the bar and comma. it turns out that we can store bar string in csv files. that's how it should be done, natively without another dict file
+fwrite(mypres,'/infodev1/rep/projects/jason/before_drop_mypres.csv')
+mypres <- mypres %>% select(-med_ingr_rxnorm_code,-queried_med_rxnorm) %>% mutate(med_ingr_rxnorm_code=rc) %>% select(-rc) %>% setDT()
+fwrite(mypres,'/infodev1/rep/projects/jason/new_verbose_rxnorm_ingr_dt.csv')
+mypres <- mypres %>% select(-med_name,-med_generic,-med_rxnorm_code) %>% setDT()
+fwrite(mypres,'/infodev1/rep/projects/jason/new_min_mypres.csv')
+
+# we have finished
 
 ###### SERVICES
 # my intuition tells me that sevices will not beo too vital
@@ -375,6 +447,7 @@ myserv<-serv %>% select (rep_person_id, SRV_DATE, srv_month, srv_px_code_type, s
 myserv<- myserv[rep_person_id %in% services_table]
 # I did not throw away any other dimensions' values. They are mainly noise
 fwrite(mysev,"/infodev1/rep/projects/jason/myserv.csv")
+
 
 ######## SURGERIES
 surg<-fread("/infodev1/rep/data/surgeries.dat")
