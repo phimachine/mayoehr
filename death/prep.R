@@ -98,6 +98,18 @@ main <- main %>% filter(!is.na(code))%>% select(-code_type) %>% setDT()
 # we have 59394 rows in the end
 fwrite(main,"/infodev1/rep/projects/jason/deathtargets.csv")
 
+####### DEMOGRAPHICS
+demo<-fread('/infodev1/rep/data/demographics.dat')
+# age is thrown away. Difficulty to process. Obfuscate valuable signal.
+demo <- demo %>% select(rep_person_id,sex,race,ethnicity,educ_level)
+fwrite(demo,'/infodev1/rep/projects/jason/demo.csv')
+demo <- demo %>% mutate(male=sex=="M") %>% setDT()
+demo <- demo %>% select (-sex)
+demo <- demo %>% arrange(rep_person_id) %>% setDT()
+# not sure what it is, only 13870 cases, binary
+demo <- demo %>%select(-ethnicity) %>% setDT()
+
+
 ##########
 # FOR INPUTS, we will maintain separate files and read all by python at run time
 # I think I will ditch the unique row by rep_person_id and dx_date convention. This means I will need to load every single dataset with python at run time, (and maybe pickle everything out?)
@@ -115,12 +127,33 @@ mydia<-mydia%>%mutate(dx_date=mdy(dx_date))%>%setDT()
 hello<-as.integer(mydia$rep_person_id)
 mydia<-mydia %>% mutate(rep_person_id=hello) %>% setDT()
 mydia<-mydia %>% arrange(rep_person_id, dx_date) %>% setDT()
-# merge demographics and mydia
+
+# NODOT transformation
+
+
+pcs<-fread("/home/m193194/git/ehr/death/data/gem_pcsi9.txt")
+colnames(pcs)<-c("i10","i9","flag")
+pcs<- pcs %>% distinct(i10,.keep_all=T)
+# fixed a bug here for multiple matches
+mysurg <- mysurg %>% left_join(pcs,by=c("px_code"="i10")) %>% setDT()
+# no dot
+mysurg <- mysurg %>% separate(px_code,c("first","second"),remove=FALSE) %>%  setDT()
+mysurg <- mysurg%>% unite("nodot",c("first","second"),sep="") %>% setDT()
+mysurg <- mysurg %>% mutate(nodot=as.integer(nodot)) %>% setDT()
+mysurg <- mysurg %>% mutate(px_code=if_else(px_codetype=="I9",nodot,i9)) %>% setDT()
+mysurg <- mysurg %>% select(-nodot, -i9, -flag, -px_codetype) %>% setDT()
+mysurg <- mysurg %>% mutate(px_date=mdy(px_date)) %>% setDT()
+mysurg <- mysurg[!is.na(px_code)] %>% mutate(rep_person_id=as.integer(rep_person_id)) %>% setDT()
+
+
+
+
+
 fwrite(mydia,"/infodev1/rep/projects/jason/mydia.csv")
 
 ##### HOSPITALIZATION
 hosp<-fread('/infodev1/rep/data/hospitalizations.dat')
-myhosp<-hosp%>%select(rep_person_id, hosp_admit_dt,hosp_disch_dt,hosp_inout_code,hosp_adm_source,hosp_disch_disp, hosp_primary_dx,starts_with("hosp_secondary_dx"))
+myhosp<-hosp%>%select(rep_person_id, hosp_admit_dt,hosp_disch_dt,hosp_inout_code,hosp_adm_source,hosp_disch_disp, hosp_primary_dx,hosp_dx_code_type,starts_with("hosp_secondary_dx"))
 # no dirty data found, this is a carefully curated dataset.
 # all of them seem to be ICD9 or ICD10
 myhosp<-myhosp%>%mutate(hosp_admit_dt=mdy(hosp_admit_dt),hosp_disch_dt=mdy(hosp_disch_dt)) %>% setDT()
