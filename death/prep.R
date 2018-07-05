@@ -5,10 +5,13 @@ require(lubridate)
 require(data.table)
 require(dplyr)
 require(doParallel)
+require(foreach)
+require(parallel)
 require(tidyr)
 require(fuzzyjoin)
 require(xml2)
 require(XML)
+require(stringr)
 
 ########## DEATH TARGETS
 demo<-fread('/infodev1/rep/data/demographics.dat')
@@ -121,34 +124,54 @@ demo <- demo %>%select(-ethnicity) %>% setDT()
 dia<-fread('/infodev1/rep/data/diagnosis.csv')
 # slicing necessary columns
 mydia<-dia[,c("rep_person_id","dx_date","dx_codetype","dx_code_seq","DX_CODE")]
-mydia<-mydia %>% filter(dx_codetype %in% c("I10","I9")) %>% setDT()
-mydia<-mydia%>%mutate(dx_date=mdy(dx_date))%>%setDT()
+mydia<-mydia%>%mutate(dx_date=mdy(dx_date))%>%setDT()
 # convert id to int before sort, otherwise it's string
 hello<-as.integer(mydia$rep_person_id)
 mydia<-mydia %>% mutate(rep_person_id=hello) %>% setDT()
 mydia<-mydia %>% arrange(rep_person_id, dx_date) %>% setDT()
-
-# NODOT transformation
-
-
-pcs<-fread("/home/m193194/git/ehr/death/data/gem_pcsi9.txt")
+# 50,000/100,000,000 out
+mydia<- mydia[!is.na(rep_person_id)][!is.na(dx_date)]
+# rid of hicda
+hic<-fread('/home/m193194/git/ehr/death/data/hicda_icd9.csv')
+colnames(hic)<-c("hicda","hicda_desc","icd9","icd9_desc","grpnbr")
+# transform the hic conversion table for our application..
+hello <- hic %>% distinct(hicda, .keep_all=T) %>% setDT()
+hello <- hello %>% select(hicda,icd9) %>% setDT()
+hello <- hello %>% mutate(hicda=as.character(hicda)) %>% setDT()
+hello<- hello %>% mutate(hicda=str_pad(hicda,8,pad="0")) %>% setDT()
+mydia<- mydia %>% left_join(hello,by=c("DX_CODE"="hicda")) %>% setDT()
+mydia<- mydia %>% mutate(DX_CODE=if_else(dx_codetype=="HIC", icd9, DX_CODE)) %>% select(-icd9) %>% setDT()
+mydia<- mydia %>% mutate(dx_codetype=if_else(dx_codetype=="HIC","I9",dx_codetype)) %>% setDT()
+# transform I10 to I9 TODO
+pcs<-fread('/home/m193194/git/ehr/death/data/2018_I10gem.txt')
 colnames(pcs)<-c("i10","i9","flag")
-pcs<- pcs %>% distinct(i10,.keep_all=T)
-# fixed a bug here for multiple matches
-mysurg <- mysurg %>% left_join(pcs,by=c("px_code"="i10")) %>% setDT()
-# no dot
-mysurg <- mysurg %>% separate(px_code,c("first","second"),remove=FALSE) %>%  setDT()
-mysurg <- mysurg%>% unite("nodot",c("first","second"),sep="") %>% setDT()
-mysurg <- mysurg %>% mutate(nodot=as.integer(nodot)) %>% setDT()
-mysurg <- mysurg %>% mutate(px_code=if_else(px_codetype=="I9",nodot,i9)) %>% setDT()
-mysurg <- mysurg %>% select(-nodot, -i9, -flag, -px_codetype) %>% setDT()
-mysurg <- mysurg %>% mutate(px_date=mdy(px_date)) %>% setDT()
-mysurg <- mysurg[!is.na(px_code)] %>% mutate(rep_person_id=as.integer(rep_person_id)) %>% setDT()
+pcs<- pcs %>% distinct(i10,.keep_all=T) %>% select(-flag) %>% setDT()
 
+mydia<- mydia %>% separate(DX_CODE,c("first","second"), remove=F)
+mydia <- mydia %>% replace_na(list(first="",second="")) %>% setDT()
+mydia <- mydia %>% unite("nodot", c("first","second"),sep="") %>% setDT()
 
+# for the regex join, we will need to run it efficiently.
+all_i10_codes <- mydia %>% filter(dx_codetype=="I10") %>% distinct(nodot) %>% setDT()
+library(foreach)
+library(parallel)
+# parallel processing needs to be done here. Each lookup costs around 3 seconds. We have ~23,000 in total.
+cl<-parallel::makeForkCluster(32)
+doParallel::registerDoParallel(cl)
+ret<-foreach(i=1:nrow(all_i10_codes), .combine='rbind') %dopar%{
+    pcs%>% regex_right_join(all_i10_codes[i],by=c(i10="nodot"))
+}
+# Throws error if 48 clusters
+# Error in unserialize(socklist[[n]]) : error reading from connection
 
+fwrite(ret,"/infodev1/rep/projects/jason/mydia_reg")
+mydia<- mydia %>% left_join(ret,by=c("nodot"="i10")) %>% setDT()
+mydia <- mydia %>% mutate(DX_CODE=if_else(dx_codetype=="I10",i9, nodot)) %>% setDT()
+## SEE WHICH ONE WORKS!
+mydia <- mydia %>% left_join(pcs, by=c("nodot"="i10")) %>% setDT()
+mydia <- mydia %>% mutate(DX_CODE=if_else(dx_codetype=="I10", i9, nodot)) %>%  setDT()
 
-
+#sort
 fwrite(mydia,"/infodev1/rep/projects/jason/mydia.csv")
 
 ##### HOSPITALIZATION
@@ -157,8 +180,90 @@ myhosp<-hosp%>%select(rep_person_id, hosp_admit_dt,hosp_disch_dt,hosp_inout_code
 # no dirty data found, this is a carefully curated dataset.
 # all of them seem to be ICD9 or ICD10
 myhosp<-myhosp%>%mutate(hosp_admit_dt=mdy(hosp_admit_dt),hosp_disch_dt=mdy(hosp_disch_dt)) %>% setDT()
-myhosp<-myhosp%>%arrange(rep_person_id,hosp_admit_dt)%>%setDT()
+myhosp<-myhosp %>% arrange(rep_person_id,hosp_admit_dt)%>%setDT()
 # myhosp has all the diagnosis codes expanded as dimensions
+
+# covert all expanded column TODO
+myhospcopy<-copy(myhosp)
+myhosp<-copy(myhospcopy)
+
+pcs<-fread('/home/m193194/git/ehr/death/data/2018_I10gem.txt')
+colnames(pcs)<-c("i10","i9","flag")
+pcs<- pcs %>% distinct(i10,.keep_all=T) %>% select(-flag) %>% setDT()
+
+vi10<-c()
+# collect all unique i10, so that regex join does not go through all rows.
+collect_i10<- function(myhosp,key,vi10){
+    myhosp<- myhosp%>% separate(key,c("first","second"), remove=F)
+    myhosp <- myhosp %>% replace_na(list(first="",second="")) %>% setDT()
+    myhosp <- myhosp %>% unite("nodot", c("first","second"),sep="") %>% setDT()
+    vi10<-c(vi10,myhosp$nodot)
+    vi10
+}
+# replace all i10 with the corresponding regex result.
+# normal left join
+batch_to_i9 <- function(myhosp,key,regret){
+    myhosp <- myhosp %>% separate(key,c("first","second"), remove=F)
+    myhosp <- myhosp %>% replace_na(list(first="",second="")) %>% setDT()
+    myhosp <- myhosp %>% unite("nodot", c("first","second"),sep="") %>% setDT()
+    myhosp <- myhosp %>% left_join(regret, by=c("nodot"="i10")) %>% setDT()
+    myhosp <- myhosp %>% mutate(!!key:=if_else(hosp_dx_code_type=="I10", i9, nodot)) %>% setDT()
+    myhosp <- myhosp %>% select(-i9) %>% setDT()
+    myhosp
+}
+# select all expanded columns
+keys<- myhosp[1:2] %>% select(starts_with("hosp_secondary_dx")) %>% colnames()
+keys<-c("hosp_primary_dx",keys)
+# collect all i10 codes
+for (key in keys) {
+    print(key)
+    vi10<-collect_i10(myhosp,key,vi10)
+}
+# convert all i10 codes. Two passes are more efficient
+uvi10<-unique(vi10)
+uvidt<-data.table(i10=uvi10)
+uvidt<-uvidt[i(i10=="")]
+# should take around 1 hour with this configuration
+cl<-parallel::makeForkCluster(48)
+doParallel::registerDoParallel(cl)
+ret<-foreach(i=1:nrow(uvidt),.combine='rbind') %dopar%{
+    pcs %>% regex_right_join(uvidt[i],by=c(i10="i10"))
+}
+# combine back
+fwrite(ret,"/infodev1/rep/projects/jason/myhosp_reg")
+for (key in keys){
+    print(key)
+    batch_to_i9(myhosp,key,ret)
+}
+
+
+# MANUALLY EXAMINE
+hosp<- hosp %>% arrange(rep_person_id, hosp_admit_dt) %>% setDT()
+myhosp<- myhosp %>% arrange(rep_person_id, hosp_admit_dt) %>% setDT()
+myhosp<- myhosp %>% select(-nodot) %>% setDT()
+
+# MERGE COLUMNS
+# merge with space
+for (key in keys) set(myhosp,which(is.na(myhosp[[key]])),key,"")
+
+myhosp<- myhosp %>% unite("all_dx_codes",keys, sep=" ") %>% setDT()
+splitted<-strsplit(myhosp$all_dx_codes,"\\s+")
+# split with space, replace with bar
+pasted<-lapply(splitted,function(x) paste(x,collapse='|'))
+# mutate
+myhosp<- myhosp %>% mutate(dx_codes=pasted) %>% setDT()
+myhosp<- myhosp %>% select(-all_dx_codes,-hosp_dx_code_type) %>% setDT()
+
+# for the two labels, remove all below 1000 cases.
+
+myhosp<-myhosp %>% group_by(hosp_disch_disp) %>% mutate(n=n()) %>% setDT()
+myhosp<-myhosp %>% mutate(hosp_disch_disp=if_else(n<1000,"XXX",hosp_disch_disp)) %>% select(-n) %>% setDT()
+
+myhosp<-myhosp %>% group_by(hosp_adm_source) %>% mutate(n=n()) %>% setDT()
+myhosp<-myhosp %>% mutate(hosp_adm_source=if_else(n<1000,"XXX",hosp_adm_source)) %>% select(-n) %>% setDT()
+
+myhosp<-myhosp %>% mutate(is_in_patient=hosp_inout_code=="I") %>% select(-hosp_inout_code) %>% setDT()
+myhosp<-myhosp %>% arrange(rep_person_id, hosp_admit_dt) %>% setDT()
 fwrite(myhosp,"/infodev1/rep/projects/jason/myhosp.csv")
 
 ##### LABS
