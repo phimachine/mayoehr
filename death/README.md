@@ -213,7 +213,7 @@ myvitals.csv
 
 #### Note:
 A person may have multiple vitals for one day, in that case, the average of the measurement is taken.
-Units have been converted to metric, personal preferences
+Units have been converted to metric, personal preferences.
 I have been suggested to incorporate other statistics than the mean, such as sd. TODO 
 
 ## Data runtime processing with Python
