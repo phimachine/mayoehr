@@ -45,6 +45,10 @@ All data files are stored on /infodev1/rep/projects/jason/, the "data" folder in
 The idea is to pull an id from demographics file and query all files for a complete patient record at run time.
 The data is preprocessed specifically for deep learning architectures.
 
+The post processing file might give you more details on the data file types. Just run the postproc, pause in the end and examine the pandas data frames.
+
+9 files in total.
+
 ### Death targets
 deathtargets.csv
 
@@ -121,7 +125,7 @@ This is a dirty file.
 * missing values of loinc code has been imputed if the lab_src_code has appeared in our database
 
 ### Prescription
-new_min_mypres.csv
+new_min_mypres.csv/mypres.csv
 
 11,203,383 rows
 
