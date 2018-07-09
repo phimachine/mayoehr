@@ -762,14 +762,16 @@ fwrite(res,'/infodev1/rep/projects/jason/myvitals.csv')
 # DEMOGRAPHICS
 # requires reading all previous files
 
-demo<-fread('/infodev1/rep/data/demographics.dat')
+demo<-fread('/infodev1/rep/data/demograph')
 # age is thrown away. Difficulty to process. Obfuscate valuable signal.
-demo <- demo %>% select(rep_person_id,sex,race,ethnicity,educ_level)
+demo <- demo %>% select(rep_person_id,sex,race,ethnicity,educ_level,birth_date)
 demo <- demo %>% mutate(male=sex=="M") %>% setDT()
 demo <- demo %>% select (-sex)
 demo <- demo %>% arrange(rep_person_id) %>% setDT()
 # not sure what it is, only 13870 cases, binary
 demo <- demo %>%select(-ethnicity) %>% setDT()
+demo <- demo %>% mutate(birth_date=mdy(birth_date)) %>% setDT()
+demo <- demo[!is.na(birth_date)]
 
 # remove people with no inputs
 death<-fread('/infodev1/rep/projects/jason/deathtargets.csv')
@@ -780,11 +782,12 @@ lab<-fread('/infodev1/rep/projects/jason/mylabs.csv')
 pres<-fread('/infodev1/rep/projects/jason/mypres.csv')
 serv<-fread("/infodev1/rep/projects/jason/myserv.csv")
 surg<-fread("/infodev1/rep/projects/jason/mysurg.csv")
-vitals<-fread("/infodev1/rep/projects/jason/myvitals.csv")a
+vitals<-fread("/infodev1/rep/projects/jason/myvitals.csv")
 
 ldf=list(dia,hos,lab,pres,serv,surg,vitals)
+notin<-copy(demo)
 for (df in ldf){
-                       notin <- notin[!rep_person_id %in% df$rep_person_id]
+    notin <- notin[!rep_person_id %in% df$rep_person_id]
 }
 demo<-demo[!rep_person_id %in% notin$rep_person_id]
 
