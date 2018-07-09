@@ -659,6 +659,8 @@ myserv<-coll(myserv,"SRV_LOCATION",1000,"other")
 # one date per row.
 myserv <- myserv %>% select(-SRV_ADMIT_DATE,-SRV_DISCH_DATE) %>% setDT()
 # bar separated is not possible here
+myserv[is.na(srv_px_count)]$srv_px_count<-1
+
 
 fwrite(myserv,"/infodev1/rep/projects/jason/myserv.csv")
 fwrite(as.list(unique(myserv$srv_px_code)),"/infodev1/rep/projects/jason/myserv_all_px_codes")
