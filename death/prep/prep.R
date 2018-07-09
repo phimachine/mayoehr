@@ -101,18 +101,6 @@ main <- main %>% filter(!is.na(code))%>% select(-code_type) %>% setDT()
 # we have 59394 rows in the end
 fwrite(main,"/infodev1/rep/projects/jason/deathtargets.csv")
 
-####### DEMOGRAPHICS
-demo<-fread('/infodev1/rep/data/demographics.dat')
-# age is thrown away. Difficulty to process. Obfuscate valuable signal.
-demo <- demo %>% select(rep_person_id,sex,race,ethnicity,educ_level)
-demo <- demo %>% mutate(male=sex=="M") %>% setDT()
-demo <- demo %>% select (-sex)
-demo <- demo %>% arrange(rep_person_id) %>% setDT()
-# not sure what it is, only 13870 cases, binary
-demo <- demo %>%select(-ethnicity) %>% setDT()
-
-fwrite(demo,'/infodev1/rep/projects/jason/demo.csv')
-
 ##########
 # FOR INPUTS, we will maintain separate files and read all by python at run time
 # I think I will ditch the unique row by rep_person_id and dx_date convention. This means I will need to load every single dataset with python at run time, (and maybe pickle everything out?)
@@ -770,3 +758,34 @@ res<-foreach(tt=by_group,.combine=rbind, .packages=c('dplyr','data.table') )%dop
 stopCluster(cl)
 res <- res%>%arrange(rep_person_id,VITAL_DATE) %>% setDT()
 fwrite(res,'/infodev1/rep/projects/jason/myvitals.csv')
+
+# DEMOGRAPHICS
+# requires reading all previous files
+
+demo<-fread('/infodev1/rep/data/demographics.dat')
+# age is thrown away. Difficulty to process. Obfuscate valuable signal.
+demo <- demo %>% select(rep_person_id,sex,race,ethnicity,educ_level)
+demo <- demo %>% mutate(male=sex=="M") %>% setDT()
+demo <- demo %>% select (-sex)
+demo <- demo %>% arrange(rep_person_id) %>% setDT()
+# not sure what it is, only 13870 cases, binary
+demo <- demo %>%select(-ethnicity) %>% setDT()
+
+# remove people with no inputs
+death<-fread('/infodev1/rep/projects/jason/deathtargets.csv')
+demo<-fread('/infodev1/rep/projects/jason/demo.csv')
+dia<-fread('/infodev1/rep/projects/jason/mydia.csv')
+hos<-fread('/infodev1/rep/projects/jason/myhosp.csv')
+lab<-fread('/infodev1/rep/projects/jason/mylabs.csv')
+pres<-fread('/infodev1/rep/projects/jason/mypres.csv')
+serv<-fread("/infodev1/rep/projects/jason/myserv.csv")
+surg<-fread("/infodev1/rep/projects/jason/mysurg.csv")
+vitals<-fread("/infodev1/rep/projects/jason/myvitals.csv")a
+
+ldf=list(dia,hos,lab,pres,serv,surg,vitals)
+for (df in ldf){
+                       notin <- notin[!rep_person_id %in% df$rep_person_id]
+}
+demo<-demo[!rep_person_id %in% notin$rep_person_id]
+
+fwrite(demo,'/infodev1/rep/projects/jason/demo.csv')
