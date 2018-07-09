@@ -9,7 +9,12 @@ import pandas as pd
 from pathlib import Path
 import pickle
 
+pickle_path="/infodev1/rep/projects/jason/pickle/"
+
 class Dfs():
+    '''
+    Dataframe manager
+    '''
 
     def __init__(self):
         '''
@@ -29,7 +34,7 @@ class Dfs():
 
         self.bar_separated=[("dia","dx_codes"),("hos","dx_codes"),
                        ("pres","med_ingr_rxnorm_code"), ("serv","srv_px_code")]
-        self.no_bar=[("death","code"),("labs","lab_loinc_code"), ("serv","srv_px_code"),
+        self.no_bar=[("death","code"),("lab","lab_loinc_code"), ("serv","srv_px_code"),
                 ("surg","collapsed_px_code")]
 
         for df, col in self.bar_separated:
@@ -43,8 +48,8 @@ class Dfs():
         load all preprocessed datasets, return in the order of death,demo,dia,hos,lab,pres,serv,surg,vital
 
         :param coerce: coerce load and resave pickle files
-        :param write_pickle:
         :param verbose: verbose output
+        :param write_pickle:
         :return: death,demo,dia,hos,lab,pres,serv,surg,vital: panda dataframe objects
         '''
         if not verbose:
@@ -185,15 +190,15 @@ class Dfs():
 
     def load_pickle(self):
         try:
+            print("loading from pickle file")
             with open("/infodev1/rep/projects/jason/pickle/pddfs.pkl",'rb') as f:
                 self.death, self.demo, self.dia, self.hos, self.lab, self.pres, \
                 self.serv, self.surg, self.vital= pickle.load(f)
                 self.loaded=True
-                print("Loaded from pickle file")
         except (OSError, IOError) as e:
             raise FileNotFoundError("pickle pddfs not found")
 
-    def make_dictionary(self, write=False,verbose=False):
+    def make_dictionary(self, save=True,verbose=False,skip=True):
         '''
         Collects all codes in all data sets, and produces dictionary for one-hot
         encoding purposes, word to index.
@@ -216,22 +221,22 @@ class Dfs():
             except FileNotFoundError:
                 self.load_raw(verbose=verbose)
 
-        if verbose:
-            print("file loaded, making dictionaries")
+
+        print("file loaded, making dictionaries")
 
 
         for df,col in self.bar_separated:
             if verbose:
                 print("generating dictionary on "+df+" "+col)
-            self.bar_separated_dictionary(df,col)
+            self.bar_separated_dictionary(df,col,save=save,skip=skip)
 
         for df,col in self.no_bar:
             if verbose:
                 print("generating dictionary on " + df + " " + col)
-            self.no_bar_dictionary(df,col)
+            self.no_bar_dictionary(df,col,save=save,skip=skip)
 
 
-    def bar_separated_dictionary(self,df_name,col_name,save=False):
+    def bar_separated_dictionary(self,df_name,col_name,save=True,skip=True):
         '''
 
         :param df_name:
@@ -240,31 +245,60 @@ class Dfs():
         :return:
         '''
 
+        savepath = Path(pickle_path)/ "dicts" / (df_name + "_" + col_name + ".pkl")
+        print(savepath)
+
+        if skip:
+            try:
+                with savepath.open('rb') as f:
+                    dic=pickle.load(f)
+                    setattr(self,df_name+"_"+col_name+"_dict",dic)
+                    return dic
+            except FileNotFoundError:
+                pass
+
         dic={}
         n=0
 
         series=self.get_series(df_name,col_name)
 
         for row in series:
-            splitted=row.split("|")
-            for word in splitted:
-                # Is there empty? in case I forgot in R
-                if word not in dic and word!="":
-                    if word=="NA":
-                        print("NA FOUND")
-                    dic[word]=n
-                    n+=1
+            try:
+                if not pd.isna(row):
+                   splitted=row.split("|")
+                   for word in splitted:
+                       # Is there empty? in case I forgot in R
+                       if word not in dic and word != "":
+                           if word == "NA":
+                               print("NA FOUND")
+                           dic[word] = n
+                           n += 1
+
+            except AttributeError:
+                print("woah woah woah what did you do")
+                raise
 
         if save==True:
-            savepath=Path().absolute()/"dicts"/df_name+"_"+col_name+".pkl"
-            with savepath.open as f:
+            with savepath.open("wb") as f:
                 pickle.dump(dic,f,protocol=pickle.HIGHEST_PROTOCOL)
+                print('saved')
         getattr(self,df_name+"_"+col_name+"_dict",dic)
 
         return dic
 
-    def no_bar_dictionary(self,df_name,col_name,save=False):
+    def no_bar_dictionary(self,df_name,col_name,save=True,skip=True):
 
+        savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
+        print(savepath)
+
+        if skip:
+            try:
+                with savepath.open('rb') as f:
+                    dic=pickle.load(f)
+                    setattr(self,df_name+"_"+col_name+"_dict",dic)
+                    return dic
+            except FileNotFoundError:
+                pass
         dic={}
         n=0
 
@@ -278,9 +312,9 @@ class Dfs():
                 n+=1
 
         if save==True:
-            savepath=Path().absolute()/"dicts"/df_name+"_"+col_name+".pkl"
-            with savepath.open as f:
+            with savepath.open('wb') as f:
                 pickle.dump(dic,f,protocol=pickle.HIGHEST_PROTOCOL)
+                print('saved')
         getattr(self,df_name+"_"+col_name+"_dict",dic)
 
         return dic
@@ -297,4 +331,4 @@ class Dfs():
 if __name__=="__main__":
     dfs=Dfs()
     # dfs.load_raw()
-    dfs.make_dictionary(verbose=False)
+    dfs.make_dictionary(verbose=True,save=True,skip=False)
