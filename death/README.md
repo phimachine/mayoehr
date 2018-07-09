@@ -38,6 +38,8 @@ A complete patient history is a unit of data. Sort by time within a patient. Shu
 
 Merged dataset needs to be split by 10G each for faster disk I/O. The whole dataset would fit in our crazy memory, but I should not do that. This means each dataset# needs to be pre-shuffled, with each patient as a unit.
 
+Pandas does not allow NA for int columns, but to avoid that, we can use categories, and deal with the inconsistencies with Numpy arrays later.
+
 ## Data file description
 All data files are stored on /infodev1/rep/projects/jason/, the "data" folder in this repository stores public data.
 The idea is to pull an id from demographics file and query all files for a complete patient record at run time.
@@ -66,8 +68,8 @@ demo.csv
 #### Columns:
 * rep_person_id: 250056 cases, includes all rep_person_id in other files.
 * male: binary label for sex. B is considered F for model simplicity.
-* race: {1,2,3,4,5,6,98,99}, coding scheme unknown
-* educ_level: {0,1,2,3,4,5}, coding scheme unknown
+* race: {1,2,3,4,5,6,98,99}, coding scheme unknown.
+* educ_level: {0,1,2,3,4,5}, coding scheme unknown.
 
 #### Note:
 Age has been discarded in this dataset. This reduces our prediction power, but forces the model to discover from medical indicators.
@@ -88,7 +90,7 @@ Files with bar separated value fields should obey this condition: every row has 
 * Empty is basically a flag for existing diagnosis. I trust that the model will be able to deal with it correctly. Most of the time, it seems from the original dataset, that this is just a reundant row that follows a diagnosis, but this is not always the case.
 
 ### Hospitalization
-hosp.csv
+myhosp.csv
 
 1,219,229 rows
 
