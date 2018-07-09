@@ -623,7 +623,7 @@ fwrite(mypres,'/infodev1/rep/projects/jason/before_drop_mypres.csv')
 mypres <- mypres %>% select(-med_ingr_rxnorm_code,-queried_med_rxnorm) %>% mutate(med_ingr_rxnorm_code=rc) %>% select(-rc) %>% setDT()
 fwrite(mypres,'/infodev1/rep/projects/jason/new_verbose_rxnorm_ingr_dt.csv')
 mypres <- mypres %>% select(-med_name,-med_generic,-med_rxnorm_code) %>% setDT()
-fwrite(mypres,'/infodev1/rep/projects/jason/new_min_mypres.csv')
+fwrite(mypres,'/infodev1/rep/projects/jason/mypres.csv')
 
 # we have finished
 
