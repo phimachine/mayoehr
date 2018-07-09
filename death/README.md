@@ -66,7 +66,7 @@ deathtargets.csv
 ### Demographics
 demo.csv
 
-250,056 rows
+247,433 rows
 
 #### Columns:
 * rep_person_id: 250056 cases, includes all rep_person_id in other files.
