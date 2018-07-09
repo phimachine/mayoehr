@@ -33,7 +33,7 @@ class Dfs():
         self.vital=None
 
         self.bar_separated=[("dia","dx_codes"),("hos","dx_codes"),
-                       ("pres","med_ingr_rxnorm_code"), ("serv","srv_px_code")]
+                       ("pres","med_ingr_rxnorm_code")]
         self.no_bar=[("death","code"),("lab","lab_loinc_code"), ("serv","srv_px_code"),
                 ("surg","collapsed_px_code")]
 
@@ -65,15 +65,19 @@ class Dfs():
                      "code": "str"}
             parse_dates= ["death_date"]
             death=pd.read_csv('/infodev1/rep/projects/jason/deathtargets.csv',dtype=dtypes,parse_dates=parse_dates)
-
+            death.set_index(["rep_person_id"])
             if v:
                 print (death)
+
             # DEMOGRAPHICS
             dtypes={'rep_person_id': "int",
                     'race':"category",
                     "educ_level":"category",
+                    "birth_date":"str",
                     "male":"bool"}
-            demo=pd.read_csv("/infodev1/rep/projects/jason/demo.csv",dtype=dtypes)
+            parse_dates=["birth_date"]
+            demo=pd.read_csv("/infodev1/rep/projects/jason/demo.csv",dtype=dtypes,parse_dates=parse_dates)
+            demo.set_index(["rep_person_id"])
             if v:
                 print(demo)
 
@@ -83,6 +87,7 @@ class Dfs():
                     "dx_codes":"str"}
             parse_dates=["dx_date"]
             dia=pd.read_csv("/infodev1/rep/projects/jason/mydia.csv",dtype=dtypes,parse_dates=parse_dates)
+            dia.set_index(["rep_person_id"])
             if v:
                 print(dia)
 
@@ -96,8 +101,10 @@ class Dfs():
                     "is_in_patient":"bool"}
             parse_dates=["hosp_admit_dt","hosp_disch_dt"]
             hos=pd.read_csv("/infodev1/rep/projects/jason/myhosp.csv",dtype=dtypes,parse_dates=parse_dates)
+            hos.set_index("rep_person_id")
             if v:
                 print(hos)
+
 
             # Labs
             dtypes={"rep_person_id": "int",
@@ -107,6 +114,7 @@ class Dfs():
                     "bigger":"float"
                     }
             lab=pd.read_csv("/infodev1/rep/projects/jason/mylabs.csv",dtype=dtypes)
+            lab.set_index("rep_person_id")
             if v:
                 print(lab)
 
@@ -117,6 +125,7 @@ class Dfs():
                     }
             parse_dates=["MED_DATE"]
             pres=pd.read_csv("/infodev1/rep/projects/jason/mypres.csv",dtype=dtypes,parse_dates=parse_dates)
+            pres.set_index("rep_person_id")
             if v:
                 print(pres)
 
@@ -132,6 +141,8 @@ class Dfs():
                       'srv_disch_stat': 'str'}
             parse_dates = ["SRV_DATE"]
             serv=pd.read_csv('/infodev1/rep/projects/jason/myserv.csv', dtype=dtypes, parse_dates=parse_dates)
+            # should be the only double index dataset
+            serv.set_index(['rep_person_id','SRV_DATE'])
             if v:
                 print(serv)
 
@@ -142,6 +153,7 @@ class Dfs():
                     "collapsed_px_code":"int"}
             parse_dates=["px_date"]
             surg=pd.read_csv("/infodev1/rep/projects/jason/mysurg.csv",dtype=dtypes,parse_dates=parse_dates)
+            surg.set_index("rep_person_id")
             if v:
                 print(surg)
 
@@ -155,6 +167,7 @@ class Dfs():
                     "WEIGHT":"float"}
             parse_dates=["VITAL_DATE"]
             vital=pd.read_csv("/infodev1/rep/projects/jason/myvitals.csv",dtype=dtypes,parse_dates=parse_dates)
+            vital.set_index("rep_person_id")
             if v:
                 print(vital)
 
@@ -227,12 +240,12 @@ class Dfs():
 
         for df,col in self.bar_separated:
             if verbose:
-                print("generating dictionary on "+df+" "+col)
+                print("generating dictionary on bar separated "+df+" "+col)
             self.bar_separated_dictionary(df,col,save=save,skip=skip)
 
         for df,col in self.no_bar:
             if verbose:
-                print("generating dictionary on " + df + " " + col)
+                print("generating dictionary on no bar " + df + " " + col)
             self.no_bar_dictionary(df,col,save=save,skip=skip)
 
 
@@ -268,6 +281,8 @@ class Dfs():
                    splitted=row.split("|")
                    for word in splitted:
                        # Is there empty? in case I forgot in R
+                       if pd.isna(word):
+                           print("NA FOUND")
                        if word not in dic and word != "":
                            if word == "NA":
                                print("NA FOUND")
@@ -289,7 +304,7 @@ class Dfs():
     def no_bar_dictionary(self,df_name,col_name,save=True,skip=True):
 
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
-        print(savepath)
+        print("save to path:",savepath)
 
         if skip:
             try:
@@ -305,8 +320,10 @@ class Dfs():
         series=self.get_series(df_name,col_name)
 
         for row in series:
+            if pd.isna(row):
+                print("NA FOUND")
             if row not in dic and row!="":
-                if row=="NA":
+                if word == "NA":
                     print("NA FOUND")
                 dic[row]=n
                 n+=1
@@ -330,5 +347,10 @@ class Dfs():
 
 if __name__=="__main__":
     dfs=Dfs()
-    # dfs.load_raw()
+    dfs.load_raw()
+
+    # dfs.load_pickle()
+
     dfs.make_dictionary(verbose=True,save=True,skip=False)
+
+    print("end script")
