@@ -8,6 +8,7 @@ This is a private repository. If you encounter this repository anywhere, please 
 
 Note: all codes have been converted to ICD9 standard, mainly in order to reduce the dimensions.
 We have two conversion files, one for diagnosis and one for procedures.
+
 Diagnosis: 2018_I10gem.txt, from https://www.cms.gov/Medicare/Coding/ICD10/2018-ICD-10-CM-and-GEMs.html
 Procedures: gem_pcsi9.txt, from https://www.cms.gov/Medicare/Coding/ICD10/Downloads/ProcedureGEMs-2014.zip
 
