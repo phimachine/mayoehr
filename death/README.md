@@ -67,7 +67,7 @@ deathtargets.csv
 ### Demographics
 demo.csv
 
-247,433 rows
+247,428 rows
 
 #### Columns:
 * rep_person_id: 250056 cases, includes all rep_person_id in other files.
@@ -181,7 +181,7 @@ myserv.csv
 * rep_person_id: 246743 unique.
 * SRV_DATE: 1995-01-01 to 2016-12-31.
 * srv_px_count: positive integer. should be a count for the services. However, there are many outliers in original table, such as negative values, so the interpretaion should be conservative. Tail chopped. Forced positive. default to 1.
-* srv_px_code: string. HCP code or CPT code. **not** bar separated, because there are more than one values that need to be concatenated. I did not find a conversion method within my resources. Around 1:4 for HCP:CPT.
+* srv_px_code: string. HCP code or CPT code. **not** bar separated, because there are more than one values that need to be concatenated. I did not find a conversion method within my resources. Around 1:4 for HCP:CPT. default to "other"
 * SRV_LOCATION: string. 83 unique values after tail chopping. Coding scheme unknown.
 * srv_admit_type: string, 19 unique. Ditto.
 * srv_admit_src: string, 24 unique. Ditto.
