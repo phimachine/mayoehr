@@ -8,3 +8,4 @@
 *.txt
 *.csv
 death/data/*
+*.pkl
