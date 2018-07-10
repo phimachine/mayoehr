@@ -37,8 +37,8 @@ class DFManager(object):
 
 
         # not in order
-        self.categories = [("demo", "educ_level"), ("dhos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
-                           ("dhos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
+        self.categories = [("demo", "educ_level"), ("dhos", "hosp_adm_source"), ("dhos", "hosp_disch_disp"),
+                           ("ahos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
                            ("lab", "lab_abn_flag"), ("demo", "race"), ("serv", "SRV_LOCATION"),
                            ("serv", "srv_admit_type"),
                            ("serv", "srv_admit_src"), ("serv", "srv_disch_stat")]
@@ -159,167 +159,6 @@ class DFManager(object):
             print("pickled all dfs")
 
         return tuple(self.__getattribute__(dfn) for dfn in self.dfn)
-    #
-    # def old_load_raw(self, coerce=False, verbose=True, save=True):
-    #
-    #     '''
-    #     load all preprocessed datasets, return in the order of death,demo,dia,hos,lab,pres,serv,surg,vital
-    #
-    #     :param coerce: coerce load and resave pickle files
-    #     :param verbose: verbose output
-    #     :param save:
-    #     :return: death,demo,dia,hos,lab,pres,serv,surg,vital: panda dataframe objects
-    #     '''
-    #     if not verbose:
-    #         print("loading from raw, this process might take 5 minutes")
-    #
-    #     if not self.loaded or (self.loaded and coerce):
-    #         v = verbose
-    #
-    #         # DEATHTARGETS
-    #         dtypes = {'rep_person_id': "int",
-    #                   "death_date": "str",
-    #                   "underlying": "bool",
-    #                   "code": "str"}
-    #         parse_dates = ["death_date"]
-    #         death = pd.read_csv('/infodev1/rep/projects/jason/deathtargets.csv', dtype=dtypes, parse_dates=parse_dates)
-    #         death.set_index(["rep_person_id"], inplace=True)
-    #         if v:
-    #             print(death)
-    #
-    #         # DEMOGRAPHICS
-    #         dtypes = {'rep_person_id': "int",
-    #                   'race': "category",
-    #                   "educ_level": "category",
-    #                   "birth_date": "str",
-    #                   "male": "bool"}
-    #         parse_dates = ["birth_date"]
-    #         demo = pd.read_csv("/infodev1/rep/projects/jason/demo.csv", dtype=dtypes, parse_dates=parse_dates)
-    #         demo.set_index(["rep_person_id"], inplace=True)
-    #         if v:
-    #             print(demo)
-    #
-    #         # DIAGNOSIS
-    #         dtypes = {'rep_person_id': "int",
-    #                   'dx_date': "str",
-    #                   "dx_codes": "str"}
-    #         parse_dates = ["dx_date"]
-    #         dia = pd.read_csv("/infodev1/rep/projects/jason/mydia.csv", dtype=dtypes, parse_dates=parse_dates)
-    #         dia.set_index(["rep_person_id"], inplace=True)
-    #         if v:
-    #             print(dia)
-    #
-    #         # Hospitalization
-    #         dtypes = {"rep_person_id": "int",
-    #                   "hosp_admit_dt": "str",
-    #                   "hosp_disch_dt": "str",
-    #                   "hosp_adm_source": "category",
-    #                   "hosp_disch_disp": "category",
-    #                   "dx_codes": "str",
-    #                   "is_in_patient": "bool"}
-    #         parse_dates = ["hosp_admit_dt", "hosp_disch_dt"]
-    #         hos = pd.read_csv("/infodev1/rep/projects/jason/myhosp.csv", dtype=dtypes, parse_dates=parse_dates)
-    #         hos.set_index("rep_person_id", inplace=True)
-    #         if v:
-    #             print(hos)
-    #
-    #         # Labs
-    #         dtypes = {"rep_person_id": "int",
-    #                   "lab_date": "str",
-    #                   "lab_loinc_code": "str",
-    #                   "lab_abn_flag": "category",
-    #                   "smaller": "float",
-    #                   "bigger": "float"
-    #                   }
-    #         parse_dates = ["lab_date"]
-    #         lab = pd.read_csv("/infodev1/rep/projects/jason/mylabs.csv", dtype=dtypes, parse_dates=parse_dates)
-    #         lab.set_index("rep_person_id", inplace=True)
-    #         if v:
-    #             print(lab)
-    #
-    #         # Prescription
-    #         dtypes = {"rep_person_id": "int",
-    #                   "MED_DATE": "str",
-    #                   "med_ingr_rxnorm_code": "str"
-    #                   }
-    #         parse_dates = ["MED_DATE"]
-    #         pres = pd.read_csv("/infodev1/rep/projects/jason/mypres.csv", dtype=dtypes, parse_dates=parse_dates)
-    #         pres.set_index("rep_person_id", inplace=True)
-    #         if v:
-    #             print(pres)
-    #
-    #         # Services
-    #         # 1% of memory, one of the bigger files. This is looking good.
-    #         dtypes = {"rep_person_id": 'int',
-    #                   "SRV_DATE": 'str',
-    #                   'srv_px_count': 'int',
-    #                   'srv_px_code': 'str',
-    #                   'SRV_LOCATION': 'category',
-    #                   'srv_admit_type': 'category',
-    #                   'srv_admit_src': 'category',
-    #                   'srv_disch_stat': 'category'}
-    #         parse_dates = ["SRV_DATE"]
-    #         serv = pd.read_csv('/infodev1/rep/projects/jason/myserv.csv', dtype=dtypes, parse_dates=parse_dates)
-    #         # should be the only double index dataset
-    #         serv.set_index(['rep_person_id', 'SRV_DATE'], inplace=True)
-    #         if v:
-    #             print(serv)
-    #
-    #         # surgeries
-    #         dtypes = {"rep_person_id": "int",
-    #                   "px_date": "str",
-    #                   "px_code": "int",
-    #                   "collapsed_px_code": "int"}
-    #         parse_dates = ["px_date"]
-    #         surg = pd.read_csv("/infodev1/rep/projects/jason/mysurg.csv", dtype=dtypes, parse_dates=parse_dates)
-    #         surg.set_index("rep_person_id", inplace=True)
-    #         if v:
-    #             print(surg)
-    #
-    #         # vitals
-    #         dtypes = {"rep_person_id": "int",
-    #                   "VITAL_DATE": "str",
-    #                   "BMI": "float",
-    #                   "BP DIASTOLIC": "float",
-    #                   "BP SYSTOLIC": 'float',
-    #                   "HEIGHT": "float",
-    #                   "WEIGHT": "float"}
-    #         parse_dates = ["VITAL_DATE"]
-    #         vital = pd.read_csv("/infodev1/rep/projects/jason/myvitals.csv", dtype=dtypes, parse_dates=parse_dates)
-    #         vital.set_index("rep_person_id", inplace=True)
-    #         if v:
-    #             print(vital)
-    #
-    #         dfs = [death, demo, dia, hos, lab, pres, serv, surg, vital]
-    #         total_mem = 0
-    #         for df in dfs:
-    #             total_mem += df.memory_usage().sum()
-    #         total_mem = total_mem / 1024 / 1024 / 1024
-    #         if verbose:
-    #             # ~ 10.76 gb
-    #             print("total memory usage: ", total_mem.item(), " gb")
-    #
-    #         self.death = death
-    #         self.demo = demo
-    #         self.dia = dia
-    #         self.hos = hos
-    #         self.lab = lab
-    #         self.pres = pres
-    #         self.serv = serv
-    #         self.surg = surg
-    #         self.vital = vital
-    #
-    #         self.loaded = True
-    #
-    #     if save:
-    #         mypath = Path("/infodev1/rep/projects/jason/pickle/pddfs.pkl")
-    #
-    #         pickle.dump((self.death, self.demo, self.dia, self.hos, self.lab, self.pres, \
-    #                      self.serv, self.surg, self.vital), mypath.open("wb"))
-    #         print("pickled all dfs")
-    #
-    #     return self.death, self.demo, self.dia, self.hos, self.lab, self.pres, \
-    #            self.serv, self.surg, self.vital
 
     def is_date_column(self,colname):
         if "dt" in colname.lower() or "date" in colname.lower():
@@ -332,7 +171,7 @@ class DFManager(object):
             # load df
             print("loading from pickle file")
             with open("/infodev1/rep/projects/jason/pickle/pddfs.pkl", 'rb') as f:
-                self.death, self.demo, self.dia, self.hos, self.lab, self.pres, \
+                self.death, self.demo, self.dia, self.ahos, self.dhos, self.lab, self.pres, \
                 self.serv, self.surg, self.vital = pickle.load(f)
 
                 self.loaded = True
@@ -480,6 +319,8 @@ class DFManager(object):
 
 if __name__ == "__main__":
     dfs = DFManager()
+
+
     dfs.load_raw(save=True)
 
     # dfs.load_pickle()
