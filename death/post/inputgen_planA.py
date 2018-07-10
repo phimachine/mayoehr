@@ -1,4 +1,4 @@
-from death.post.qdata import DFManager
+from death.post.qdata import *
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd
@@ -6,6 +6,17 @@ import pandas as pd
 # we can only assume that all deaths are recorded
 
 # torch integration reference: https://github.com/utkuozbulak/pytorch-custom-dataset-examples
+
+def get_timestep_location(earliest, time):
+    '''
+
+    :param earliest: pandas.Timestamp
+    :param time: pandas.Timestmap
+    :return:
+    '''
+    cc=(time-earliest).to_timedelta64()
+    cc=cc.astype("timedelta64[M]")
+    return cc.astype("int")
 
 class InputGen(Dataset):
     '''
@@ -21,6 +32,9 @@ class InputGen(Dataset):
         # manual format: (dfname,colname,starting_index)
         self.input_dim_manual=None
         self.get_input_dim()
+        # this df has no na
+        self.earla=pd.read_csv("/infodev1/rep/projects/jason/earla.csv",parse_dates=["earliest","latest"])
+        self.earla.set_index("rep_person_id",inplace=True)
 
     def get_input_dim(self):
         # pre allocate a whole vector of input
@@ -49,10 +63,14 @@ class InputGen(Dataset):
                         dimsize += 1
                     if dtn == "datetime64[ns]":
                         raise ValueError("No, I should not see this")
+
+        # # the last index is a binary flag whether there is time-dependent record on this location
+        # dimsize=dimsize+1
+
         self.input_dim=dimsize
         self.input_dim_manual=input_dim_manual
 
-    def get_input_index_range(self,dfn,coln):
+    def get_column_index_range(self, dfn, coln):
         '''
         standard notation [start,end)
         modifies self.input_dim_manual and self.input_base_size
@@ -74,6 +92,8 @@ class InputGen(Dataset):
 
         return start,end
 
+
+
     def __getitem__(self, index):
         '''
         pulls a row in demographics
@@ -91,32 +111,38 @@ class InputGen(Dataset):
         :param index:
         :return: (time, longest)
         '''
+        id=self.rep_person_id[index]
+        # plus 2 should not bring problem? I am not sure
+        month_interval=self.earla.loc[10]["int"]+1
+        input=np.zeros((month_interval,self.input_dim))
+
 
         ### we pull all relevant data
-        # demo
-        id=self.rep_person_id[index]
+        # demo, will span all time stamps
         demorow=self.dfm.demo.loc[id]
         race=demorow['race']
         educ_level=demorow['educ_level']
         birth_date=demorow['birth_date']
         male=demorow['male']
+        # TODO this is not done
 
-        self.dfm.death.loc[10]
+
+        # all others, will insert at specific timestamps
+        # diagnosis
+        dias=self.dfm.dia.loc[id]
+        for index, row in dias.iterrows():
+            date=row['dx_date']
+            dx_codes=row["dx_codes"]
+
+        others=["dia","hos","lab","pres","serv","surg","vital"]
+        for df in others:
+            for col in
 
 
-        # get the earliest record time and the latest record time, calculate how many months that would be
 
-        earliest=None
-        latest=None
+
 
         # exception handling: high frequency visitors
-        # allocate now
-
-
-
-
-
-        # pull demographics
 
         ### we compile it into time series
 
