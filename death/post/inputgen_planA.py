@@ -14,10 +14,10 @@ class InputGen(Dataset):
     def __init__(self,load_pickle=True,verbose=False):
         self.dfm=DFManager()
         self.dfm.load_pickle(verbose=verbose)
-        self.rep_id=self.dfm.demo['rep_person_id']
+        self.rep_person_id=self.dfm.demo.index.values
         self.verbose=verbose
-        self.input_base_size=None
-        # (dfname,colname,starting_index)
+        self.input_dim=None
+        # manual format: (dfname,colname,starting_index)
         self.input_dim_manual=None
         self.get_input_dim()
 
@@ -29,9 +29,7 @@ class InputGen(Dataset):
             df = getattr(self.dfm, dfn)
             # get all columns and column dtypes, allocate depending on the dtypes
             for colname, dtype in zip(df.dtypes.index, df.dtypes):
-                if colname in ("rep_person_id", "death_date", "birth_date", "dx_date",
-                               "hosp_admit_dt", "hosp_disch_dt", "MED_DATE", "SRV_DATE",
-                               "px_date", "VITAL_DATE","lab_date"):
+                if colname == "rep_person_id" or self.dfm.is_date_column(colname):
                     # no memory needed for these values.
                     # either index that is ignored, or contained in the time series.
                     pass
@@ -39,7 +37,7 @@ class InputGen(Dataset):
                     dtn = dtype.name
                     input_dim_manual.append((dfn, colname, dimsize))
                     if self.verbose:
-                        print("allocating for", dfn, colname)
+                        print("accounting for", dfn, colname)
                     if dtn == 'bool':
                         dimsize += 1
                     if dtn == "category":
@@ -50,15 +48,16 @@ class InputGen(Dataset):
                         dimsize += 1
                     if dtn == "datetime64[ns]":
                         raise ValueError("No, I should not see this")
-        self.input_base_size=dimsize
+        self.input_dim=dimsize
         self.input_dim_manual=input_dim_manual
 
     def get_input_index_range(self,dfn,coln):
         '''
         standard notation [start,end)
+        modifies self.input_dim_manual and self.input_base_size
         :param dfn:
         :param coln:
-        :return:
+        :return: start, end: integer, memory index
         '''
         idx=0
         start=None
@@ -70,7 +69,7 @@ class InputGen(Dataset):
         if idx<len(self.input_dim_manual):
             end=self.input_dim_manual[idx][2]
         else:
-            end=self.input_base_size
+            end=self.input_dim
 
         return start,end
 
@@ -87,18 +86,32 @@ class InputGen(Dataset):
 
         input will be variable length, with a unit of a month
 
-        for missing data, the whole vector will be zero. There should not be gradient backprop.
+        for missing data, the whole vector will be zero. There should not be gradient backprop. TODO make sure.
         :param index:
         :return: (time, longest)
         '''
 
         ### we pull all relevant data
-        id=self.rep_id[index]
+        # demo
+        id=self.rep_person_id[index]
+        demorow=self.dfm.demo.loc[id]
+        race=demorow['race']
+        educ_level=demorow['educ_level']
+        birth_date=demorow['birth_date']
+        male=demorow['male']
 
-        # sort all records by time
+        self.dfm.death.loc[10]
+
+
         # get the earliest record time and the latest record time, calculate how many months that would be
+
+        earliest=None
+        latest=None
+
         # exception handling: high frequency visitors
         # allocate now
+
+
 
 
 
@@ -107,6 +120,8 @@ class InputGen(Dataset):
         ### we compile it into time series
 
         print("get item finished")
+
+    # def _time_helper(self,earliest,latest):
 
 
     def __len__(self):
@@ -117,5 +132,5 @@ class InputGen(Dataset):
 
 if __name__=="__main__":
     ig=InputGen(load_pickle=True,verbose=True)
-    ig.__getitem__(1)
+    ig.__getitem__(0)
     print("script finished")
