@@ -16,6 +16,7 @@ class InputGen(Dataset):
         self.dfm.load_pickle(verbose=verbose)
         self.rep_person_id=self.dfm.demo.index.values
         self.verbose=verbose
+        # 35781
         self.input_dim=None
         # manual format: (dfname,colname,starting_index)
         self.input_dim_manual=None
@@ -25,7 +26,7 @@ class InputGen(Dataset):
         # pre allocate a whole vector of input
         input_dim_manual=[]
         dimsize = 0
-        for dfn in self.dfm.dfs:
+        for dfn in self.dfm.dfn:
             df = getattr(self.dfm, dfn)
             # get all columns and column dtypes, allocate depending on the dtypes
             for colname, dtype in zip(df.dtypes.index, df.dtypes):
