@@ -2,6 +2,7 @@ from death.post.qdata import *
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd
+import copy
 
 # we can only assume that all deaths are recorded
 
@@ -23,7 +24,7 @@ class InputGen(Dataset,DFManager):
     '''
     take a data frame manager object and produce inputs wrapped in torch objects
     '''
-    def __init__(self,load_pickle=True,verbose=False):
+    def __init__(self,load_pickle=True,verbose=False,debug=False):
         super(InputGen, self).__init__()
         self.load_pickle(verbose=verbose)
         self.rep_person_id=self.demo.index.values
@@ -117,7 +118,6 @@ class InputGen(Dataset,DFManager):
         month_interval=self.earla.loc[10]["int"]+1
         input=np.zeros((month_interval,self.input_dim))
 
-
         ### we pull all relevant data
         # demo, will span all time stamps
         demorow=self.demo.loc[id]
@@ -127,7 +127,6 @@ class InputGen(Dataset,DFManager):
         male=demorow['male']
         # TODO this is not done
 
-
         # all others, will insert at specific timestamps
         # diagnosis
         dias=self.dia.loc[id]
@@ -135,16 +134,40 @@ class InputGen(Dataset,DFManager):
             date=row['dx_date']
             dx_codes=row["dx_codes"]
 
-
-
-        others=["dia","lab","pres","serv","surg","vital"]
+        others=[dfn for dfn in self.dfn if dfn not in ("death","demo")]
         for dfn in others:
+            # any df is processed here
             df=self.__getattribute__(dfn)
-            for coln in df:
-                df[coln]
+            # figure out which column is the date in this df
+            date_coln=[coln for coln in df if self.is_date_column(coln)]
+            if debug:
+                assert len(date_coln)==1
+            datacolns=[coln for coln in df if not self.is_date_column(coln) and coln!="rep_person_id"]
+            date_coln=date_coln[0]
 
-        # hospitalization needs to be treated differently, since there is a discharge date.
+            # query
+            allrows = df.loc[id]
 
+            # we bucket the columns so we know how to process them.
+            direct_insert=[]
+            barsep=[]
+            nobarsep=[]
+
+            for coln in datacolns:
+                if (dfn,coln) in self.no_bar:
+                    nobarsep.append(coln)
+                if (dfn,coln) in self.bar_separated:
+                    barsep.append(coln)
+                else:
+                    direct_insert.append(coln)
+                    if debug:
+                        assert(self.dtypes[dfn][coln] in ("int","bool","float"))
+
+            for row in allrows:
+                # can we vectorize this computation?
+                for coln in datacolns:
+                    if coln in direct_insert:
+                        pass
 
 
         # exception handling: high frequency visitors
@@ -152,8 +175,6 @@ class InputGen(Dataset,DFManager):
         ### we compile it into time series
 
         print("get item finished")
-
-    # def _time_helper(self,earliest,latest):
 
 
     def __len__(self):
