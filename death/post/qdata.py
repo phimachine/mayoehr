@@ -86,7 +86,7 @@ class DFManager():
                                                        ("px_date", "str"),
                                                        ("px_code", "int"),
                                                        ("collapsed_px_code", "int")])
-        self.dtypes["vitals"] = collections.OrderedDict([("rep_person_id", "int"),
+        self.dtypes["vital"] = collections.OrderedDict([("rep_person_id", "int"),
                                                          ("VITAL_DATE", "str"),
                                                          ("BMI", "float"),
                                                          ("BP DIASTOLIC", "float"),
