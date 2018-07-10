@@ -2,6 +2,11 @@ require(lubridate)
 
 require(data.table)
 require(dplyr)
+
+
+####################
+# find the first and the last date of all demo
+
 death<-fread('/infodev1/rep/projects/jason/deathtargets.csv')
 demo<-fread('/infodev1/rep/projects/jason/demo.csv')
 dia<-fread('/infodev1/rep/projects/jason/mydia.csv')
@@ -31,12 +36,36 @@ mark_dates<- function(rep_id){
 
 library(foreach)
 library(parallel)
-cl<-parallel::makeForkCluster(48)
+
+# not all 16 cores will be used.
+cl<-parallel::makeForkCluster(4)
 doParallel::registerDoParallel(cl)
 
 
 ret<-foreach(i=demo$rep_person_id,.combine='rbind') %dopar% {
     mark_dates(i)
 }
+
+ret <- ret %>% arrange(rep_person_id) %>% setDT()
+# our algorithm is way too advanced that it counts days
+day(ret$earliest) <- 1
+day(ret$latest) <- 1
+ret <- ret %>% mutate(int=interval(earliest,latest) %/% months(1)) %>% setDT()
+
+
+fwrite(ret,'/infodev1/rep/projects/jason/earla.csv')
+
+
+
+#########################
+# split hospitalization file since it has two dates? what the heck?
+hos<-fread('/infodev1/rep/projects/jason/myhosp.csv')
+# all hos rows have admit dt
+disch_hos<-hos[hosp_disch_dt!=""] %>% select(-hosp_admit_dt)
+admit_hos<-hos %>% select(-hosp_disch_dt) %>% setDT()
+
+fwrite(admit_hos,'/infodev1/rep/projects/jason/admit_hos.csv')
+fwrite(disch_hos,'/infodev1/rep/projects/jason/disch_hos.csv')
+
 
 
