@@ -18,14 +18,15 @@ def get_timestep_location(earliest, time):
     cc=cc.astype("timedelta64[M]")
     return cc.astype("int")
 
-class InputGen(Dataset):
+# mutltiple inheritance
+class InputGen(Dataset,DFManager):
     '''
     take a data frame manager object and produce inputs wrapped in torch objects
     '''
     def __init__(self,load_pickle=True,verbose=False):
-        self.dfm=DFManager()
-        self.dfm.load_pickle(verbose=verbose)
-        self.rep_person_id=self.dfm.demo.index.values
+        super(InputGen, self).__init__()
+        self.load_pickle(verbose=verbose)
+        self.rep_person_id=self.demo.index.values
         self.verbose=verbose
         # 35781
         self.input_dim=None
@@ -40,11 +41,11 @@ class InputGen(Dataset):
         # pre allocate a whole vector of input
         input_dim_manual=[]
         dimsize = 0
-        for dfn in self.dfm.dfn:
-            df = getattr(self.dfm, dfn)
+        for dfn in self.dfn:
+            df = getattr(self, dfn)
             # get all columns and column dtypes, allocate depending on the dtypes
             for colname, dtype in zip(df.dtypes.index, df.dtypes):
-                if colname == "rep_person_id" or self.dfm.is_date_column(colname):
+                if colname == "rep_person_id" or self.is_date_column(colname):
                     # no memory needed for these values.
                     # either index that is ignored, or contained in the time series.
                     pass
@@ -56,9 +57,9 @@ class InputGen(Dataset):
                     if dtn == 'bool':
                         dimsize += 1
                     if dtn == "category":
-                        dimsize += len(self.dfm.get_dict(dfn, colname))
+                        dimsize += len(self.get_dict(dfn, colname))
                     if dtn == "object":
-                        dimsize += len(self.dfm.get_dict(dfn, colname))
+                        dimsize += len(self.get_dict(dfn, colname))
                     if dtn == "float64":
                         dimsize += 1
                     if dtn == "datetime64[ns]":
@@ -119,7 +120,7 @@ class InputGen(Dataset):
 
         ### we pull all relevant data
         # demo, will span all time stamps
-        demorow=self.dfm.demo.loc[id]
+        demorow=self.demo.loc[id]
         race=demorow['race']
         educ_level=demorow['educ_level']
         birth_date=demorow['birth_date']
@@ -129,16 +130,20 @@ class InputGen(Dataset):
 
         # all others, will insert at specific timestamps
         # diagnosis
-        dias=self.dfm.dia.loc[id]
+        dias=self.dia.loc[id]
         for index, row in dias.iterrows():
             date=row['dx_date']
             dx_codes=row["dx_codes"]
 
-        others=["dia","hos","lab","pres","serv","surg","vital"]
-        for df in others:
-            for col in
 
 
+        others=["dia","lab","pres","serv","surg","vital"]
+        for dfn in others:
+            df=self.__getattribute__(dfn)
+            for coln in df:
+                df[coln]
+
+        # hospitalization needs to be treated differently, since there is a discharge date.
 
 
 
