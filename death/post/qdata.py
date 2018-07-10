@@ -11,7 +11,7 @@ import pickle
 
 pickle_path="/infodev1/rep/projects/jason/pickle/"
 
-class Dfs():
+class DFManager():
     '''
     Dataframe manager
     '''
@@ -32,24 +32,35 @@ class Dfs():
         self.surg=None
         self.vital=None
 
+        self.dfs=["death","demo","dia","hos","lab","pres","serv","surg","vital"]
+
+        # not in order
+        self.categories=[("demo","educ_level"),("hos","hosp_adm_source"),("hos","hosp_disch_disp"),
+                         ("lab","lab_abn_flag"),("demo","race"),("srv","SRV_LOCATION"),("srv","srv_admit_type"),
+                         ("srv","srv_admit_src"),("srv","srv_disch_stat")]
         self.bar_separated=[("dia","dx_codes"),("hos","dx_codes"),
-                       ("pres","med_ingr_rxnorm_code"), ("serv","srv_px_code")]
-        self.no_bar=[("death","code"),("lab","lab_loinc_code"), ("serv","srv_px_code"),
+                       ("pres","med_ingr_rxnorm_code")]
+        self.no_bar=self.categories+[("death","code"),("lab","lab_loinc_code"), ("serv","srv_px_code"),
                 ("surg","collapsed_px_code")]
+
 
         for df, col in self.bar_separated:
             setattr(self,df+"_"+col+"_dict",None)
         for df, col in self.no_bar:
             setattr(self, df + "_" + col + "_dict", None)
 
-    def load_raw(self, coerce=False, verbose=True, write_pickle=True):
+
+    def get_dict(self,df,col):
+        return getattr(self,df+"_"+col+"_dict")
+
+    def load_raw(self, coerce=False, verbose=True, save=True):
 
         '''
         load all preprocessed datasets, return in the order of death,demo,dia,hos,lab,pres,serv,surg,vital
 
         :param coerce: coerce load and resave pickle files
         :param verbose: verbose output
-        :param write_pickle:
+        :param save:
         :return: death,demo,dia,hos,lab,pres,serv,surg,vital: panda dataframe objects
         '''
         if not verbose:
@@ -65,15 +76,19 @@ class Dfs():
                      "code": "str"}
             parse_dates= ["death_date"]
             death=pd.read_csv('/infodev1/rep/projects/jason/deathtargets.csv',dtype=dtypes,parse_dates=parse_dates)
-
+            death.set_index(["rep_person_id"])
             if v:
                 print (death)
+
             # DEMOGRAPHICS
             dtypes={'rep_person_id': "int",
                     'race':"category",
                     "educ_level":"category",
+                    "birth_date":"str",
                     "male":"bool"}
-            demo=pd.read_csv("/infodev1/rep/projects/jason/demo.csv",dtype=dtypes)
+            parse_dates=["birth_date"]
+            demo=pd.read_csv("/infodev1/rep/projects/jason/demo.csv",dtype=dtypes,parse_dates=parse_dates)
+            demo.set_index(["rep_person_id"])
             if v:
                 print(demo)
 
@@ -83,6 +98,7 @@ class Dfs():
                     "dx_codes":"str"}
             parse_dates=["dx_date"]
             dia=pd.read_csv("/infodev1/rep/projects/jason/mydia.csv",dtype=dtypes,parse_dates=parse_dates)
+            dia.set_index(["rep_person_id"])
             if v:
                 print(dia)
 
@@ -96,17 +112,22 @@ class Dfs():
                     "is_in_patient":"bool"}
             parse_dates=["hosp_admit_dt","hosp_disch_dt"]
             hos=pd.read_csv("/infodev1/rep/projects/jason/myhosp.csv",dtype=dtypes,parse_dates=parse_dates)
+            hos.set_index("rep_person_id")
             if v:
                 print(hos)
 
+
             # Labs
             dtypes={"rep_person_id": "int",
+                    "lab_date":"str",
                     "lab_loinc_code":"str",
                     "lab_abn_flag":"category",
                     "smaller":"float",
                     "bigger":"float"
                     }
-            lab=pd.read_csv("/infodev1/rep/projects/jason/mylabs.csv",dtype=dtypes)
+            parse_dates=["lab_date"]
+            lab=pd.read_csv("/infodev1/rep/projects/jason/mylabs.csv",dtype=dtypes,parse_dates=parse_dates)
+            lab.set_index("rep_person_id")
             if v:
                 print(lab)
 
@@ -117,6 +138,7 @@ class Dfs():
                     }
             parse_dates=["MED_DATE"]
             pres=pd.read_csv("/infodev1/rep/projects/jason/mypres.csv",dtype=dtypes,parse_dates=parse_dates)
+            pres.set_index("rep_person_id")
             if v:
                 print(pres)
 
@@ -126,12 +148,14 @@ class Dfs():
                       "SRV_DATE": 'str',
                       'srv_px_count': 'int',
                       'srv_px_code': 'str',
-                      'SRV_LOCATION': 'str',
-                      'srv_admit_type': 'str',
-                      'srv_admit_src': 'str',
-                      'srv_disch_stat': 'str'}
+                      'SRV_LOCATION': 'category',
+                      'srv_admit_type': 'category',
+                      'srv_admit_src': 'category',
+                      'srv_disch_stat': 'category'}
             parse_dates = ["SRV_DATE"]
             serv=pd.read_csv('/infodev1/rep/projects/jason/myserv.csv', dtype=dtypes, parse_dates=parse_dates)
+            # should be the only double index dataset
+            serv.set_index(['rep_person_id','SRV_DATE'])
             if v:
                 print(serv)
 
@@ -142,6 +166,7 @@ class Dfs():
                     "collapsed_px_code":"int"}
             parse_dates=["px_date"]
             surg=pd.read_csv("/infodev1/rep/projects/jason/mysurg.csv",dtype=dtypes,parse_dates=parse_dates)
+            surg.set_index("rep_person_id")
             if v:
                 print(surg)
 
@@ -155,6 +180,7 @@ class Dfs():
                     "WEIGHT":"float"}
             parse_dates=["VITAL_DATE"]
             vital=pd.read_csv("/infodev1/rep/projects/jason/myvitals.csv",dtype=dtypes,parse_dates=parse_dates)
+            vital.set_index("rep_person_id")
             if v:
                 print(vital)
 
@@ -179,24 +205,37 @@ class Dfs():
 
             self.loaded=True
 
-        if write_pickle:
+        if save:
             mypath=Path("/infodev1/rep/projects/jason/pickle/pddfs.pkl")
 
             pickle.dump((self.death, self.demo, self.dia, self.hos, self.lab, self.pres, \
                                self.serv, self.surg, self.vital), mypath.open("wb"))
+            print("pickled all dfs")
 
         return self.death, self.demo, self.dia, self.hos, self.lab, self.pres, \
                self.serv, self.surg, self.vital
 
-    def load_pickle(self):
+    def load_pickle(self,verbose=False):
         try:
+            # load df
             print("loading from pickle file")
             with open("/infodev1/rep/projects/jason/pickle/pddfs.pkl",'rb') as f:
                 self.death, self.demo, self.dia, self.hos, self.lab, self.pres, \
                 self.serv, self.surg, self.vital= pickle.load(f)
+
                 self.loaded=True
+
+            for df, col in self.bar_separated+self.no_bar:
+                if verbose:
+                    print("loading dictionary on bar separated " + df + " " + col)
+                savepath = Path(pickle_path) / "dicts" / (df+ "_" + col + ".pkl")
+                with savepath.open('rb') as f :
+                    dic=pickle.load(f)
+                    self.__setattr__(df+"_"+col+"_dict",dic)
+
         except (OSError, IOError) as e:
             raise FileNotFoundError("pickle pddfs not found")
+
 
     def make_dictionary(self, save=True,verbose=False,skip=True):
         '''
@@ -227,12 +266,12 @@ class Dfs():
 
         for df,col in self.bar_separated:
             if verbose:
-                print("generating dictionary on "+df+" "+col)
+                print("generating dictionary on bar separated "+df+" "+col)
             self.bar_separated_dictionary(df,col,save=save,skip=skip)
 
         for df,col in self.no_bar:
             if verbose:
-                print("generating dictionary on " + df + " " + col)
+                print("generating dictionary on no bar " + df + " " + col)
             self.no_bar_dictionary(df,col,save=save,skip=skip)
 
 
@@ -268,11 +307,12 @@ class Dfs():
                    splitted=row.split("|")
                    for word in splitted:
                        # Is there empty? in case I forgot in R
-                       if word not in dic and word != "":
-                           if word == "NA":
-                               print("NA FOUND")
-                           dic[word] = n
-                           n += 1
+                      if not pd.isna(word):
+                           if word not in dic and word != "":
+                               if word == "NA":
+                                   print("unprocessed NA FOUND")
+                               dic[word] = n
+                               n += 1
 
             except AttributeError:
                 print("woah woah woah what did you do")
@@ -289,7 +329,7 @@ class Dfs():
     def no_bar_dictionary(self,df_name,col_name,save=True,skip=True):
 
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
-        print(savepath)
+        print("save to path:",savepath)
 
         if skip:
             try:
@@ -305,11 +345,12 @@ class Dfs():
         series=self.get_series(df_name,col_name)
 
         for row in series:
-            if row not in dic and row!="":
-                if row=="NA":
-                    print("NA FOUND")
-                dic[row]=n
-                n+=1
+            if not pd.isna(row):
+                if row not in dic and row!="":
+                    if row == "NA":
+                        print("unprocessed NA FOUND")
+                    dic[row]=n
+                    n+=1
 
         if save==True:
             with savepath.open('wb') as f:
@@ -329,6 +370,11 @@ class Dfs():
         return self.__getattribute__(df_name)[col_name]
 
 if __name__=="__main__":
-    dfs=Dfs()
-    # dfs.load_raw()
+    dfs=DFManager()
+    dfs.load_raw(save=True)
+
+    # dfs.load_pickle()
+
     dfs.make_dictionary(verbose=True,save=True,skip=False)
+
+    print("end script")
