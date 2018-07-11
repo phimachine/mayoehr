@@ -114,8 +114,6 @@ class InputGen(Dataset,DFManager):
 
     def __getitem__(self,index,debug=False):
         '''
-        time-wise batch version of __getitem__()
-        notably, I will access timestamp as a whole a see if I can use it effectively in the end.
 
         :param index:
         :return:
@@ -156,7 +154,7 @@ class InputGen(Dataset,DFManager):
 
                 if debug:
                     assert len(date_coln) == 1
-                datacolns = [coln for coln in df if not self.is_date_column(coln) and coln != "rep_person_id"]
+                datacolns = [coln for coln in df if not self.is_date_column(coln) and coln not in ("rep_person_id", "id")]
                 date_coln = date_coln[0]
 
                 # I hate that the return value of this line is inconsistent
@@ -206,26 +204,7 @@ class InputGen(Dataset,DFManager):
                             insidx+=[dic[val]+startidx]
                             nantsloc+=[ts]
                     np.add.at(input, [nantsloc, insidx], 1)
-                    # again, accumulate count if multiple occurrences
-
-
-
-                    # # deal with pandas quirks
-                    # if not isinstance(tsloc,np.ndarray):
-                    #     ts, val = (tsloc, allrows[coln])
-                    #     if val==val:
-                    #         insidx+=[dic[val]+startidx]
-                    #         nantsloc+=[ts]
-                    #     np.add.at(input, (nantsloc, insidx), 1)
-                    # else:
-                    #     for ts, val in zip(tsloc,allrows[coln]):
-                    #         # if not nan
-                    #         if val==val:
-                    #             insidx+=[dic[val]+startidx]
-                    #             nantsloc+=[ts]
-                    #     np.add.at(input, [nantsloc, insidx], 1)
-                    #     # again, accumulate count if multiple occurrences
-
+                    # again, accumulate count if multiple occurrence
 
                 for coln in barsep:
                     startidx,endidx=self.get_column_index_range(dfn,coln)
@@ -253,24 +232,32 @@ class InputGen(Dataset,DFManager):
         return self.len
 
     def performance_probe(self):
-        for dfn in self.dfn:
-            df=self.__getattribute__(dfn)
-            print(dfn, "has unique index?", df.index.is_unique)
+        # all dfn have unique double index. Performance is not yet known.
+        # I hope they hash hierarchically.
+
+        # for dfn in self.dfn:
+        #     if dfn!="demo":
+        #         df=self.__getattribute__(dfn)
+        #         print(dfn, "has unique index?", df.index.is_unique)
+        #         print(dfn, "is lex_sorted?", df.index.is_lexsorted())
+        #         print("....")
+
+        start = time.time()
+        for i in range(4):
+            ig.__getitem__(i, debug=True)
+            if (i % 100 == 0):
+                print("working on ", i)
+        end = time.time()
+        print(end-start)
         print("performance probe finished")
+        print("speed is now 3x faster")
+
+
 
 if __name__=="__main__":
-    ig=InputGen(load_pickle=True,verbose=True)
+    ig=InputGen(load_pickle=True,verbose=False)
     ig.performance_probe()
-
-
-    start=time.time()
-    for i in range(4):
-        ig.__getitem__(i,debug=True)
-        if (i%100==0):
-            print("working on ", i)
 
     # go get one of the values and see if you can trace it all the way back to raw data
     # this is a MUST DO TODO
-    end=time.time()
-    print(end-start)
     print("script finished")
