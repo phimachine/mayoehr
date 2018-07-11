@@ -15,7 +15,7 @@ dhos<-fread('/infodev1/rep/projects/jason/disch_hos.csv')
 lab<-fread('/infodev1/rep/projects/jason/mylabs.csv')
 pres<-fread('/infodev1/rep/projects/jason/mypres.csv')
 serv<-fread("/infodev1/rep/projects/jason/myserv.csv")
-surg<-fread("/infodev1/rep/projects/jason/mysurg.csv")
+surg<-fread("/infodev1/rep/projects/jason/newsurg.csv")
 vital<-fread("/infodev1/rep/projects/jason/myvitals.csv")
 
 dfs=list("death","dia","ahos","dhos","lab","pres","serv","surg","vital")
