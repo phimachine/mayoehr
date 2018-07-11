@@ -1,8 +1,12 @@
 # Post processing 
 All post processing script has been added to preprocessing.
-1, Pandas does not allow NA in integer columns, so we will need to fill NA with 1.
 
+## What changed?
+* Pandas does not allow NA in integer columns, so we will need to fill NA with 1.
 
+* Split hosp by disch and admit
+
+* surg non collapsed px codes have been deleted for automation purposes. The file is newsurg.csv
 
 # Basic modelling
 ## Label mystery
