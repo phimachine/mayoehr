@@ -10,16 +10,18 @@ import copy
 
 def get_timestep_location(earliest, time):
     '''
+    Uses numpy instead of panda.
 
     :param earliest: pandas.Timestamp
-    :param time: pandas.Timestmap
-    :return:
+    :param time: ndarray of datetime64
+    :return: cc: int numpy array, the index location of the corresponding records
     '''
-    cc=(time-earliest).to_timedelta64()
-    cc=cc.astype("timedelta64[M]")
+    earliest=earliest.to_datetime64()
+    time=time.values
+    cc=(time-earliest).astype('timedelta64[M]')
     return cc.astype("int")
 
-# mutltiple inheritance
+# multiple inheritance
 class InputGen(Dataset,DFManager):
     '''
     take a data frame manager object and produce inputs wrapped in torch objects
@@ -29,7 +31,7 @@ class InputGen(Dataset,DFManager):
         self.load_pickle(verbose=verbose)
         self.rep_person_id=self.demo.index.values
         self.verbose=verbose
-        # 35781
+        # 46872
         self.input_dim=None
         # manual format: (dfname,colname,starting_index)
         self.input_dim_manual=None
@@ -94,6 +96,93 @@ class InputGen(Dataset,DFManager):
 
         return start,end
 
+    def batch_get(self,index,debug=False):
+        '''
+        time-wise batch version of __getitem__()
+        notably, I will access timestamp as a whole a see if I can use it effectively in the end.
+
+        :param index:
+        :return:
+        '''
+        id = self.rep_person_id[index]
+        # plus 2 should not bring problem? I am not sure
+        month_interval = self.earla.loc[id]["int"] + 1
+        earliest=self.earla.loc[id]["earliest"]
+        latest=self.earla.loc[id]["latest"]
+        input = np.zeros((month_interval, self.input_dim))
+
+        ### we pull all relevant data
+        # demo, will span all time stamps
+        demorow = self.demo.loc[id]
+        race = demorow['race']
+        educ_level = demorow['educ_level']
+        birth_date = demorow['birth_date']
+        male = demorow['male']
+        # TODO this is not done
+
+        # all others, will insert at specific timestamps
+        # diagnosis
+        dias = self.dia.loc[id]
+        for index, row in dias.iterrows():
+            date = row['dx_date']
+            dx_codes = row["dx_codes"]
+
+        others = [dfn for dfn in self.dfn if dfn not in ("death", "demo")]
+        for dfn in others:
+            # any df is processed here
+            if debug:
+                dfn="dhos"
+                df= self.dhos
+            else:
+                df = self.__getattribute__(dfn)
+            allrows = df.loc[id]
+
+            # get the index for all dates first
+            date_coln = [coln for coln in df if self.is_date_column(coln)]
+
+            if debug:
+                assert len(date_coln) == 1
+            datacolns = [coln for coln in df if not self.is_date_column(coln) and coln != "rep_person_id"]
+            date_coln = date_coln[0]
+
+            all_dates=allrows[date_coln]
+            tsloc=get_timestep_location(earliest,all_dates)
+
+            # we bucket the columns so we know how to process them.
+            direct_insert = []
+            barsep = []
+            nobarsep = []
+
+            for coln in datacolns:
+                if (dfn, coln) in self.no_bar:
+                    nobarsep.append(coln)
+                elif (dfn, coln) in self.bar_separated:
+                    barsep.append(coln)
+                else:
+                    direct_insert.append(coln)
+                    if debug:
+                        try:
+                            assert (self.dtypes[dfn][coln] in ("int", "bool", "float"))
+                        except (KeyError, AssertionError) as e:
+                            raise
+
+            print("ready")
+
+            # we need two things: index and values
+            for coln in direct_insert:
+                index=
+
+
+            # deal with direct insert
+
+
+
+
+        # exception handling: high frequency visitors
+
+        ### we compile it into time series
+
+        print("get item finished")
 
 
     def __getitem__(self, index):
@@ -182,8 +271,9 @@ class InputGen(Dataset,DFManager):
         Length of the demographics dataset
         :return:
         '''
+        pass
 
 if __name__=="__main__":
     ig=InputGen(load_pickle=True,verbose=True)
-    ig.__getitem__(0)
+    ig.batch_get(0,debug=True)
     print("script finished")
