@@ -1,6 +1,6 @@
 # mayoehr
 
-### Where is the main files?
+### Where are the main files?
 For preprocessing: prep/prep.R
 
 For postprocessing: post/post.R
