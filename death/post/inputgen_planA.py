@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import copy
 import time
+import torch
 
 # we can only assume that all deaths are recorded
 
@@ -49,6 +50,7 @@ class InputGen(Dataset,DFManager):
         self.earla=pd.read_csv("/infodev1/rep/projects/jason/earla.csv",parse_dates=["earliest","latest"])
         self.earla.set_index("rep_person_id",inplace=True)
         self.len=len(self.rep_person_id)
+        print("Input Gen initiated")
 
     def get_input_dim(self):
         # pre allocate a whole vector of input
@@ -222,6 +224,8 @@ class InputGen(Dataset,DFManager):
         # high frequency visitors have been handled smoothly, by aggregating
         if debug:
             print("get item finished")
+        input=np.expand_dims(input,axis=0)
+        print(input.shape)
         return input
 
     def __len__(self):
@@ -256,8 +260,15 @@ class InputGen(Dataset,DFManager):
 
 if __name__=="__main__":
     ig=InputGen(load_pickle=True,verbose=False)
-    ig.performance_probe()
+    # ig.performance_probe()
 
     # go get one of the values and see if you can trace it all the way back to raw data
     # this is a MUST DO TODO
+
+    dl=DataLoader(dataset=ig,batch_size=1,shuffle=False,num_workers=16)
+    # batch data loading seems to be a problem since patients have different lenghts of data.
+    # it's advisable to load one at a time.
+    # we need to think about how to make batch processing possible.
+    # or maybe not, if the input dimension is so high.
+    # well, if we don't have batch, then we don't have batch normalization.
     print("script finished")
