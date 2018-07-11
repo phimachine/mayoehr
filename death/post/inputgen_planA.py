@@ -3,6 +3,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd
 import copy
+import time
 
 # we can only assume that all deaths are recorded
 
@@ -17,7 +18,10 @@ def get_timestep_location(earliest, time):
     :return: cc: int numpy array, the index location of the corresponding records
     '''
     earliest=earliest.to_datetime64()
-    time=time.values
+    if not isinstance(time,pd.Timestamp):
+        time=time.values
+    else:
+        time=time.to_datetime64()
     cc=(time-earliest).astype('timedelta64[M]')
     return cc.astype("int")
 
@@ -32,6 +36,7 @@ class InputGen(Dataset,DFManager):
         self.rep_person_id=self.demo.index.values
         self.verbose=verbose
         # 46872
+        # TODO we need to exploit the structured codes and augment inputs
         self.input_dim=None
         # manual format: (dfname,colname,starting_index)
         self.input_dim_manual=None
@@ -39,6 +44,7 @@ class InputGen(Dataset,DFManager):
         # this df has no na
         self.earla=pd.read_csv("/infodev1/rep/projects/jason/earla.csv",parse_dates=["earliest","latest"])
         self.earla.set_index("rep_person_id",inplace=True)
+        self.len=len(self.rep_person_id)
 
     def get_input_dim(self):
         # pre allocate a whole vector of input
@@ -88,7 +94,9 @@ class InputGen(Dataset,DFManager):
         while(idx<len(self.input_dim_manual)):
             if self.input_dim_manual[idx][0]==dfn and self.input_dim_manual[idx][1]==coln:
                 start=self.input_dim_manual[idx][2]
+                break
             idx+=1
+        idx+=1
         if idx<len(self.input_dim_manual):
             end=self.input_dim_manual[idx][2]
         else:
@@ -109,7 +117,7 @@ class InputGen(Dataset,DFManager):
         month_interval = self.earla.loc[id]["int"] + 1
         earliest=self.earla.loc[id]["earliest"]
         latest=self.earla.loc[id]["latest"]
-        input = np.zeros((month_interval, self.input_dim))
+        input = np.zeros((month_interval, self.input_dim),dtype=float)
 
         ### we pull all relevant data
         # demo, will span all time stamps
@@ -135,54 +143,79 @@ class InputGen(Dataset,DFManager):
                 df= self.dhos
             else:
                 df = self.__getattribute__(dfn)
-            allrows = df.loc[id]
+            if id in df.index:
+                allrows = df.loc[id]
 
-            # get the index for all dates first
-            date_coln = [coln for coln in df if self.is_date_column(coln)]
+                # get the index for all dates first
+                date_coln = [coln for coln in df if self.is_date_column(coln)]
 
-            if debug:
-                assert len(date_coln) == 1
-            datacolns = [coln for coln in df if not self.is_date_column(coln) and coln != "rep_person_id"]
-            date_coln = date_coln[0]
+                if debug:
+                    assert len(date_coln) == 1
+                datacolns = [coln for coln in df if not self.is_date_column(coln) and coln != "rep_person_id"]
+                date_coln = date_coln[0]
 
-            all_dates=allrows[date_coln]
-            tsloc=get_timestep_location(earliest,all_dates)
+                all_dates=allrows[date_coln]
+                tsloc=get_timestep_location(earliest,all_dates)
 
-            # we bucket the columns so we know how to process them.
-            direct_insert = []
-            barsep = []
-            nobarsep = []
+                # we bucket the columns so we know how to process them.
+                direct_insert = []
+                barsep = []
+                nobarsep = []
+                for coln in datacolns:
+                    if (dfn, coln) in self.no_bar:
+                        nobarsep.append(coln)
+                    elif (dfn, coln) in self.bar_separated:
+                        barsep.append(coln)
+                    else:
+                        direct_insert.append(coln)
+                        if debug:
+                            try:
+                                assert (self.dtypes[dfn][coln] in ("int", "bool", "float"))
+                            except (KeyError, AssertionError):
+                                raise
 
-            for coln in datacolns:
-                if (dfn, coln) in self.no_bar:
-                    nobarsep.append(coln)
-                elif (dfn, coln) in self.bar_separated:
-                    barsep.append(coln)
-                else:
-                    direct_insert.append(coln)
+                # we need two things: index and values
+                for coln in direct_insert:
+                    startidx,endidx=self.get_column_index_range(dfn,coln)
                     if debug:
                         try:
-                            assert (self.dtypes[dfn][coln] in ("int", "bool", "float"))
-                        except (KeyError, AssertionError) as e:
+                            assert(endidx-startidx==1)
+                        except AssertionError:
                             raise
+                    # this line will increment only 1:
+                    # input[tsloc,startidx]+=allrows[coln]
+                    # this line will accumulate count:
+                    np.add.at(input,[tsloc,startidx],allrows[coln])
 
-            print("ready")
+                for coln in nobarsep:
+                    startidx,endidx=self.get_column_index_range(dfn,coln)
+                    dic=self.__getattribute__(dfn+"_"+coln+"_dict")
+                    insidx=[]
+                    nantsloc=[]
+                    for ts, val in zip(tsloc,allrows[coln]):
+                        # if not nan
+                        if val==val:
+                            insidx+=[dic[val]+startidx]
+                            nantsloc+=[ts]
+                    # again, accumulate count if multiple occurrences
+                    np.add.at(input,[nantsloc,insidx],1)
 
-            # we need two things: index and values
-            for coln in direct_insert:
-                index=
+                for coln in barsep:
+                    startidx,endidx=self.get_column_index_range(dfn,coln)
+                    dic=self.__getattribute__(dfn+"_"+coln+"_dict")
+                    tss=[]
+                    insidx=[]
+                    for ts,multival in zip(tsloc,allrows[coln]):
+                        if multival==multival:
+                            vals=multival.split("|")
+                            tss+=[ts]*len(vals)
+                            insidx+=[dic[val]+startidx for val in vals if val==val]
+                    np.add.at(input,[tss,insidx],1)
 
-
-            # deal with direct insert
-
-
-
-
-        # exception handling: high frequency visitors
-
-        ### we compile it into time series
-
-        print("get item finished")
+        # high frequency visitors have been handled smoothly, by aggregating
+        if debug:
+            print("get item finished")
+        return input
 
 
     def __getitem__(self, index):
@@ -271,9 +304,16 @@ class InputGen(Dataset,DFManager):
         Length of the demographics dataset
         :return:
         '''
-        pass
+        return self.len
 
 if __name__=="__main__":
-    ig=InputGen(load_pickle=True,verbose=True)
-    ig.batch_get(0,debug=True)
+    ig=InputGen(load_pickle=True,verbose=False)
+    start=time.time()
+    for i in range(10000):
+        ig.batch_get(i,debug=False)
+
+    # go get one of the values and see if you can trace it all the way back to raw data
+    # this is a MUST DO TODO
+    end=time.time()
+    print(end-start)
     print("script finished")
