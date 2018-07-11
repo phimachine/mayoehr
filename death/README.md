@@ -1,5 +1,4 @@
 This is a code repository for all-mortality prediction.
-This is a prototying project aimed to help me explore the dataset, processing and modelling process, to gauge the challenges ahead of me.
 
 This is a private repository. If you encounter this repository anywhere, please contact me through email: hu.yaojie@mayo.edu
 
