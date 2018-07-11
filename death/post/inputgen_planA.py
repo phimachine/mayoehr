@@ -252,8 +252,17 @@ class InputGen(Dataset,DFManager):
         '''
         return self.len
 
+    def performance_probe(self):
+        for dfn in self.dfn:
+            df=self.__getattribute__(dfn)
+            print(dfn, "has unique index?", df.index.is_unique)
+        print("performance probe finished")
+
 if __name__=="__main__":
     ig=InputGen(load_pickle=True,verbose=True)
+    ig.performance_probe()
+
+
     start=time.time()
     for i in range(4):
         ig.__getitem__(i,debug=True)
