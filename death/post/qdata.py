@@ -24,19 +24,9 @@ class DFManager(object):
         '''
         self.loaded = False
 
-        self.death = None
-        self.demo = None
-        self.dia = None
-        self.ahos = None
-        self.dhos=None
-        self.lab = None
-        self.pres = None
-        self.serv = None
-        self.surg = None
-        self.vital = None
-
-
         # not in order
+        # these information will be used for automation purposes across the whole project
+        # they contain possible human errors, and must be kept prestine
         self.categories = [("demo", "educ_level"), ("dhos", "hosp_adm_source"), ("dhos", "hosp_disch_disp"),
                            ("ahos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
                            ("lab", "lab_abn_flag"), ("demo", "race"), ("serv", "SRV_LOCATION"),
@@ -92,8 +82,7 @@ class DFManager(object):
                                                        ('srv_disch_stat', 'category')])
         self.dtypes["surg"] = collections.OrderedDict([("rep_person_id", "int"),
                                                        ("px_date", "str"),
-                                                       ("px_code", "int"),
-                                                       ("collapsed_px_code", "int")])
+                                                       ("collapsed_px_code", "str")])
         self.dtypes["vital"] = collections.OrderedDict([("rep_person_id", "int"),
                                                          ("VITAL_DATE", "str"),
                                                          ("BMI", "float"),
@@ -111,12 +100,13 @@ class DFManager(object):
             "lab" :"/infodev1/rep/projects/jason/mylabs.csv",
             "pres" :"/infodev1/rep/projects/jason/mypres.csv",
             "serv" : '/infodev1/rep/projects/jason/myserv.csv',
-            'surg' : "/infodev1/rep/projects/jason/mysurg.csv",
+            'surg' : "/infodev1/rep/projects/jason/newsurg.csv",
             "vital": "/infodev1/rep/projects/jason/myvitals.csv"
         }
 
-        self.dfn=list(self.dtypes.keys())
-
+        self.dfn=tuple(self.dtypes.keys())
+        for dfn in self.dfn:
+            setattr(self,dfn,None)
         for df, col in self.bar_separated:
             setattr(self, df + "_" + col + "_dict", None)
         for df, col in self.no_bar:
@@ -325,6 +315,6 @@ if __name__ == "__main__":
 
     # dfs.load_pickle()
 
-    dfs.make_dictionary(verbose=True,save=True,skip=True)
+    dfs.make_dictionary(verbose=True,save=True,skip=False)
 
     print("end script")

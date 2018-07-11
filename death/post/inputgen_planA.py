@@ -18,12 +18,16 @@ def get_timestep_location(earliest, time):
     :return: cc: int numpy array, the index location of the corresponding records
     '''
     earliest=earliest.to_datetime64()
-    if not isinstance(time,pd.Timestamp):
-        time=time.values
-    else:
-        time=time.to_datetime64()
+    # if not isinstance(time,pd.Timestamp):
+    # # if it's a series as it should be
+    #     time=time.values
+    # else:
+    #     time=time.to_datetime64()
+    time=time.values
     cc=(time-earliest).astype('timedelta64[M]')
     return cc.astype("int")
+
+
 
 # multiple inheritance
 class InputGen(Dataset,DFManager):
@@ -65,14 +69,18 @@ class InputGen(Dataset,DFManager):
                         print("accounting for", dfn, colname)
                     if dtn == 'bool':
                         dimsize += 1
-                    if dtn == "category":
+                    elif dtn == "category":
                         dimsize += len(self.get_dict(dfn, colname))
-                    if dtn == "object":
+                    elif dtn == "object":
                         dimsize += len(self.get_dict(dfn, colname))
-                    if dtn == "float64":
+                    elif dtn == "float64":
                         dimsize += 1
-                    if dtn == "datetime64[ns]":
+                    elif dtn == "int64":
+                        dimsize += 1
+                    elif dtn == "datetime64[ns]":
                         raise ValueError("No, I should not see this")
+                    else:
+                        raise ValueError("Unaccounted for")
 
         # # the last index is a binary flag whether there is time-dependent record on this location
         # dimsize=dimsize+1
@@ -104,7 +112,7 @@ class InputGen(Dataset,DFManager):
 
         return start,end
 
-    def batch_get(self,index,debug=False):
+    def __getitem__(self,index,debug=False):
         '''
         time-wise batch version of __getitem__()
         notably, I will access timestamp as a whole a see if I can use it effectively in the end.
@@ -127,10 +135,11 @@ class InputGen(Dataset,DFManager):
         birth_date = demorow['birth_date']
         male = demorow['male']
         # TODO this is not done
+        # TODO we need labels too
 
         # all others, will insert at specific timestamps
         # diagnosis
-        dias = self.dia.loc[id]
+        dias = self.dia.loc[[id]]
         for index, row in dias.iterrows():
             date = row['dx_date']
             dx_codes = row["dx_codes"]
@@ -138,13 +147,9 @@ class InputGen(Dataset,DFManager):
         others = [dfn for dfn in self.dfn if dfn not in ("death", "demo")]
         for dfn in others:
             # any df is processed here
-            if debug:
-                dfn="dhos"
-                df= self.dhos
-            else:
-                df = self.__getattribute__(dfn)
+            df = self.__getattribute__(dfn)
             if id in df.index:
-                allrows = df.loc[id]
+                allrows = df.loc[[id]]
 
                 # get the index for all dates first
                 date_coln = [coln for coln in df if self.is_date_column(coln)]
@@ -154,6 +159,8 @@ class InputGen(Dataset,DFManager):
                 datacolns = [coln for coln in df if not self.is_date_column(coln) and coln != "rep_person_id"]
                 date_coln = date_coln[0]
 
+                # I hate that the return value of this line is inconsistent
+                # If single value it's timestamp, if multiple it's np time list
                 all_dates=allrows[date_coln]
                 tsloc=get_timestep_location(earliest,all_dates)
 
@@ -185,26 +192,47 @@ class InputGen(Dataset,DFManager):
                     # this line will increment only 1:
                     # input[tsloc,startidx]+=allrows[coln]
                     # this line will accumulate count:
-                    np.add.at(input,[tsloc,startidx],allrows[coln])
+                    np.add.at(input,(tsloc,startidx),allrows[coln])
 
                 for coln in nobarsep:
                     startidx,endidx=self.get_column_index_range(dfn,coln)
                     dic=self.__getattribute__(dfn+"_"+coln+"_dict")
                     insidx=[]
                     nantsloc=[]
+
                     for ts, val in zip(tsloc,allrows[coln]):
                         # if not nan
                         if val==val:
                             insidx+=[dic[val]+startidx]
                             nantsloc+=[ts]
+                    np.add.at(input, [nantsloc, insidx], 1)
                     # again, accumulate count if multiple occurrences
-                    np.add.at(input,[nantsloc,insidx],1)
+
+
+
+                    # # deal with pandas quirks
+                    # if not isinstance(tsloc,np.ndarray):
+                    #     ts, val = (tsloc, allrows[coln])
+                    #     if val==val:
+                    #         insidx+=[dic[val]+startidx]
+                    #         nantsloc+=[ts]
+                    #     np.add.at(input, (nantsloc, insidx), 1)
+                    # else:
+                    #     for ts, val in zip(tsloc,allrows[coln]):
+                    #         # if not nan
+                    #         if val==val:
+                    #             insidx+=[dic[val]+startidx]
+                    #             nantsloc+=[ts]
+                    #     np.add.at(input, [nantsloc, insidx], 1)
+                    #     # again, accumulate count if multiple occurrences
+
 
                 for coln in barsep:
                     startidx,endidx=self.get_column_index_range(dfn,coln)
                     dic=self.__getattribute__(dfn+"_"+coln+"_dict")
                     tss=[]
                     insidx=[]
+
                     for ts,multival in zip(tsloc,allrows[coln]):
                         if multival==multival:
                             vals=multival.split("|")
@@ -217,88 +245,6 @@ class InputGen(Dataset,DFManager):
             print("get item finished")
         return input
 
-
-    def __getitem__(self, index):
-        '''
-        pulls a row in demographics
-        pulls all data from all files
-        compile it into a longest vector
-        construct label from death records
-
-        We do not use sliding window augmentation here.
-        We do sliding window augmentation probably in the training stage.
-        Simply because we cannot find the index for a window without loading the series.
-
-        input will be variable length, with a unit of a month
-
-        for missing data, the whole vector will be zero. There should not be gradient backprop. TODO make sure.
-        :param index:
-        :return: (time, longest)
-        '''
-        id=self.rep_person_id[index]
-        # plus 2 should not bring problem? I am not sure
-        month_interval=self.earla.loc[10]["int"]+1
-        input=np.zeros((month_interval,self.input_dim))
-
-        ### we pull all relevant data
-        # demo, will span all time stamps
-        demorow=self.demo.loc[id]
-        race=demorow['race']
-        educ_level=demorow['educ_level']
-        birth_date=demorow['birth_date']
-        male=demorow['male']
-        # TODO this is not done
-
-        # all others, will insert at specific timestamps
-        # diagnosis
-        dias=self.dia.loc[id]
-        for index, row in dias.iterrows():
-            date=row['dx_date']
-            dx_codes=row["dx_codes"]
-
-        others=[dfn for dfn in self.dfn if dfn not in ("death","demo")]
-        for dfn in others:
-            # any df is processed here
-            df=self.__getattribute__(dfn)
-            # figure out which column is the date in this df
-            date_coln=[coln for coln in df if self.is_date_column(coln)]
-            if debug:
-                assert len(date_coln)==1
-            datacolns=[coln for coln in df if not self.is_date_column(coln) and coln!="rep_person_id"]
-            date_coln=date_coln[0]
-
-            # query
-            allrows = df.loc[id]
-
-            # we bucket the columns so we know how to process them.
-            direct_insert=[]
-            barsep=[]
-            nobarsep=[]
-
-            for coln in datacolns:
-                if (dfn,coln) in self.no_bar:
-                    nobarsep.append(coln)
-                if (dfn,coln) in self.bar_separated:
-                    barsep.append(coln)
-                else:
-                    direct_insert.append(coln)
-                    if debug:
-                        assert(self.dtypes[dfn][coln] in ("int","bool","float"))
-
-            for row in allrows:
-                # can we vectorize this computation?
-                for coln in datacolns:
-                    if coln in direct_insert:
-                        pass
-
-
-        # exception handling: high frequency visitors
-
-        ### we compile it into time series
-
-        print("get item finished")
-
-
     def __len__(self):
         '''
         Length of the demographics dataset
@@ -307,10 +253,12 @@ class InputGen(Dataset,DFManager):
         return self.len
 
 if __name__=="__main__":
-    ig=InputGen(load_pickle=True,verbose=False)
+    ig=InputGen(load_pickle=True,verbose=True)
     start=time.time()
-    for i in range(10000):
-        ig.batch_get(i,debug=False)
+    for i in range(4):
+        ig.__getitem__(i,debug=True)
+        if (i%100==0):
+            print("working on ", i)
 
     # go get one of the values and see if you can trace it all the way back to raw data
     # this is a MUST DO TODO
