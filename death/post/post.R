@@ -68,4 +68,17 @@ fwrite(admit_hos,'/infodev1/rep/projects/jason/admit_hos.csv')
 fwrite(disch_hos,'/infodev1/rep/projects/jason/disch_hos.csv')
 
 
+##########################
+# add natural death causes records in cod dataset
+require(lubridate)
+mydeath<-fread('/infodev1/rep/projects/jason/multideath.csv')
+demo<-fread('/infodev1/rep/data/demographics.dat')
 
+dead<-demo[death_date!=""]
+natural<-dead[!rep_person_id %in% mydeath$rep_person_id]
+natural<-natural %>% select(rep_person_id,death_date) %>% setDT()
+natural <- natural %>% mutate(id=1, code=0, underlying=F, death_date=mdy(death_date)) %>% setDT()
+mydeath<- mydeath %>% mutate(death_date=ymd(death_date)) %>% setDT()
+newdeath<-rbind(mydeath,natural)
+newdeath<-newdeath%>% arrange(rep_person_id, id) %>% setDT()
+fwrite(newdeath,"/infodev1/rep/projects/jason/newdeath.csv")
