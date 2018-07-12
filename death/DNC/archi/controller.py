@@ -1,10 +1,10 @@
 # reference Methods, controller network
 
-from death.DNC.archi.param import *
+from archi.param import *
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
-import death.DNC.archi.param as param
+import archi.param as param
 import math
 from torch.nn.modules.rnn import LSTM
 from torch.nn.parameter import Parameter
@@ -39,10 +39,9 @@ class Controller(nn.Module):
             hidden_this_timestep[:,i,:]=hidden_output
             hidden_previous_layer=hidden_output
 
-        flat=hidden_this_timestep.view((param.bs,param.L*param.h))
-        output=self.W_y(flat)
-        interface=self.W_E(flat)
-        # TODO assign warning
+        flat_hidden=hidden_this_timestep.view((param.bs,param.L*param.h))
+        output=self.W_y(flat_hidden)
+        interface=self.W_E(flat_hidden)
         self.hidden_previous_timestep.data=hidden_this_timestep
         return output, interface
 
