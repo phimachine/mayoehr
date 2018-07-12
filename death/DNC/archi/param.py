@@ -39,29 +39,3 @@ N=32
 bs=24
 
 global_reset_flag=False
-
-
-'''
-Hyperarameters have been tuned for Nvidia 1080. Bottleneck by memory.
-|-------------------------------+----------------------+----------------------+
-| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
-|===============================+======================+======================|
-|   0  GeForce GTX 1080    Off  | 00000000:0B:00.0  On |                  N/A |
-| 47%   54C    P2    68W / 180W |   6511MiB /  8116MiB |     45%      Default |
-+-------------------------------+----------------------+----------------------+
-                                                                               
-+-----------------------------------------------------------------------------+
-| Processes:                                                       GPU Memory |
-|  GPU       PID   Type   Process name                             Usage      |
-|=============================================================================|
-|    0      1400      G   /usr/lib/xorg/Xorg                            40MiB |
-|    0      1441      G   /usr/bin/gnome-shell                          49MiB |
-|    0      1622      G   /usr/lib/xorg/Xorg                           727MiB |
-|    0      1765      G   /usr/bin/gnome-shell                         529MiB |
-|    0      5210      G   ...-token=3A0C47659340A06C9B73AE9394F12BB2   135MiB |
-|    0      5832      G   ...passed-by-fd --v8-snapshot-passed-by-fd   124MiB |
-|    0      9914      G   ...-token=C26BA1388B5B5BDF6B6980F03E2EB7E0   106MiB |
-|    0     19213      C   ...onhu/anaconda3/envs/python36/bin/python  4783MiB |
-+-----------------------------------------------------------------------------+
-'''
