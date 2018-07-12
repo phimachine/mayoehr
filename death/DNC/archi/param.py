@@ -1,12 +1,12 @@
+
+
+
 # all variables starting with param refers to variables declared in this python file
 # other variables are Latex representation of variables stated in Methods section of Nature paper
 
-'''
-Controller parameters
-'''
 # input vector size x_t
-# dataset specific
-x=None
+# dataset specific, you need to change it every time.
+x=47781
 
 # single hidden unit output size h^l_t
 # state size
@@ -20,8 +20,8 @@ h=128
 L=64
 
 # Controller output v_t size
-# dataset specific
-v_t=None
+# dataset specific, you need to change it every time.
+v_t=3654
 
 # Memory location width
 # Memory read heads count R
@@ -34,8 +34,5 @@ E_t=W*R+3*W+5*R+3
 # Total memory block (N, W)
 N=32
 
-# I am going to bake batch_processing in the DNC.
-# This is going to be a very tough week.
-bs=24
-
-global_reset_flag=False
+# bake batch_processing in the DNC.
+bs=1
