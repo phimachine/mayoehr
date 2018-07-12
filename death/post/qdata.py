@@ -27,6 +27,8 @@ class DFManager(object):
         # not in order
         # these information will be used for automation purposes across the whole project
         # they contain possible human errors, and must be kept prestine
+
+        # do not contain all columns of the datasets
         self.categories = [("demo", "educ_level"), ("dhos", "hosp_adm_source"), ("dhos", "hosp_disch_disp"),
                            ("ahos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
                            ("lab", "lab_abn_flag"), ("demo", "race"), ("serv", "SRV_LOCATION"),
@@ -92,16 +94,16 @@ class DFManager(object):
                                                          ("WEIGHT", "float")])
 
         self.fpaths={
-            "death":"/infodev1/rep/projects/jason/deathtargets.csv",
+            "death":"/infodev1/rep/projects/jason/multideath.csv",
             "demo":"/infodev1/rep/projects/jason/demo.csv",
-            "dia":"/infodev1/rep/projects/jason/mydia.csv",
-            "ahos":"/infodev1/rep/projects/jason/admit_hos.csv",
-            "dhos": "/infodev1/rep/projects/jason/disch_hos.csv",
-            "lab" :"/infodev1/rep/projects/jason/mylabs.csv",
-            "pres" :"/infodev1/rep/projects/jason/mypres.csv",
-            "serv" : '/infodev1/rep/projects/jason/myserv.csv',
-            'surg' : "/infodev1/rep/projects/jason/newsurg.csv",
-            "vital": "/infodev1/rep/projects/jason/myvitals.csv"
+            "dia":"/infodev1/rep/projects/jason/multidia.csv",
+            "ahos":"/infodev1/rep/projects/jason/multiahos.csv",
+            "dhos": "/infodev1/rep/projects/jason/multidhos.csv",
+            "lab" :"/infodev1/rep/projects/jason/multilab.csv",
+            "pres" :"/infodev1/rep/projects/jason/multipres.csv",
+            "serv" : '/infodev1/rep/projects/jason/multiserv.csv',
+            'surg' : "/infodev1/rep/projects/jason/multisurg.csv",
+            "vital": "/infodev1/rep/projects/jason/multivital.csv"
         }
 
         self.dfn=tuple(self.dtypes.keys())
@@ -136,9 +138,14 @@ class DFManager(object):
                 parse_dates=[coln for coln in dtypes.keys() if self.is_date_column(coln)]
                 df=pd.read_csv(self.fpaths[dfn], dtype=dtypes, parse_dates=parse_dates)
                 self.__setattr__(dfn,df)
-                df.set_index("rep_person_id",inplace=True)
+                if dfn!="demo":
+                    df.set_index(["rep_person_id","id"],inplace=True)
+                else:
+                    df.set_index(["rep_person_id"],inplace=True)
                 if v:
+                    print(dfn+":")
                     print(self.__getattribute__(dfn))
+                df.sort_index()
             self.loaded = True
 
         if save:
@@ -146,7 +153,7 @@ class DFManager(object):
 
             pickle.dump(tuple(self.__getattribute__(dfn) for dfn in self.dfn),mypath.open('wb'))
 
-            print("pickled all dfs")
+            print("pickled all dfs at", mypath)
 
         return tuple(self.__getattribute__(dfn) for dfn in self.dfn)
 
@@ -311,7 +318,7 @@ if __name__ == "__main__":
     dfs = DFManager()
 
 
-    dfs.load_raw(save=True)
+    # dfs.load_raw(save=True)
 
     # dfs.load_pickle()
 

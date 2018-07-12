@@ -5,7 +5,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.functional import cosine_similarity, softmax, normalize
-import archi.param as param
+import death.DNC.archi.param as param
 from torch.autograd import Variable
 import pdb
 import numpy
