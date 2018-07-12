@@ -1,15 +1,11 @@
-from babi_train.training.datagen import PreGenData
-from archi.computer import Computer
+from .archi.computer import Computer
 import torch
 import numpy
-import archi.param as param
 import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-import gc
-import time
-# task 10 of babi
+import death.DNC.archi.param as param
 
 batch_size=param.bs
 
@@ -53,45 +49,6 @@ def load_model(computer):
 
     return model, optim, epoch
 
-def save_model_old(net, optim, epoch):
-    state_dict = net.state_dict()
-    for key in state_dict.keys():
-        state_dict[key] = state_dict[key].cpu()
-    task_dir = os.path.dirname(abspath(__file__))
-    print(task_dir)
-    pickle_file=Path("../saves/DNC_"+str(epoch)+".pkl")
-    pickle_file=pickle_file.open('wb')
-
-    torch.save({
-        'epoch': epoch,
-        'state_dict': state_dict,
-        'optimizer': optim},
-        pickle_file)
-
-
-def load_model_old(net):
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir=Path(task_dir).parent/"saves"
-    highestepoch=-1
-    for child in save_dir.iterdir():
-        epoch=str(child).split("_")[1].split('.')[0]
-        # some files are open but not written to yet.
-        if int(epoch) > highestepoch and child.stat().st_size>2048:
-            highestepoch=int(epoch)
-    pickle_file=Path("../saves/DNC_"+str(highestepoch)+".pkl")
-    pickle_file=pickle_file.open('rb')
-    ret=torch.load(pickle_file)
-
-    net.load_state_dict(ret['state_dict'])
-    print('Loaded model at epoch ', highestepoch)
-
-    for child in save_dir.iterdir():
-        epoch=str(child).split("_")[1].split('.')[0]
-        if int(epoch)!=highestepoch:
-            os.remove(child)
-    print('Removed incomplete save file and all else.')
-
-    return ret['epoch'], ret['optimizer']
 
 def run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False):
     # to promote code reuse
@@ -141,24 +98,25 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=F
 
     return story_loss
 
-def train(computer, optimizer, story_length, batch_size, pgd, starting_epoch):
-    for epoch in range(starting_epoch,epochs_count):
 
-        running_loss=0
+def train(computer, optimizer, story_length, batch_size, pgd, starting_epoch):
+    for epoch in range(starting_epoch, epochs_count):
+
+        running_loss = 0
 
         for batch in range(epoch_batches_count):
 
-            train_story_loss=run_one_story(computer, optimizer, story_length, batch_size, pgd)
+            train_story_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd)
             print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
                   (epoch, batch, train_story_loss.item()))
-            running_loss+=train_story_loss
-            val_freq=16
-            if batch%val_freq==val_freq-1:
+            running_loss += train_story_loss
+            val_freq = 16
+            if batch % val_freq == val_freq - 1:
                 print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f' %
                       (epoch, batch, running_loss / val_freq))
-                running_loss=0
+                running_loss = 0
                 # also test the model
-                val_loss=run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
+                val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
                 print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                       (epoch, batch, val_loss))
 
@@ -166,27 +124,26 @@ def train(computer, optimizer, story_length, batch_size, pgd, starting_epoch):
         print("model saved for epoch ", epoch)
 
 
+if __name__ == "__main__":
 
-if __name__=="__main__":
-
-    story_limit=150
-    epoch_batches_count=64
-    epochs_count=1024
-    lr=1e-5
-    pgd=PreGenData(param.bs)
-    computer=Computer()
-    optim=None
-    starting_epoch=-1
+    story_limit = 150
+    epoch_batches_count = 64
+    epochs_count = 1024
+    lr = 1e-5
+    pgd = PreGenData(param.bs)
+    computer = Computer()
+    optim = None
+    starting_epoch = -1
 
     # if load model
     computer, optim, starting_epoch = load_model(computer)
 
-    computer=computer.cuda()
+    computer = computer.cuda()
     if optim is None:
-        optimizer=torch.optim.Adam(computer.parameters(),lr=lr)
+        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
     else:
         print('use Adadelta optimizer with learning rate ', lr)
-        optimizer=torch.optim.Adadelta(computer.parameters(),lr=lr)
-    
+        optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+
     # starting with the epoch after the loaded one
-    train(computer,optimizer,story_limit, batch_size, pgd, int(starting_epoch)+1)
+    train(computer, optimizer, story_limit, batch_size, pgd, int(starting_epoch) + 1)

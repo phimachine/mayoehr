@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from archi.interface import Interface
-from archi.controller import Controller
-from archi.memory import Memory
-import archi.param as param
+from death.DNC.archi.interface import Interface
+from death.DNC.archi.controller import Controller
+from death.DNC.archi.memory import Memory
+import death.DNC.archi.param as param
 import pdb
 from torch.nn.parameter import Parameter
 

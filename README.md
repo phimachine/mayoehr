@@ -2,11 +2,11 @@
 
 ## Where are the main files?
 ### For preprocessing: prep/prep.R
-Preprocessing takes the REP data that I was given, cleans, imputes, mutates for machine learning inputs.
+Preprocessing takes the REP data that I was given, cleans, imputes, mutates for machine learning purposes.
 
 I have not run the whole script myself, but the it should take around 5 hours. There are likely lines I did not record in the file, so you should do it block by block to be safe.
 
-The whole script (sometimes) requires up to 32+ cores and at least 200Gb RAM at peak by my estimate.
+The whole script requires up to 32+ cores and at least 200Gb RAM at peak by my estimate.
 
 ### For postprocessing: post/post.R
 Takes preprocessed csv files and transform them to meet python-specific needs. For example, one date per row, or multiindex for pandas performance.
@@ -21,6 +21,6 @@ The whole script should take around 5 minutes. You shoud run it everytime you mo
 
 ### For pandas to PyTorch dataloader: post/inputgen_planA.py
 
-Different models will have different input/output formats. This is the input/output generation file.
+Different models will have different input/output formats. This is the input/output generation file for plan A. See post/README.md
 
-__getitem__() is the main function for this class, which will integrate seamlessly (hopefully) with PyTorch dataloader to enable multi-processed data loading. I'm still working on it.
+__getitem__() is the main function for this class, which will integrate seamlessly (hopefully) with PyTorch dataloader to enable multi-processed data loading.
