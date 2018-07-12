@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from death.DNC.archi.interface import Interface
-from death.DNC.archi.controller import Controller
-from death.DNC.archi.memory import Memory
-import death.DNC.archi.param as param
+from archi.interface import Interface
+from archi.controller import Controller
+from archi.memory import Memory
+import archi.param as param
 import pdb
 from torch.nn.parameter import Parameter
 
@@ -15,12 +15,15 @@ class Computer(nn.Module):
         self.controller=Controller()
         self.interface=Interface()
         self.last_read_vector=Parameter(torch.Tensor(param.bs,param.W, param.R).zero_())
+        self.W_r=nn.Linear(param.W*param.R,param.v_t,bias=False)
 
     def forward(self, input):
         input_x_t=torch.cat((input,self.last_read_vector.view(param.bs,-1)),dim=1)
         output, interface=self.controller(input_x_t)
         interface_output_tuple=self.interface(interface)
         self.last_read_vector.data=self.memory(*interface_output_tuple)
+        output=output+self.W_r(self.last_read_vector.view(param.bs,param.W*param.R))
+        # DEBUG NAN
         if torch.isnan(self.last_read_vector).any():
             read_keys, read_strengths, write_key, write_strength, \
             erase_vector, write_vector, free_gates, allocation_gate, \
