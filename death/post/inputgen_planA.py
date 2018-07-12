@@ -45,12 +45,24 @@ class InputGen(Dataset,DFManager):
         self.input_dim=None
         # manual format: (dfname,colname,starting_index)
         self.input_dim_manual=None
+        self.output_dim=None
         self.get_input_dim()
+        self.get_output_dim()
         # this df has no na
         self.earla=pd.read_csv("/infodev1/rep/projects/jason/earla.csv",parse_dates=["earliest","latest"])
         self.earla.set_index("rep_person_id",inplace=True)
         self.len=len(self.rep_person_id)
         print("Input Gen initiated")
+
+    def get_output_dim(self):
+        # dimsize (dead,death_date,cause)
+        dimsize=1+1
+        dic = self.__getattribute__("death_code_dict")
+        dimsize+=2*len(dic)
+        self.output_dim=dimsize
+        self.underlying_code_location= 2 + len(dic)
+
+        return dimsize
 
     def get_input_dim(self):
         # pre allocate a whole vector of input
@@ -134,14 +146,7 @@ class InputGen(Dataset,DFManager):
 
         ######
         # We start compiling input and target.
-        # death
-
         # demo
-        demorow = self.demo.loc[id]
-        race = demorow['race']
-        educ_level = demorow['educ_level']
-        birth_date = demorow['birth_date']
-        male = demorow['male']
 
         row=self.demo.loc[[id]]
         tss=np.arange(time_length)
@@ -172,10 +177,44 @@ class InputGen(Dataset,DFManager):
             age_val=np.arange(earliest_month_age,earliest_month_age+time_length)
             np.add.at(input,[tss,insidx],age_val)
 
-        # TODO use bottom layer bias to offset missing data.
-        # TODO this is not done
-        # TODO we need labels too
+        #####
+        # death
+        # we need regi_label, time_to_event,
+        regi_label = False
+        df=self.death
 
+        target=np.zeros((time_length,self.output_dim))
+        if id in df.index:
+            # registration label, denotes whether the person has death record in our files
+            # (whether he died, if our record is complete)
+            np.add.at(target,[tss, 0],1)
+
+            # death time to event
+            allrows = self.death.loc[[id]]
+            death_date=allrows["death_date"].iloc[0]
+            earliest_distance=(death_date.to_datetime64()-earliest.to_datetime64()).astype("timedelta64[M]").astype("int")
+            countdown_val=np.arange(earliest_distance,earliest_distance-time_length,-1)
+            np.add.at(target,[tss,1],countdown_val)
+
+            # cause of death
+            cods=allrows["code"]
+            unds=allrows["underlying"]
+            insidx=[]
+
+            for code, underlying in zip(cods,unds):
+                # no na testing, I tested it in R
+                # if cod==cod and und==und:
+                dic = self.__getattribute__("death_code_dict")
+                idx=dic[code]
+                insidx+=[2+idx]
+                if underlying:
+                    insidx+=[self.underlying_code_location+idx]
+            # does not accumulate!
+            target[:,insidx]=1
+
+        # TODO use bottom layer bias to offset missing data.
+
+        #####
         # all others, will insert at specific timestamps
         others = [dfn for dfn in self.dfn if dfn not in ("death", "demo")]
         for dfn in others:
@@ -258,8 +297,7 @@ class InputGen(Dataset,DFManager):
         if debug:
             print("get item finished")
         input=np.expand_dims(input,axis=0)
-        print(input.shape)
-        return input
+        return input,target
 
     def __len__(self):
         '''
@@ -280,10 +318,9 @@ class InputGen(Dataset,DFManager):
         #         print("....")
 
         start = time.time()
-        for i in range(4):
-            ig.__getitem__(i, debug=True)
-            if (i % 100 == 0):
-                print("working on ", i)
+        for i in range(100):
+            input,target=ig.__getitem__(i, debug=True)
+            print("working on ", i)
         end = time.time()
         print(end-start)
         print("performance probe finished")

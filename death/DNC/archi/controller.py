@@ -1,10 +1,10 @@
 # reference Methods, controller network
 
-from archi.param import *
+from death.DNC.archi.param import *
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
-import archi.param as param
+import death.DNC.archi.param as param
 import math
 from torch.nn.modules.rnn import LSTM
 from torch.nn.parameter import Parameter
