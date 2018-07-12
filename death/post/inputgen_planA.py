@@ -63,7 +63,12 @@ class InputGen(Dataset,DFManager):
                 if colname == "rep_person_id" or self.is_date_column(colname):
                     # no memory needed for these values.
                     # either index that is ignored, or contained in the time series.
-                    pass
+                    if dfn=="demo" and self.is_date_column(colname):
+                        # then we are dealing with birth date
+                        input_dim_manual.append((dfn, colname, dimsize))
+                        # how many dimensions do you want for birth date?
+                        # My plan is to simply throw the age in as a float.
+                        dimsize+=1
                 else:
                     dtn = dtype.name
                     input_dim_manual.append((dfn, colname, dimsize))
@@ -84,8 +89,6 @@ class InputGen(Dataset,DFManager):
                     else:
                         raise ValueError("Unaccounted for")
 
-        # # the last index is a binary flag whether there is time-dependent record on this location
-        # dimsize=dimsize+1
 
         self.input_dim=dimsize
         self.input_dim_manual=input_dim_manual
@@ -122,28 +125,58 @@ class InputGen(Dataset,DFManager):
         '''
         id = self.rep_person_id[index]
         # plus 2 should not bring problem? I am not sure
-        month_interval = self.earla.loc[id]["int"] + 1
+        time_length = self.earla.loc[id]["int"] + 1
         earliest=self.earla.loc[id]["earliest"]
         latest=self.earla.loc[id]["latest"]
-        input = np.zeros((month_interval, self.input_dim),dtype=float)
+        input = np.zeros((time_length, self.input_dim),dtype=float)
 
-        ### we pull all relevant data
-        # demo, will span all time stamps
+
+
+        ######
+        # We start compiling input and target.
+        # death
+
+        # demo
         demorow = self.demo.loc[id]
         race = demorow['race']
         educ_level = demorow['educ_level']
         birth_date = demorow['birth_date']
         male = demorow['male']
+
+        row=self.demo.loc[[id]]
+        tss=np.arange(time_length)
+        dfn="demo"
+        for coln in ("race","educ_level"):
+            startidx, endidx = self.get_column_index_range(dfn, coln)
+            dic = self.__getattribute__(dfn + "_" + coln + "_dict")
+
+            # I know that only one row is possible
+            val=row[coln].iloc[0]
+            if val == val:
+                insidx=dic[val] + startidx
+                np.add.at(input, [tss, insidx], 1)
+
+        coln="male"
+        insidx, endidx = self.get_column_index_range(dfn, coln)
+        val = row[coln].iloc[0]
+        if val == val:
+            np.add.at(input, [tss, insidx], 1)
+        # this might have problem, we should use two dimensions for bool. But for now, let's not go back to prep.
+
+        coln="birth_date"
+        insidx, _ = self.get_column_index_range(dfn, coln)
+        bd = row[coln].iloc[0]
+        if bd==bd:
+            # convert age
+            earliest_month_age=(earliest.to_datetime64()-bd.to_datetime64()).astype("timedelta64[M]").astype("int")
+            age_val=np.arange(earliest_month_age,earliest_month_age+time_length)
+            np.add.at(input,[tss,insidx],age_val)
+
+        # TODO use bottom layer bias to offset missing data.
         # TODO this is not done
         # TODO we need labels too
 
         # all others, will insert at specific timestamps
-        # diagnosis
-        dias = self.dia.loc[[id]]
-        for index, row in dias.iterrows():
-            date = row['dx_date']
-            dx_codes = row["dx_codes"]
-
         others = [dfn for dfn in self.dfn if dfn not in ("death", "demo")]
         for dfn in others:
             # any df is processed here
@@ -260,7 +293,7 @@ class InputGen(Dataset,DFManager):
 
 if __name__=="__main__":
     ig=InputGen(load_pickle=True,verbose=False)
-    # ig.performance_probe()
+    ig.performance_probe()
 
     # go get one of the values and see if you can trace it all the way back to raw data
     # this is a MUST DO TODO
