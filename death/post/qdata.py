@@ -94,7 +94,7 @@ class DFManager(object):
                                                          ("WEIGHT", "float")])
 
         self.fpaths={
-            "death":"/infodev1/rep/projects/jason/multideath.csv",
+            "death":"/infodev1/rep/projects/jason/newdeath.csv",
             "demo":"/infodev1/rep/projects/jason/demo.csv",
             "dia":"/infodev1/rep/projects/jason/multidia.csv",
             "ahos":"/infodev1/rep/projects/jason/multiahos.csv",
@@ -318,7 +318,7 @@ if __name__ == "__main__":
     dfs = DFManager()
 
 
-    # dfs.load_raw(save=True)
+    dfs.load_raw(save=True)
 
     # dfs.load_pickle()
 
