@@ -318,7 +318,7 @@ if __name__ == "__main__":
     dfs = DFManager()
 
 
-    dfs.load_raw(save=True)
+    # dfs.load_raw(save=True)
 
     # dfs.load_pickle()
 
