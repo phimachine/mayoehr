@@ -9,7 +9,6 @@ import archi.param as param
 from torch.autograd import Variable
 import pdb
 import numpy
-from torch.nn.parameter import Parameter
 
 def test_simplex_bound(tensor,dim):
     t=tensor.contiguous().view(-1,dim)
@@ -22,15 +21,15 @@ class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
         # u_0
-        self.usage_vector=Variable(torch.Tensor(param.bs,param.N).zero_())
+        self.usage_vector=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
         # p, (N), should be simplex bound
-        self.precedence_weighting=Variable(torch.Tensor(param.bs,param.N).zero_())
+        self.precedence_weighting=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
         # (N,N)
-        self.temporal_memory_linkage=Variable(torch.Tensor(param.bs,param.N, param.N).zero_())
+        self.temporal_memory_linkage=Variable(torch.Tensor(param.bs,param.N, param.N).zero_().cuda())
         # (N,W)
-        self.memory=Variable(torch.Tensor(param.N,param.W).zero_())
+        self.memory=Variable(torch.Tensor(param.N,param.W).zero_().cuda())
         # (N, R). Does this require gradient?
-        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N))
+        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N)).cuda()
 
 
     def new_sequence_reset(self):
