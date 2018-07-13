@@ -10,6 +10,7 @@ from death.post.inputgen_planC import InputGen
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import archi.param as param
+from torch.autograd import Variable
 
 batch_size = 1
 
@@ -60,8 +61,8 @@ def load_model(computer):
 def run_one_patient(computer, input, target, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
 
-    input = torch.Tensor(input).cuda()
-    target = torch.Tensor(target).cuda()
+    input = Variable(torch.Tensor(input).cuda())
+    target = Variable(torch.Tensor(target).cuda())
 
     # we have no critical index, becuase critical index are those timesteps that
     # DNC is required to produce outputs. This is not the case for our project.
@@ -69,14 +70,14 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
 
     time_length = input.size()[1]
     with torch.no_grad if validate else dummy_context_mgr():
-        patient_output = torch.Tensor(1, time_length, param.v_t)
+        patient_output = Variable(torch.Tensor(1, time_length, param.v_t)).cuda()
         computer.new_sequence_reset()
         for timestep in range(time_length):
             # first colon is always size 1
             feeding = input[:, timestep, :]
             output = computer(feeding)
-            assert not torch.isnan(output).any()
-            patient_output[0, timestep, :] = output
+            assert not (output!=output).any()
+            patient_output[0, timestep, :] = output.data
 
         # patient_output: (batch_size 1, time_length, output_dim ~4000)
         time_to_event_output=patient_output[:,:,0]
@@ -86,7 +87,9 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
 
         patient_loss=None
 
-        if loss_type==0:
+        # this block will not work for batch input,
+        # you should modify it so that the loss evaluation is not determined by logic but function.
+        if loss_type[0]==0:
             # in record
             toe_loss = real_criterion(time_to_event_output,time_to_event_target)
             cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
@@ -99,6 +102,8 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
             toe_loss = real_criterion(underestimation,0)
             cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
             patient_loss=toe_loss+cod_loss
+
+        patient_loss.requires_grad=True
 
         if not validate:
             patient_loss.backward()
@@ -120,7 +125,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                                                real_criterion,binary_criterion)
             if i % 100 == 0:
                 print("learning. count: %4d, training loss: %.4f" %
-                      (i, train_story_loss.item()))
+                      (i, train_story_loss[0]))
             running_loss += train_story_loss
             # TODO No validation support for now.
             # val_freq = 16
