@@ -8,6 +8,7 @@ import archi.param as param
 import math
 from torch.nn.modules.rnn import LSTM
 from torch.nn.parameter import Parameter
+from torch.autograd import Variable
 
 
 
@@ -20,7 +21,7 @@ class Controller(nn.Module):
         self.RNN_list=nn.ModuleList()
         for _ in range(param.L):
             self.RNN_list.append(RNN_Unit())
-        self.hidden_previous_timestep=Parameter(torch.Tensor(param.bs,param.L,param.h).zero_())
+        self.hidden_previous_timestep=Parameter(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
         self.W_y=nn.Linear(param.L*param.h,param.v_t)
         self.W_E=nn.Linear(param.L*param.h,param.E_t)
 
@@ -31,8 +32,8 @@ class Controller(nn.Module):
         :param input_x: raw input concatenated with flattened memory input
         :return:
         '''
-        hidden_previous_layer=torch.Tensor(param.bs,param.h).zero_().cuda()
-        hidden_this_timestep=torch.Tensor(param.bs,param.L,param.h).cuda()
+        hidden_previous_layer=Variable(torch.Tensor(param.bs,param.h).zero_().cuda())
+        hidden_this_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).cuda())
         for i in range(param.L):
             hidden_output=self.RNN_list[i](input_x, self.hidden_previous_timestep[:,i,:],
                                            hidden_previous_layer)
@@ -42,7 +43,7 @@ class Controller(nn.Module):
         flat_hidden=hidden_this_timestep.view((param.bs,param.L*param.h))
         output=self.W_y(flat_hidden)
         interface=self.W_E(flat_hidden)
-        self.hidden_previous_timestep.data=hidden_this_timestep
+        self.hidden_previous_timestep=hidden_this_timestep
         return output, interface
 
     def reset_parameters(self):
@@ -53,7 +54,7 @@ class Controller(nn.Module):
         self.W_E.reset_parameters()
 
     def new_sequence_reset(self):
-        self.hidden_previous_timestep.data=torch.Tensor(param.bs,param.L,param.h).zero_().cuda()
+        self.hidden_previous_timestep=Parameter(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
         for RNN in self.RNN_list:
             RNN.new_sequence_reset()
 
@@ -69,7 +70,7 @@ class RNN_Unit(nn.Module):
         self.W_output=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
         self.W_state=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
 
-        self.old_state=Parameter(torch.Tensor(param.bs,param.h).zero_().cuda())
+        self.old_state=Variable(torch.Tensor(param.bs,param.h).zero_().cuda())
 
 
     def reset_parameters(self):
@@ -89,7 +90,10 @@ class RNN_Unit(nn.Module):
         # a hidden unit outputs a hidden output new_hidden.
         # state also changes, but it's hidden inside a hidden unit.
 
-        semicolon_input=torch.cat([input_x,previous_time,previous_layer],dim=1)
+        # I think .data call is safe whenever new Variable should be initated.
+        # Unless I wish to have the gradients recursively flow back to the beginning of history
+        # I do not wish so.
+        semicolon_input=torch.cat((input_x,previous_time,previous_layer),dim=1)
 
         # 5 equations
         input_gate=torch.sigmoid(self.W_input(semicolon_input))
@@ -100,9 +104,10 @@ class RNN_Unit(nn.Module):
         new_hidden=output_gate*torch.tanh(new_state)
 
         # TODO Warning: needs to assign, not sure if this is right
-        self.old_state.data=new_state
+        # Good warning, I have changed the assignment and I hope this now works better.
+        self.old_state=new_state
 
         return new_hidden
 
     def new_sequence_reset(self):
-        self.old_state=Parameter(torch.Tensor(param.bs,param.h).zero_().cuda())
+        self.old_state=torch.Tensor(param.bs,param.h).zero_().cuda()
