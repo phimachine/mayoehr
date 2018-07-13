@@ -6,8 +6,10 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planA import InputGen
+from death.post.inputgen_planC import InputGen
 from torch.utils.data import DataLoader
+import torch.nn as nn
+import archi.param as param
 
 batch_size = 1
 
@@ -55,54 +57,67 @@ def load_model(computer):
     return model, optim, epoch
 
 
-def run_one_patient(computer, optimizer, criterion, input, target, validate=False):
-    '''
-
-    :param computer:
-    :param optimizer:
-    :param input:
-    :param target:
-    :param validate: right now, validation is not supported, must always be false.
-    :return:
-    '''
+def run_one_patient(computer, input, target, optimizer, loss_type, real_criterion,
+                    binary_criterion, validate=False):
 
     input = torch.Tensor(input).cuda()
     target = torch.Tensor(target).cuda()
 
     # we have no critical index, becuase critical index are those timesteps that
     # DNC is required to produce outputs. This is not the case for our project.
-    # criterion does not need to be initiated here, because we are not using a mask
+    # criterion does not need to be reinitiated for every story, because we are not using a mask
 
     time_length = input.size()[1]
     with torch.no_grad if validate else dummy_context_mgr():
-        patient_output = torch.Tensor(1, time_length, param.output_dim)
+        patient_output = torch.Tensor(1, time_length, param.v_t)
         computer.new_sequence_reset()
         for timestep in range(time_length):
             # first colon is always size 1
             feeding = input[:, timestep, :]
             output = computer(feeding)
             assert not torch.isnan(output).any()
-            patient_output[1, timestep, :] = output
+            patient_output[0, timestep, :] = output
 
-        story_loss = criterion(patient_output, target)
-        ## pass criterion on.
+        # patient_output: (batch_size 1, time_length, output_dim ~4000)
+        time_to_event_output=patient_output[:,:,0]
+        cause_of_death_output=patient_output[:,:,1:]
+        time_to_event_target=target[:,:,0]
+        cause_of_death_target=target[:,:,1:]
+
+        patient_loss=None
+
+        if loss_type==0:
+            # in record
+            toe_loss = real_criterion(time_to_event_output,time_to_event_target)
+            cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
+            patient_loss=toe_loss+cod_loss
+        else:
+            # not in record
+            # be careful with the sign, penalize when and only when positive
+            underestimation = time_to_event_target-time_to_event_output
+            underestimation = nn.ReLU(underestimation)
+            toe_loss = real_criterion(underestimation,0)
+            cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
+            patient_loss=toe_loss+cod_loss
+
         if not validate:
-            # I chose to backward a derivative only after a whole story has been taken in
-            # This should lead to a more stable, but initially slower convergence.
-            story_loss.backward()
+            patient_loss.backward()
             optimizer.step()
 
-    return story_loss
+    return patient_loss
 
 
-def train(computer, optimizer, criterion, igdl, starting_epoch, total_epochs):
+def train(computer, optimizer, real_criterion, binary_criterion,
+          igdl, starting_epoch, total_epochs):
+
     for epoch in range(starting_epoch, total_epochs):
 
         running_loss = 0
 
-        for i, (input, target) in igdl:
+        for i, (input, target, loss_type) in enumerate(igdl):
 
-            train_story_loss = run_one_patient(computer, optimizer, criterion, input, target)
+            train_story_loss = run_one_patient(computer, input, target, optimizer, loss_type,
+                                               real_criterion,binary_criterion)
             if i % 100 == 0:
                 print("learning. count: %4d, training loss: %.4f" %
                       (i, train_story_loss.item()))
@@ -143,5 +158,10 @@ if __name__=="__main__":
         print('use Adadelta optimizer with learning rate ', lr)
         optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
 
+    real_criterion=nn.SmoothL1Loss()
+    binary_criterion=nn.BCEWithLogitsLoss()
+
     # starting with the epoch after the loaded one
-    train(computer, optimizer, criterion, igdl, int(starting_epoch) + 1, total_epochs)
+
+    train(computer, optimizer, real_criterion, binary_criterion,
+          igdl, int(starting_epoch) + 1, total_epochs)

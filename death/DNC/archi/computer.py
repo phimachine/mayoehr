@@ -7,22 +7,23 @@ import archi.param as param
 import pdb
 from torch.nn.parameter import Parameter
 
+
 class Computer(nn.Module):
 
     def __init__(self):
         super(Computer, self).__init__()
-        self.memory=Memory()
-        self.controller=Controller()
-        self.interface=Interface()
-        self.last_read_vector=Parameter(torch.Tensor(param.bs,param.W, param.R).zero_())
-        self.W_r=nn.Linear(param.W*param.R,param.v_t,bias=False)
+        self.memory = Memory()
+        self.controller = Controller()
+        self.interface = Interface()
+        self.last_read_vector = Parameter(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
+        self.W_r = nn.Linear(param.W * param.R, param.v_t, bias=False)
 
     def forward(self, input):
-        input_x_t=torch.cat((input,self.last_read_vector.view(param.bs,-1)),dim=1)
-        output, interface=self.controller(input_x_t)
-        interface_output_tuple=self.interface(interface)
-        self.last_read_vector.data=self.memory(*interface_output_tuple)
-        output=output+self.W_r(self.last_read_vector.view(param.bs,param.W*param.R))
+        input_x_t = torch.cat((input, self.last_read_vector.view(param.bs, -1).data), dim=1)
+        output, interface = self.controller(input_x_t)
+        interface_output_tuple = self.interface(interface)
+        self.last_read_vector.data = self.memory(*interface_output_tuple)
+        output = output + self.W_r(self.last_read_vector.view(param.bs, param.W * param.R))
         # DEBUG NAN
         if torch.isnan(self.last_read_vector).any():
             read_keys, read_strengths, write_key, write_strength, \
@@ -30,7 +31,7 @@ class Computer(nn.Module):
             write_gate, read_modes = interface_output_tuple
             allocation_weighting = self.memory.allocation_weighting()
             write_weighting = self.memory.write_weighting(write_key, write_strength,
-                                                   allocation_gate, write_gate, allocation_weighting)
+                                                          allocation_gate, write_gate, allocation_weighting)
             self.memory.write_to_memory(write_weighting, erase_vector, write_vector)
             # update some
             memory_retention = self.memory.memory_retention(free_gates)
@@ -41,8 +42,9 @@ class Computer(nn.Module):
             forward_weighting = self.memory.forward_weighting()
             backward_weighting = self.memory.backward_weighting()
 
-            read_weightings = self.memory.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
-                                                   read_modes)
+            read_weightings = self.memory.read_weightings(forward_weighting, backward_weighting, read_keys,
+                                                          read_strengths,
+                                                          read_modes)
             # read from memory last, a new modification.
             read_vectors = self.memory.read_memory(read_weightings)
             raise ValueError("nan is found.")
@@ -58,4 +60,4 @@ class Computer(nn.Module):
         # to reset the values that depends on a particular sequence.
         self.controller.new_sequence_reset()
         self.memory.new_sequence_reset()
-        self.last_read_vector.data=torch.Tensor(param.bs,param.W, param.R).zero_().cuda()
+        self.last_read_vector.data = torch.Tensor(param.bs, param.W, param.R).zero_().cuda()
