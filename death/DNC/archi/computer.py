@@ -5,7 +5,7 @@ from archi.controller import Controller
 from archi.memory import Memory
 import archi.param as param
 import pdb
-from torch.nn.parameter import Parameter
+from torch.autograd import Variable
 
 
 class Computer(nn.Module):
@@ -15,17 +15,21 @@ class Computer(nn.Module):
         self.memory = Memory()
         self.controller = Controller()
         self.interface = Interface()
-        self.last_read_vector = Parameter(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
+        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
         self.W_r = nn.Linear(param.W * param.R, param.v_t, bias=False)
 
     def forward(self, input):
-        input_x_t = torch.cat((input, self.last_read_vector.view(param.bs, -1).data), dim=1)
+        # This might be a problem for non 0.4 version PyTorch, if cat does not support variable,
+        # should gradient still flow back?
+        input_x_t = torch.cat((input, self.last_read_vector.view(param.bs, -1)), dim=1)
         output, interface = self.controller(input_x_t)
         interface_output_tuple = self.interface(interface)
-        self.last_read_vector.data = self.memory(*interface_output_tuple)
+        # If I understand correctly, the old code will either modify .data in a destructive way,
+        # or it will store the computation history infinitely causing memory leak.
+        self.last_read_vector = self.memory(*interface_output_tuple)
         output = output + self.W_r(self.last_read_vector.view(param.bs, param.W * param.R))
         # DEBUG NAN
-        if torch.isnan(self.last_read_vector).any():
+        if (self.last_read_vector!=self.last_read_vector).any():
             read_keys, read_strengths, write_key, write_strength, \
             erase_vector, write_vector, free_gates, allocation_gate, \
             write_gate, read_modes = interface_output_tuple
@@ -60,4 +64,5 @@ class Computer(nn.Module):
         # to reset the values that depends on a particular sequence.
         self.controller.new_sequence_reset()
         self.memory.new_sequence_reset()
-        self.last_read_vector.data = torch.Tensor(param.bs, param.W, param.R).zero_().cuda()
+        # initiate new object, so the old container history is reset.
+        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())

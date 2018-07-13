@@ -9,7 +9,6 @@ import archi.param as param
 from torch.autograd import Variable
 import pdb
 import numpy
-from torch.nn.parameter import Parameter
 
 def test_simplex_bound(tensor,dim):
     t=tensor.contiguous().view(-1,dim)
@@ -22,23 +21,23 @@ class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
         # u_0
-        self.usage_vector=Parameter(torch.Tensor(param.bs,param.N).zero_())
+        self.usage_vector=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
         # p, (N), should be simplex bound
-        self.precedence_weighting=Parameter(torch.Tensor(param.bs,param.N).zero_())
+        self.precedence_weighting=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
         # (N,N)
-        self.temporal_memory_linkage=Parameter(torch.Tensor(param.bs,param.N, param.N).zero_())
+        self.temporal_memory_linkage=Variable(torch.Tensor(param.bs,param.N, param.N).zero_().cuda())
         # (N,W)
-        self.memory=Parameter(torch.Tensor(param.N,param.W).zero_())
+        self.memory=Variable(torch.Tensor(param.N,param.W).zero_().cuda())
         # (N, R). Does this require gradient?
-        self.last_read_weightings=Parameter(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N))
+        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N)).cuda()
 
 
     def new_sequence_reset(self):
         # memory is the only value that is not reset after new sequence
-        self.usage_vector.data=torch.Tensor(param.bs, param.N).zero_().cuda()
-        self.precedence_weighting.data= torch.Tensor(param.bs, param.N).zero_().cuda()
-        self.temporal_memory_linkage.data = torch.Tensor(param.bs, param.N, param.N).zero_().cuda()
-        self.last_read_weightings.data=torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N).cuda()
+        self.usage_vector=Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
+        self.precedence_weighting= Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
+        self.temporal_memory_linkage = Variable(torch.Tensor(param.bs, param.N, param.N).zero_().cuda())
+        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N).cuda())
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
         '''
@@ -132,7 +131,12 @@ class Memory(nn.Module):
 
         ret= (self.usage_vector+write_wighting-self.usage_vector*write_wighting)*memory_retention
 
-        self.usage_vector.data=ret
+        # Here we should use .data instead? Like:
+        # self.usage_vector.data=ret.data
+        # Usage vector contain all computation history,
+        # which is not necessary? I'm not sure, maybe the write weighting should be back_propped here?
+        # We reset usage vector for every seq, but should we for every timestep?
+        self.usage_vector=ret
         return ret
 
 
@@ -154,7 +158,7 @@ class Memory(nn.Module):
         sorted, indices= self.usage_vector.sort(dim=1)
         cum_prod=torch.cumprod(sorted,1)
         # notice the index on the product
-        cum_prod=torch.cat([torch.ones(param.bs,1).cuda(),cum_prod],1)[:,:-1]
+        cum_prod=torch.cat([Variable(torch.ones(param.bs,1).cuda()),cum_prod],1)[:,:-1]
         sorted_inv=1-sorted
         allocation_weighting=sorted_inv*cum_prod
         # to shuffle back in place
@@ -190,7 +194,7 @@ class Memory(nn.Module):
         # Took me 3 hours.
         # sum_ww=sum(write_weighting,1)
         sum_ww=torch.sum(write_weighting,dim=1)
-        self.precedence_weighting.data=(1-sum_ww).unsqueeze(1)*self.precedence_weighting+write_weighting
+        self.precedence_weighting=((1-sum_ww).unsqueeze(1)*self.precedence_weighting+write_weighting)
         test_simplex_bound(self.precedence_weighting,1)
         return self.precedence_weighting
 
@@ -206,7 +210,7 @@ class Memory(nn.Module):
         ww_i=write_weighting.unsqueeze(2).expand(-1,-1,param.N)
         p_j=self.precedence_weighting.unsqueeze(1).expand(-1,param.N,-1)
         batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
-        self.temporal_memory_linkage.data= (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
+        self.temporal_memory_linkage= ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j)
         test_simplex_bound(self.temporal_memory_linkage,1)
         test_simplex_bound(self.temporal_memory_linkage,2)
         return self.temporal_memory_linkage
@@ -257,7 +261,7 @@ class Memory(nn.Module):
         read_modes=read_modes.unsqueeze(3)
         # dimension (bs,N,R)
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1,2)
-        self.last_read_weightings.data=read_weightings
+        self.last_read_weightings=read_weightings
         # last read weightings
         test_simplex_bound(self.last_read_weightings,1)
         return read_weightings
@@ -283,9 +287,10 @@ class Memory(nn.Module):
         :return:
         '''
         term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
-        term1=self.memory.unsqueeze(0)*(torch.ones((param.bs,param.N,param.W)).cuda()-term1_2)
+        # term1=self.memory.unsqueeze(0)*Variable(torch.ones((param.bs,param.N,param.W)).cuda()-term1_2.data)
+        term1=self.memory.unsqueeze(0)*(1-term1_2)
         term2=torch.matmul(write_weighting.unsqueeze(2),write_vector.unsqueeze(1))
-        self.memory.data=torch.mean(term1+term2, dim=0)
+        self.memory=torch.mean(term1+term2, dim=0)
 
     def forward(self,read_keys, read_strengths, write_key, write_strength,
                 erase_vector, write_vector, free_gates, allocation_gate,
