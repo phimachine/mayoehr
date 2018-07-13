@@ -5,7 +5,7 @@ from archi.controller import Controller
 from archi.memory import Memory
 import archi.param as param
 import pdb
-from torch.nn.parameter import Parameter
+from torch.autograd import Variable
 
 
 class Computer(nn.Module):
@@ -65,4 +65,4 @@ class Computer(nn.Module):
         self.controller.new_sequence_reset()
         self.memory.new_sequence_reset()
         # initiate new object, so the old container history is reset.
-        self.last_read_vector = Parameter(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
+        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())

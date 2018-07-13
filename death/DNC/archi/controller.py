@@ -7,7 +7,6 @@ from torch.nn.parameter import Parameter
 import archi.param as param
 import math
 from torch.nn.modules.rnn import LSTM
-from torch.nn.parameter import Parameter
 from torch.autograd import Variable
 
 
@@ -21,7 +20,7 @@ class Controller(nn.Module):
         self.RNN_list=nn.ModuleList()
         for _ in range(param.L):
             self.RNN_list.append(RNN_Unit())
-        self.hidden_previous_timestep=Parameter(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
+        self.hidden_previous_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
         self.W_y=nn.Linear(param.L*param.h,param.v_t)
         self.W_E=nn.Linear(param.L*param.h,param.E_t)
 
@@ -54,7 +53,7 @@ class Controller(nn.Module):
         self.W_E.reset_parameters()
 
     def new_sequence_reset(self):
-        self.hidden_previous_timestep=Parameter(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
+        self.hidden_previous_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
         for RNN in self.RNN_list:
             RNN.new_sequence_reset()
 
@@ -110,4 +109,4 @@ class RNN_Unit(nn.Module):
         return new_hidden
 
     def new_sequence_reset(self):
-        self.old_state=torch.Tensor(param.bs,param.h).zero_().cuda()
+        self.old_state=Variable(torch.Tensor(param.bs,param.h).zero_().cuda())

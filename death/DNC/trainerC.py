@@ -70,7 +70,7 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
 
     time_length = input.size()[1]
     with torch.no_grad if validate else dummy_context_mgr():
-        patient_output = Variable(torch.Tensor(1, time_length, param.v_t))
+        patient_output = Variable(torch.Tensor(1, time_length, param.v_t)).cuda()
         computer.new_sequence_reset()
         for timestep in range(time_length):
             # first colon is always size 1
@@ -103,6 +103,8 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
             cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
             patient_loss=toe_loss+cod_loss
 
+        patient_loss.requires_grad=True
+
         if not validate:
             patient_loss.backward()
             optimizer.step()
@@ -123,7 +125,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                                                real_criterion,binary_criterion)
             if i % 100 == 0:
                 print("learning. count: %4d, training loss: %.4f" %
-                      (i, train_story_loss.item()))
+                      (i, train_story_loss[0]))
             running_loss += train_story_loss
             # TODO No validation support for now.
             # val_freq = 16
