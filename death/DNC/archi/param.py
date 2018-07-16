@@ -26,13 +26,13 @@ v_t=3656
 # Memory location width
 # Memory read heads count R
 # Controller interface epsilon_t size, derived
-W=64
-R=32
+W=256
+R=8
 E_t=W*R+3*W+5*R+3
 
 # Total memory address count
 # Total memory block (N, W)
-N=32
+N=8
 
 # bake batch_processing in the DNC.
 bs=1
