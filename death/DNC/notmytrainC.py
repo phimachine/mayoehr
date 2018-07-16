@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.autograd import Variable
 import archi.param as param
+import torch.nn as nn
 
 
 class DNCwrapper(DNC):
@@ -115,9 +116,7 @@ def load_model(computer):
 
 def run_one_patient(computer, input, target, optimizer, loss_type, real_criterion,
                     binary_criterion, memory_hidden, validate=False, debug=False):
-    input = Variable(torch.Tensor(input).cuda())
-    input.requires_grad = True
-    target = Variable(torch.Tensor(target).cuda())
+
 
     with torch.no_grad if validate else dummy_context_mgr():
         if debug:
@@ -159,20 +158,27 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           igdl, starting_epoch, total_epochs):
+    device = torch.cuda.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     memory_hidden = None
 
     for epoch in range(starting_epoch, total_epochs):
 
-        running_loss = 0
+        # running_loss = 0
 
         for i, (input, target, loss_type) in enumerate(igdl):
+            input, target, loss_type= Variable(input,requires_grad=True).cuda(), Variable(target).cuda(), Variable(loss_type)
 
             patient_loss, memory_hidden = run_one_patient(computer, input, target, optimizer, loss_type,
                                                           real_criterion, binary_criterion, memory_hidden)
             if i % 10 == 0:
                 print("learning. count: %4d, training loss: %.4f" %
                       (i, patient_loss[0]))
-            running_loss += patient_loss
+
+            # This line might be holding an object that causes CPU memory leak.
+            # I didn't need a running loss anyway. unbelievable.
+            # running_loss += patient_loss
+
             # TODO No validation support for now.
             # val_freq = 16
             # if batch % val_freq == val_freq - 1:
@@ -196,7 +202,7 @@ if __name__ == "__main__":
     starting_epoch = -1
 
     ig = InputGen()
-    igdl = DataLoader(dataset=ig, batch_size=1, shuffle=False, num_workers=16)
+    igdl = DataLoader(dataset=ig, batch_size=1, shuffle=True, num_workers=16)
 
     computer = DNCwrapper(
         input_size=param.x,
@@ -210,6 +216,8 @@ if __name__ == "__main__":
         batch_first=True,
         gpu_id=0
     )
+    computer=nn.DataParallel(computer)
+
 
     # if load model
     # computer, optim, starting_epoch = load_model(computer)
