@@ -1,5 +1,5 @@
 import pandas as pd
-from archi.computer import Computer
+from dnc import DNC
 import torch
 import numpy
 import pdb
@@ -9,18 +9,17 @@ from os.path import abspath
 from death.post.inputgen_planC import InputGen
 from torch.utils.data import DataLoader
 import torch.nn as nn
-import archi.param as param
 from torch.autograd import Variable
 
-batch_size = 1
-
-
-class dummy_context_mgr():
-    def __enter__(self):
-        return None
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        return False
+# batch_size = 1
+#
+#
+# class dummy_context_mgr():
+#     def __enter__(self):
+#         return None
+#
+#     def __exit__(self, exc_type, exc_value, traceback):
+#         return False
 
 def save_model(net, optim, epoch):
     epoch = int(epoch)
@@ -104,7 +103,7 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
             cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
             patient_loss=toe_loss+cod_loss
 
-        patient_loss.requires_grad=True
+        # patient_loss.requires_grad=True
 
         if not validate:
             patient_loss.backward()
@@ -152,7 +151,19 @@ if __name__=="__main__":
     ig=InputGen()
     igdl=DataLoader(dataset=ig,batch_size=1,shuffle=False,num_workers=16)
 
-    computer = Computer()
+    computer = DNC(
+        input_size=64,
+        hidden_size=128,
+        rnn_type='lstm',
+        num_layers=4,
+        nr_cells=100,
+        cell_size=32,
+        read_heads=4,
+        batch_first=True,
+        gpu_id=0
+    )
+
+    (controller_hidden, memory, read_vectors) = (None, None, None)
 
     # if load model
     # computer, optim, starting_epoch = load_model(computer)

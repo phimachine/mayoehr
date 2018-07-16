@@ -11,7 +11,7 @@ class Interface(nn.Module):
         super(Interface, self).__init__()
         self.logSigmoid = nn.LogSigmoid()
         self.Sigmoid = nn.Sigmoid()
-        self.softmax = nn.Softmax(dim=0)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, interface_input):
         last_index = param.W * param.R
