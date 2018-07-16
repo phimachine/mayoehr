@@ -10,16 +10,27 @@ from torch.autograd import Variable
 import pdb
 import numpy
 
-def test_simplex_bound(tensor,dim):
-    t=tensor.contiguous().view(-1,dim)
-    if (t.sum(1)>1).any() or (t.sum(1)<0).any() or (t<0).any() or (t>1).any():
+def test_simplex_bound(tensor,dim=1):
+    # it's impossible to deal with dimensions
+    # we will default to test dim 1 of 2-dim (x, y),
+    # so that for every x, y is simplex bound
+
+    if dim!=1:
+        raise DeprecationWarning("no longer accepts dim other othan one")
+        raise NotImplementedError
+    t=tensor.contiguous()
+    if (t.sum(1)-1>1e-6).any() or (t.sum(1)<-1e-6).any() or (t<0).any() or (t>1).any():
         raise ValueError("test simplex bound failed")
+    if (t!=t).any():
+        raise ValueError('test simple bound failed due to NA')
     return True
 
 class Memory(nn.Module):
 
     def __init__(self):
         super(Memory, self).__init__()
+        # None here requires gradient
+
         # u_0
         self.usage_vector=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
         # p, (N), should be simplex bound
@@ -28,7 +39,7 @@ class Memory(nn.Module):
         self.temporal_memory_linkage=Variable(torch.Tensor(param.bs,param.N, param.N).zero_().cuda())
         # (N,W)
         self.memory=Variable(torch.Tensor(param.N,param.W).zero_().cuda())
-        # (N, R). Does this require gradient?
+        # (N, R).
         self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N)).cuda()
 
 
@@ -214,7 +225,7 @@ class Memory(nn.Module):
         batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
         self.temporal_memory_linkage= ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j)
         test_simplex_bound(self.temporal_memory_linkage,1)
-        test_simplex_bound(self.temporal_memory_linkage,2)
+        test_simplex_bound(self.temporal_memory_linkage.transpose(1,2),1)
         return self.temporal_memory_linkage
 
     def backward_weighting(self):
@@ -266,6 +277,9 @@ class Memory(nn.Module):
         self.last_read_weightings=read_weightings
         # last read weightings
         test_simplex_bound(self.last_read_weightings,1)
+        test_simplex_bound(read_weightings,1)
+        if (read_weightings!=read_weightings).any():
+            raise ValueError("NAN is found")
         return read_weightings
 
     def read_memory(self,read_weightings):
@@ -316,5 +330,8 @@ class Memory(nn.Module):
                                              read_modes)
         # read from memory last, a new modification.
         read_vectors=self.read_memory(read_weightings)
+
+        if (read_vectors!=read_vectors).any():
+            raise ValueError("Nan is found")
 
         return read_vectors
