@@ -22,6 +22,8 @@ class Computer(nn.Module):
         # This might be a problem for non 0.4 version PyTorch, if cat does not support variable,
         # should gradient still flow back?
         input_x_t = torch.cat((input, self.last_read_vector.view(param.bs, -1)), dim=1)
+        # fake a time-series. (bs, ts, ...)
+        input_x_t=input_x_t.unsqueeze(1)
         output, interface = self.controller(input_x_t)
         interface_output_tuple = self.interface(interface)
         # If I understand correctly, the old code will either modify .data in a destructive way,
@@ -47,10 +49,11 @@ class Computer(nn.Module):
             backward_weighting = self.memory.backward_weighting()
 
             read_weightings = self.memory.read_weightings(forward_weighting, backward_weighting, read_keys,
-                                                          read_strengths,
-                                                          read_modes)
+                                                          read_strengths, read_modes)
             # read from memory last, a new modification.
             read_vectors = self.memory.read_memory(read_weightings)
+            raise ValueError("nan is found.")
+        if (output!=output).any():
             raise ValueError("nan is found.")
         return output
 
@@ -66,3 +69,8 @@ class Computer(nn.Module):
         self.memory.new_sequence_reset()
         # initiate new object, so the old container history is reset.
         self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
+        self.W_r.weight.detach()
+        torch.cuda.empty_cache()
+        print("************ NEW SEQUENCE RESET ***************")
+
+from torch.nn import RNN

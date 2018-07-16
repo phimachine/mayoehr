@@ -10,10 +10,27 @@ from torch.autograd import Variable
 import pdb
 import numpy
 
-def test_simplex_bound(tensor,dim):
-    t=tensor.contiguous().view(-1,dim)
+def test_simplex_bound(tensor,dim=1):
+    # it's impossible to deal with dimensions
+    # we will default to test dim 1 of 2-dim (x, y),
+    # so that for every x, y is simplex bound
+
+    if dim!=1:
+        raise DeprecationWarning("no longer accepts dim other othan one")
+        raise NotImplementedError
+    t=tensor.contiguous()
     if (t.sum(1)>1).any() or (t.sum(1)<0).any() or (t<0).any() or (t>1).any():
         raise ValueError("test simplex bound failed")
+    return True
+
+def test_unit_simplex(tensor,dim=1):
+    # ditto
+    if dim!=1:
+        raise DeprecationWarning("no longer accepts dim other othan one")
+        raise NotImplementedError
+    t=tensor.contiguous()
+    if (t.sum(1)!=1).any() or (t<0).any() or (t>1).any():
+        raise ValueError("test simplex surface failed")
     return True
 
 class Memory(nn.Module):
@@ -66,6 +83,7 @@ class Memory(nn.Module):
         similarties=innerprod/normalizer.t().clamp(min=eps)
         similarties=similarties*key_strength.expand(-1,param.N)
         normalized= softmax(similarties,dim=1)
+        test_unit_simplex(normalized,1)
         return normalized
 
     def read_content_weighting(self, read_keys, key_strengths, eps=1e-8):
@@ -182,6 +200,7 @@ class Memory(nn.Module):
         '''
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
+        test_unit_simplex(content_weighting,dim=1)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
         test_simplex_bound(write_weighting,1)
         return write_weighting
@@ -214,7 +233,7 @@ class Memory(nn.Module):
         batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
         self.temporal_memory_linkage= ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j)
         test_simplex_bound(self.temporal_memory_linkage,1)
-        test_simplex_bound(self.temporal_memory_linkage,2)
+        test_simplex_bound(self.temporal_memory_linkage.transpose(1,2),1)
         return self.temporal_memory_linkage
 
     def backward_weighting(self):
@@ -266,6 +285,8 @@ class Memory(nn.Module):
         self.last_read_weightings=read_weightings
         # last read weightings
         test_simplex_bound(self.last_read_weightings,1)
+        if (read_weightings!=read_weightings).any():
+            raise ValueError("NAN is found")
         return read_weightings
 
     def read_memory(self,read_weightings):
@@ -316,5 +337,8 @@ class Memory(nn.Module):
                                              read_modes)
         # read from memory last, a new modification.
         read_vectors=self.read_memory(read_weightings)
+
+        if (read_vectors!=read_vectors).any():
+            raise ValueError("Nan is found")
 
         return read_vectors

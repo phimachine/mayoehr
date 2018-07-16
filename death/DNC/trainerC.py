@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 import archi.param as param
 from torch.autograd import Variable
+import gc
 
 batch_size = 1
 
@@ -57,12 +58,15 @@ def load_model(computer):
 
     return model, optim, epoch
 
+def run_one_patient_one_step():
+    # this is so python does garbage collection automatically.
+    # we are debugging the
+    pass
 
 def run_one_patient(computer, input, target, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
 
     input = Variable(torch.Tensor(input).cuda())
-    input.requires_grad=True
     target = Variable(torch.Tensor(target).cuda())
 
     # we have no critical index, becuase critical index are those timesteps that
@@ -70,45 +74,47 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
     # criterion does not need to be reinitiated for every story, because we are not using a mask
 
     time_length = input.size()[1]
-    with torch.no_grad if validate else dummy_context_mgr():
-        patient_output = Variable(torch.Tensor(1, time_length, param.v_t)).cuda()
-        computer.new_sequence_reset()
-        for timestep in range(time_length):
-            # first colon is always size 1
-            feeding = input[:, timestep, :]
-            output = computer(feeding)
-            assert not (output!=output).any()
-            patient_output[0, timestep, :] = output.data
+    # with torch.no_grad if validate else dummy_context_mgr():
+    patient_output = Variable(torch.Tensor(1, time_length, param.v_t)).cuda()
+    for timestep in range(time_length):
+        # first colon is always size 1
+        feeding = input[:, timestep, :]
+        output = computer(feeding)
+        assert not (output!=output).any()
+        patient_output[0, timestep, :] = output.data
 
-        # patient_output: (batch_size 1, time_length, output_dim ~4000)
-        time_to_event_output=patient_output[:,:,0]
-        cause_of_death_output=patient_output[:,:,1:]
-        time_to_event_target=target[:,:,0]
-        cause_of_death_target=target[:,:,1:]
+    # patient_output: (batch_size 1, time_length, output_dim ~4000)
+    time_to_event_output=patient_output[:,:,0]
+    cause_of_death_output=patient_output[:,:,1:]
+    time_to_event_target=target[:,:,0]
+    cause_of_death_target=target[:,:,1:]
 
-        patient_loss=None
+    patient_loss=None
 
-        # this block will not work for batch input,
-        # you should modify it so that the loss evaluation is not determined by logic but function.
-        if loss_type[0]==0:
-            # in record
-            toe_loss = real_criterion(time_to_event_output,time_to_event_target)
-            cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
-            patient_loss=toe_loss+cod_loss
-        else:
-            # not in record
-            # be careful with the sign, penalize when and only when positive
-            underestimation = time_to_event_target-time_to_event_output
-            underestimation = nn.ReLU(underestimation)
-            toe_loss = real_criterion(underestimation,0)
-            cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
-            patient_loss=toe_loss+cod_loss
+    # this block will not work for batch input,
+    # you should modify it so that the loss evaluation is not determined by logic but function.
+    if loss_type[0]==0:
+        # in record
+        toe_loss = real_criterion(time_to_event_output,time_to_event_target)
+        cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
+        patient_loss=toe_loss+cod_loss
+    else:
+        # not in record
+        # be careful with the sign, penalize when and only when positive
+        underestimation = time_to_event_target-time_to_event_output
+        underestimation = nn.ReLU(underestimation)
+        toe_loss = real_criterion(underestimation,0)
+        cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
+        patient_loss=toe_loss+cod_loss
 
-        patient_loss.requires_grad=True
+    patient_loss.requires_grad=True
 
-        if not validate:
-            patient_loss.backward()
-            optimizer.step()
+    if not validate:
+        patient_loss.backward()
+        optimizer.step()
+
+    del input
+    del target
 
     return patient_loss
 
@@ -118,16 +124,26 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
     for epoch in range(starting_epoch, total_epochs):
 
-        running_loss = 0
-
         for i, (input, target, loss_type) in enumerate(igdl):
 
             train_story_loss = run_one_patient(computer, input, target, optimizer, loss_type,
                                                real_criterion,binary_criterion)
+            computer.new_sequence_reset()
+            gc.collect()
+            del input, target, loss_type
+            torch.cuda.empty_cache()
+            print("#####################################")
+            print("printing all objects")
+            for obj in gc.get_objects():
+                try:
+                    if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                        print(type(obj), obj.size())
+                except (OSError , ModuleNotFoundError, KeyError, NotImplementedError):
+                    pass
+
             # if i % 100 == 0:
             print("learning. count: %4d, training loss: %.4f" %
                   (i, train_story_loss[0]))
-            running_loss += train_story_loss
             # TODO No validation support for now.
             # val_freq = 16
             # if batch % val_freq == val_freq - 1:
