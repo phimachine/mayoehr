@@ -34,6 +34,8 @@ class Memory(nn.Module):
 
     def new_sequence_reset(self):
         # memory is the only value that is not reset after new sequence
+        # since memory is not reset after a new sequence, we should reinitiate with every new sequence
+        self.memory.detach()
         self.usage_vector=Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
         self.precedence_weighting= Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
         self.temporal_memory_linkage = Variable(torch.Tensor(param.bs, param.N, param.N).zero_().cuda())

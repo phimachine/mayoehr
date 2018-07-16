@@ -62,6 +62,7 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
                     binary_criterion, validate=False):
 
     input = Variable(torch.Tensor(input).cuda())
+    input.requires_grad=True
     target = Variable(torch.Tensor(target).cuda())
 
     # we have no critical index, becuase critical index are those timesteps that
@@ -123,9 +124,9 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
             train_story_loss = run_one_patient(computer, input, target, optimizer, loss_type,
                                                real_criterion,binary_criterion)
-            if i % 100 == 0:
-                print("learning. count: %4d, training loss: %.4f" %
-                      (i, train_story_loss[0]))
+            # if i % 100 == 0:
+            print("learning. count: %4d, training loss: %.4f" %
+                  (i, train_story_loss[0]))
             running_loss += train_story_loss
             # TODO No validation support for now.
             # val_freq = 16
