@@ -218,7 +218,7 @@ class InputGen(Dataset, DFManager):
             loss_type = 0
         else:
             loss_type = 1
-            countdown_val=np.arange(time_length-1,-1)
+            countdown_val=np.arange(time_length-1,-1,-1)
             np.add.at(target, [tss, 0], countdown_val)
             # TODO do not pass gradient to code if loss_type is 1
 
