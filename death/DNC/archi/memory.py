@@ -10,6 +10,8 @@ from torch.autograd import Variable
 import pdb
 import numpy
 
+debug=False
+
 def test_simplex_bound(tensor,dim=1):
     # it's impossible to deal with dimensions
     # we will default to test dim 1 of 2-dim (x, y),
@@ -194,7 +196,8 @@ class Memory(nn.Module):
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
-        test_simplex_bound(write_weighting,1)
+        if debug:
+            test_simplex_bound(write_weighting,1)
         return write_weighting
 
     def update_precedence_weighting(self,write_weighting):
@@ -208,7 +211,8 @@ class Memory(nn.Module):
         # sum_ww=sum(write_weighting,1)
         sum_ww=torch.sum(write_weighting,dim=1)
         self.precedence_weighting=((1-sum_ww).unsqueeze(1)*self.precedence_weighting+write_weighting)
-        test_simplex_bound(self.precedence_weighting,1)
+        if debug:
+            test_simplex_bound(self.precedence_weighting,1)
         return self.precedence_weighting
 
     def update_temporal_linkage_matrix(self,write_weighting):
@@ -224,8 +228,9 @@ class Memory(nn.Module):
         p_j=self.precedence_weighting.unsqueeze(1).expand(-1,param.N,-1)
         batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
         self.temporal_memory_linkage= ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j)
-        test_simplex_bound(self.temporal_memory_linkage,1)
-        test_simplex_bound(self.temporal_memory_linkage.transpose(1,2),1)
+        if debug:
+            test_simplex_bound(self.temporal_memory_linkage,1)
+            test_simplex_bound(self.temporal_memory_linkage.transpose(1,2),1)
         return self.temporal_memory_linkage
 
     def backward_weighting(self):
@@ -234,7 +239,8 @@ class Memory(nn.Module):
         :return: backward_weighting: b^i_t, (N,R)
         '''
         ret= torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
-        test_simplex_bound(ret,1)
+        if debug:
+            test_simplex_bound(ret,1)
         return ret
 
     def forward_weighting(self):
@@ -243,7 +249,8 @@ class Memory(nn.Module):
         :return: forward_weighting: f^i_t, (N,R)
         '''
         ret= torch.matmul(self.temporal_memory_linkage.transpose(1,2), self.last_read_weightings)
-        test_simplex_bound(ret,1)
+        if debug:
+            test_simplex_bound(ret,1)
         return ret
     # TODO sparse update, skipped because it's for performance improvement.
 
@@ -262,9 +269,10 @@ class Memory(nn.Module):
         '''
 
         content_weighting=self.read_content_weighting(read_keys,read_strengths)
-        test_simplex_bound(content_weighting,1)
-        test_simplex_bound(backward_weighting,1)
-        test_simplex_bound(forward_weighting,1)
+        if debug:
+            test_simplex_bound(content_weighting,1)
+            test_simplex_bound(backward_weighting,1)
+            test_simplex_bound(forward_weighting,1)
         # has dimension (bs,3,N,R)
         all_weightings=torch.stack([backward_weighting,content_weighting,forward_weighting],dim=1)
         # permute to dimension (bs,R,N,3)
@@ -276,10 +284,11 @@ class Memory(nn.Module):
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1,2)
         self.last_read_weightings=read_weightings
         # last read weightings
-        test_simplex_bound(self.last_read_weightings,1)
-        test_simplex_bound(read_weightings,1)
-        if (read_weightings!=read_weightings).any():
-            raise ValueError("NAN is found")
+        if debug:
+            test_simplex_bound(self.last_read_weightings,1)
+            test_simplex_bound(read_weightings,1)
+            if (read_weightings!=read_weightings).any():
+                raise ValueError("NAN is found")
         return read_weightings
 
     def read_memory(self,read_weightings):
@@ -331,7 +340,8 @@ class Memory(nn.Module):
         # read from memory last, a new modification.
         read_vectors=self.read_memory(read_weightings)
 
-        if (read_vectors!=read_vectors).any():
-            raise ValueError("Nan is found")
+        if debug:
+            if (read_vectors!=read_vectors).any():
+                raise ValueError("Nan is found")
 
         return read_vectors

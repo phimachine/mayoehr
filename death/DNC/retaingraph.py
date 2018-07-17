@@ -30,17 +30,17 @@ from torch.autograd import Variable
 # hello=Computer()
 # print(list(hello.children()))
 # print(list(hello.parameters()))
-
-hello=MyController()
-optim=torch.optim.Adam(hello.parameters())
-
-for i in range(100):
-    x=Variable(torch.Tensor(1, param.x+param.R*param.W).uniform_(-1,1)).cuda()
-    output,interface=hello(x)
-    loss=output.sum()+interface.sum()
-    loss.backward()
-    optim.step()
-    hello.new_sequence_reset()
+#
+# hello=MyController()
+# optim=torch.optim.Adam(hello.parameters())
+#
+# for i in range(100):
+#     x=Variable(torch.Tensor(1, param.x+param.R*param.W).uniform_(-1,1)).cuda()
+#     output,interface=hello(x)
+#     loss=output.sum()+interface.sum()
+#     loss.backward()
+#     optim.step()
+#     hello.new_sequence_reset()
 
 class wrapper(nn.Module):
     def __init__(self):
@@ -48,27 +48,40 @@ class wrapper(nn.Module):
         self.memory = Memory()
         self.controller = MyController()
         self.interface = Interface()
+        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
+        # those work
+
+        self.W_r = Parameter(torch.Tensor(param.W * param.R, param.v_t).zero_().cuda())
+
 
     def forward(self,input):
         # fake a time-series. (bs, ts, ...)
         # only applies to the off-the-shelf LSTM
         # input_x_t=input_x_t.unsqueeze(1)
-        output, interface = self.controller(input)
+        input_x_t = torch.cat((input, self.last_read_vector.view(param.bs, -1)), dim=1)
+
+        output, interface = self.controller(input_x_t)
         interface_output_tuple = self.interface(interface)
-        return output
+        self.last_read_vector = self.memory(*interface_output_tuple)
+        # output = output + torch.matmul(self.last_read_vector.view(param.bs, param.W * param.R),self.W_r)
+
+        return output, self.last_read_vector
 
     def new_sequence_reset(self):
         # I have not found a reference to this function, but I think it's reasonable
         # to reset the values that depends on a particular sequence.
         self.controller.new_sequence_reset()
         self.memory.new_sequence_reset()
+        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
+        self.W_r = Parameter(torch.Tensor(param.W * param.R, param.v_t).zero_().cuda())
+
 
 hello=wrapper()
 optim=torch.optim.Adam(hello.parameters())
 for i in range(20):
-    x=Variable(torch.Tensor(1, param.x+param.R*param.W).uniform_(-1,1)).cuda()
-    output=hello(x)
-    loss=output.sum()
+    x=Variable(torch.Tensor(1, param.x).uniform_(-1,1)).cuda()
+    output, lrv=hello(x)
+    loss=output.sum()+lrv.sum()
     loss.backward()
     optim.step()
     hello.new_sequence_reset()
