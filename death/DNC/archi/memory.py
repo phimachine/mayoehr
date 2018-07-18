@@ -308,7 +308,6 @@ class Memory(nn.Module):
         :param write_weighting: the strength of writing
         :param erase_vector: e_t, (W), [0,1]
         :param write_vector: w^w_t, (W),
-        interfere with each other
         :return:
         '''
         term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
