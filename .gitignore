@@ -8,4 +8,5 @@
 *.txt
 *.csv
 death/data/*
+death/DNC/babi/data/*
 *.pkl
