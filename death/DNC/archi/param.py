@@ -1,12 +1,12 @@
 
-# for plan C
+
 
 # all variables starting with param refers to variables declared in this python file
 # other variables are Latex representation of variables stated in Methods section of Nature paper
 
 # input vector size x_t
 # dataset specific, you need to change it every time.
-x=47782
+x=47781
 
 # single hidden unit output size h^l_t
 # state size
@@ -21,7 +21,7 @@ L=3
 
 # Controller output v_t size
 # dataset specific, you need to change it every time.
-v_t=3656
+v_t=3654
 
 # Memory location width
 # Memory read heads count R

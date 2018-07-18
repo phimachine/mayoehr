@@ -58,11 +58,7 @@ class InputGen(Dataset, DFManager):
         print("Input Gen initiated")
 
     def get_output_dim(self):
-        '''
-        The output is death_date and cause of death, respectively [:,0] and [:,-0]
-        :return:
-        '''
-        # dimsize (death_date,cause)
+        # dimsize (dead,death_date,cause)
         dimsize = 1 + 1
         dic = self.__getattribute__("death_code_dict")
         dimsize += 2 * len(dic)
@@ -163,8 +159,6 @@ class InputGen(Dataset, DFManager):
             if val == val:
                 insidx = dic[val] + startidx
                 np.add.at(input, [tss, insidx], 1)
-        if (input!=input).any():
-            raise ValueError("NA FOUND")
 
         coln = "male"
         insidx, endidx = self.get_column_index_range(dfn, coln)
@@ -172,8 +166,7 @@ class InputGen(Dataset, DFManager):
         if val == val:
             np.add.at(input, [tss, insidx], 1)
         # this might have problem, we should use two dimensions for bool. But for now, let's not go back to prep.
-        if (input!=input).any():
-            raise ValueError("NA FOUND")
+
         coln = "birth_date"
         insidx, _ = self.get_column_index_range(dfn, coln)
         bd = row[coln].iloc[0]
@@ -182,11 +175,10 @@ class InputGen(Dataset, DFManager):
             earliest_month_age = (earliest.to_datetime64() - bd.to_datetime64()).astype("timedelta64[M]").astype("int")
             age_val = np.arange(earliest_month_age, earliest_month_age + time_length)
             np.add.at(input, [tss, insidx], age_val)
-        if (input!=input).any():
-            raise ValueError("NA FOUND")
+
         #####
         # death
-        # we need time_to_event, cause of death, and loss type
+        # we need time_to_event, cause of death, and
         df = self.death
 
         target = np.zeros((time_length, self.output_dim))
@@ -276,9 +268,8 @@ class InputGen(Dataset, DFManager):
                     # this line will increment only 1:
                     # input[tsloc,startidx]+=allrows[coln]
                     # this line will accumulate count:
-                    np.add.at(input, (tsloc, startidx), np.nan_to_num(allrows[coln].values))
-                if (input != input).any():
-                    raise ValueError("NA FOUND")
+                    np.add.at(input, (tsloc, startidx), allrows[coln])
+
                 for coln in nobarsep:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
@@ -292,8 +283,7 @@ class InputGen(Dataset, DFManager):
                             nantsloc += [ts]
                     np.add.at(input, [nantsloc, insidx], 1)
                     # again, accumulate count if multiple occurrence
-                if (input != input).any():
-                    raise ValueError("NA FOUND")
+
                 for coln in barsep:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
@@ -305,18 +295,23 @@ class InputGen(Dataset, DFManager):
                             vals = multival.split("|")
                             tss += [ts] * len(vals)
                             insidx += [dic[val] + startidx for val in vals if val == val]
+<<<<<<< HEAD
                     try:
                         np.add.at(input, [tss, insidx], 1)
                     except IndexError:
                         raise IndexError
         if (input!=input).any():
             raise ValueError("NA FOUND")
+=======
+                    np.add.at(input, [tss, insidx], 1)
+
+>>>>>>> parent of 4c2a585... Training skeleton finished.
         # high frequency visitors have been handled smoothly, by aggregating
         if debug:
             print("get item finished")
-        if (input!=input).any():
-            raise ValueError("NA FOUND")
-        return input.astype("float32"), target.astype("float32"), loss_type
+        input = np.expand_dims(input, axis=0)
+
+        return input, target, loss_type
 
     def __len__(self):
         '''
@@ -337,8 +332,8 @@ class InputGen(Dataset, DFManager):
         #         print("....")
 
         start = time.time()
-        for i in range(4):
-            input, target, loss_type = ig.__getitem__(i, debug=True)
+        for i in range(100):
+            input, target = ig.__getitem__(i, debug=True)
             print("working on ", i)
         end = time.time()
         print(end - start)
@@ -352,21 +347,8 @@ if __name__ == "__main__":
 
     # go get one of the values and see if you can trace it all the way back to raw data
     # this is a MUST DO TODO
-    print('parallelize')
-    dl = DataLoader(dataset=ig, batch_size=1, shuffle=False, num_workers=16)
 
-    start=time.time()
-    n=0
-    for i,t,l, in dl:
-        print(i,t,l)
-        # if you take a look at the shape you will know that dl expanded a batch dim
-        n+=1
-        if n==100:
-            break
-        if (i!=i).any() or (t!=t).any():
-            raise ValueError("NA found")
-    end=time.time()
-    print("100 rounds, including initiation:", end-start)
+    dl = DataLoader(dataset=ig, batch_size=1, shuffle=False, num_workers=16)
     # batch data loading seems to be a problem since patients have different lenghts of data.
     # it's advisable to load one at a time.
     # we need to think about how to make batch processing possible.
