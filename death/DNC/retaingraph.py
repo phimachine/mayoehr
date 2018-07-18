@@ -4,6 +4,7 @@ from archi.param import *
 from archi.interface import Interface
 from archi.controller import MyController
 from archi.memory import Memory
+from Monster import MonsterDNC
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
@@ -107,15 +108,15 @@ class isadditiontheproblem(nn.Module):
 hello=isadditiontheproblem()
 optim=torch.optim.Adam(hello.parameters())
 
-for i in range(100):
-    x=Variable(torch.Tensor(1,param.E_t).uniform_(-1,1)).cuda()
-    ctrx = Variable(torch.Tensor(1, param.x + param.R * param.W).uniform_(-1, 1)).cuda()
-    output=hello(x,ctrx)
-    loss=output.sum()
-    loss.backward()
-    optim.step()
-    hello.new_sequence_reset()
-    print("addition is not the problem")
+# for i in range(100):
+#     x=Variable(torch.Tensor(1,param.E_t).uniform_(-1,1)).cuda()
+#     ctrx = Variable(torch.Tensor(1, param.x + param.R * param.W).uniform_(-1, 1)).cuda()
+#     output=hello(x,ctrx)
+#     loss=output.sum()
+#     loss.backward()
+#     optim.step()
+#     hello.new_sequence_reset()
+#     print("addition is not the problem")
 
 
 
@@ -144,16 +145,30 @@ class issharinginputtheproblem(nn.Module):
 
 hello=issharinginputtheproblem()
 optim=torch.optim.Adam(hello.parameters())
+#
+# for i in range(100):
+#     x=Variable(torch.Tensor(1,param.E_t).uniform_(-1,1)).cuda()
+#     ctrx = Variable(torch.Tensor(1, param.x + param.R * param.W).uniform_(-1, 1)).cuda()
+#     output=hello(ctrx)
+#     loss=output.sum()
+#     loss.backward()
+#     optim.step()
+#     hello.new_sequence_reset()
+#     print("what the heck")
+
+hello=MonsterDNC()
+optim=torch.optim.Adam(hello.parameters())
 
 for i in range(100):
     x=Variable(torch.Tensor(1,param.E_t).uniform_(-1,1)).cuda()
-    ctrx = Variable(torch.Tensor(1, param.x + param.R * param.W).uniform_(-1, 1)).cuda()
+    ctrx = Variable(torch.Tensor(1, param.x).uniform_(-1, 1)).cuda()
     output=hello(ctrx)
     loss=output.sum()
     loss.backward()
     optim.step()
     hello.new_sequence_reset()
     print("what the heck")
+
 
 #
 #
