@@ -9,36 +9,50 @@ import archi.param as param
 from torch.autograd import Variable
 import pdb
 import numpy
-from torch.nn.parameter import Parameter
 
-def test_simplex_bound(tensor,dim):
-    t=tensor.contiguous().view(-1,dim)
-    if (t.sum(1)>1).any() or (t.sum(1)<0).any() or (t<0).any() or (t>1).any():
+debug=False
+
+def test_simplex_bound(tensor,dim=1):
+    # it's impossible to deal with dimensions
+    # we will default to test dim 1 of 2-dim (x, y),
+    # so that for every x, y is simplex bound
+
+    if dim!=1:
+        raise DeprecationWarning("no longer accepts dim other othan one")
+        raise NotImplementedError
+    t=tensor.contiguous()
+    if (t.sum(1)-1>1e-6).any() or (t.sum(1)<-1e-6).any() or (t<0).any() or (t>1).any():
         raise ValueError("test simplex bound failed")
+    if (t!=t).any():
+        raise ValueError('test simple bound failed due to NA')
     return True
 
 class Memory(nn.Module):
 
     def __init__(self):
         super(Memory, self).__init__()
+        # None here requires gradient
+
         # u_0
-        self.usage_vector=Parameter(torch.Tensor(param.bs,param.N).zero_())
+        self.usage_vector=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
         # p, (N), should be simplex bound
-        self.precedence_weighting=Parameter(torch.Tensor(param.bs,param.N).zero_())
+        self.precedence_weighting=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
         # (N,N)
-        self.temporal_memory_linkage=Parameter(torch.Tensor(param.bs,param.N, param.N).zero_())
+        self.temporal_memory_linkage=Variable(torch.Tensor(param.bs,param.N, param.N).zero_().cuda())
         # (N,W)
-        self.memory=Parameter(torch.Tensor(param.N,param.W).zero_())
-        # (N, R). Does this require gradient?
-        self.last_read_weightings=Parameter(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N))
+        self.memory=Variable(torch.Tensor(param.N,param.W).zero_().cuda())
+        # (N, R).
+        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N)).cuda()
 
 
     def new_sequence_reset(self):
         # memory is the only value that is not reset after new sequence
-        self.usage_vector.data=torch.Tensor(param.bs, param.N).zero_().cuda()
-        self.precedence_weighting.data= torch.Tensor(param.bs, param.N).zero_().cuda()
-        self.temporal_memory_linkage.data = torch.Tensor(param.bs, param.N, param.N).zero_().cuda()
-        self.last_read_weightings.data=torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N).cuda()
+        # since memory is not reset after a new sequence, we should reinitiate with every new sequence
+        self.memory.detach()
+        self.usage_vector=Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
+        self.precedence_weighting= Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
+        self.temporal_memory_linkage = Variable(torch.Tensor(param.bs, param.N, param.N).zero_().cuda())
+        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N).cuda())
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
         '''
@@ -132,7 +146,12 @@ class Memory(nn.Module):
 
         ret= (self.usage_vector+write_wighting-self.usage_vector*write_wighting)*memory_retention
 
-        self.usage_vector.data=ret
+        # Here we should use .data instead? Like:
+        # self.usage_vector.data=ret.data
+        # Usage vector contain all computation history,
+        # which is not necessary? I'm not sure, maybe the write weighting should be back_propped here?
+        # We reset usage vector for every seq, but should we for every timestep?
+        self.usage_vector=ret
         return ret
 
 
@@ -154,7 +173,7 @@ class Memory(nn.Module):
         sorted, indices= self.usage_vector.sort(dim=1)
         cum_prod=torch.cumprod(sorted,1)
         # notice the index on the product
-        cum_prod=torch.cat([torch.ones(param.bs,1).cuda(),cum_prod],1)[:,:-1]
+        cum_prod=torch.cat([Variable(torch.ones(param.bs,1).cuda()),cum_prod],1)[:,:-1]
         sorted_inv=1-sorted
         allocation_weighting=sorted_inv*cum_prod
         # to shuffle back in place
@@ -177,7 +196,8 @@ class Memory(nn.Module):
         # measures content similarity
         content_weighting=self.write_content_weighting(write_key,write_strength)
         write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
-        test_simplex_bound(write_weighting,1)
+        if debug:
+            test_simplex_bound(write_weighting,1)
         return write_weighting
 
     def update_precedence_weighting(self,write_weighting):
@@ -190,8 +210,9 @@ class Memory(nn.Module):
         # Took me 3 hours.
         # sum_ww=sum(write_weighting,1)
         sum_ww=torch.sum(write_weighting,dim=1)
-        self.precedence_weighting.data=(1-sum_ww).unsqueeze(1)*self.precedence_weighting+write_weighting
-        test_simplex_bound(self.precedence_weighting,1)
+        self.precedence_weighting=((1-sum_ww).unsqueeze(1)*self.precedence_weighting+write_weighting)
+        if debug:
+            test_simplex_bound(self.precedence_weighting,1)
         return self.precedence_weighting
 
     def update_temporal_linkage_matrix(self,write_weighting):
@@ -206,9 +227,10 @@ class Memory(nn.Module):
         ww_i=write_weighting.unsqueeze(2).expand(-1,-1,param.N)
         p_j=self.precedence_weighting.unsqueeze(1).expand(-1,param.N,-1)
         batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(param.bs,-1,-1)
-        self.temporal_memory_linkage.data= (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
-        test_simplex_bound(self.temporal_memory_linkage,1)
-        test_simplex_bound(self.temporal_memory_linkage,2)
+        self.temporal_memory_linkage= ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j)
+        if debug:
+            test_simplex_bound(self.temporal_memory_linkage,1)
+            test_simplex_bound(self.temporal_memory_linkage.transpose(1,2),1)
         return self.temporal_memory_linkage
 
     def backward_weighting(self):
@@ -217,7 +239,8 @@ class Memory(nn.Module):
         :return: backward_weighting: b^i_t, (N,R)
         '''
         ret= torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
-        test_simplex_bound(ret,1)
+        if debug:
+            test_simplex_bound(ret,1)
         return ret
 
     def forward_weighting(self):
@@ -226,7 +249,8 @@ class Memory(nn.Module):
         :return: forward_weighting: f^i_t, (N,R)
         '''
         ret= torch.matmul(self.temporal_memory_linkage.transpose(1,2), self.last_read_weightings)
-        test_simplex_bound(ret,1)
+        if debug:
+            test_simplex_bound(ret,1)
         return ret
     # TODO sparse update, skipped because it's for performance improvement.
 
@@ -245,9 +269,10 @@ class Memory(nn.Module):
         '''
 
         content_weighting=self.read_content_weighting(read_keys,read_strengths)
-        test_simplex_bound(content_weighting,1)
-        test_simplex_bound(backward_weighting,1)
-        test_simplex_bound(forward_weighting,1)
+        if debug:
+            test_simplex_bound(content_weighting,1)
+            test_simplex_bound(backward_weighting,1)
+            test_simplex_bound(forward_weighting,1)
         # has dimension (bs,3,N,R)
         all_weightings=torch.stack([backward_weighting,content_weighting,forward_weighting],dim=1)
         # permute to dimension (bs,R,N,3)
@@ -257,9 +282,13 @@ class Memory(nn.Module):
         read_modes=read_modes.unsqueeze(3)
         # dimension (bs,N,R)
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1,2)
-        self.last_read_weightings.data=read_weightings
+        self.last_read_weightings=read_weightings
         # last read weightings
-        test_simplex_bound(self.last_read_weightings,1)
+        if debug:
+            test_simplex_bound(self.last_read_weightings,1)
+            test_simplex_bound(read_weightings,1)
+            if (read_weightings!=read_weightings).any():
+                raise ValueError("NAN is found")
         return read_weightings
 
     def read_memory(self,read_weightings):
@@ -279,13 +308,13 @@ class Memory(nn.Module):
         :param write_weighting: the strength of writing
         :param erase_vector: e_t, (W), [0,1]
         :param write_vector: w^w_t, (W),
-        interfere with each other
         :return:
         '''
         term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
-        term1=self.memory.unsqueeze(0)*(torch.ones((param.bs,param.N,param.W)).cuda()-term1_2)
+        # term1=self.memory.unsqueeze(0)*Variable(torch.ones((param.bs,param.N,param.W)).cuda()-term1_2.data)
+        term1=self.memory.unsqueeze(0)*(1-term1_2)
         term2=torch.matmul(write_weighting.unsqueeze(2),write_vector.unsqueeze(1))
-        self.memory.data=torch.mean(term1+term2, dim=0)
+        self.memory=torch.mean(term1+term2, dim=0)
 
     def forward(self,read_keys, read_strengths, write_key, write_strength,
                 erase_vector, write_vector, free_gates, allocation_gate,
@@ -309,5 +338,9 @@ class Memory(nn.Module):
                                              read_modes)
         # read from memory last, a new modification.
         read_vectors=self.read_memory(read_weightings)
+
+        if debug:
+            if (read_vectors!=read_vectors).any():
+                raise ValueError("Nan is found")
 
         return read_vectors

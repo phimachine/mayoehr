@@ -218,7 +218,7 @@ class InputGen(Dataset, DFManager):
             loss_type = 0
         else:
             loss_type = 1
-            countdown_val=np.arange(time_length-1,-1)
+            countdown_val=np.arange(time_length-1,-1,-1)
             np.add.at(target, [tss, 0], countdown_val)
             # TODO do not pass gradient to code if loss_type is 1
 
@@ -305,7 +305,10 @@ class InputGen(Dataset, DFManager):
                             vals = multival.split("|")
                             tss += [ts] * len(vals)
                             insidx += [dic[val] + startidx for val in vals if val == val]
-                    np.add.at(input, [tss, insidx], 1)
+                    try:
+                        np.add.at(input, [tss, insidx], 1)
+                    except IndexError:
+                        raise IndexError
         if (input!=input).any():
             raise ValueError("NA FOUND")
         # high frequency visitors have been handled smoothly, by aggregating

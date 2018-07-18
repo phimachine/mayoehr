@@ -1,5 +1,5 @@
-class Foo():
-    def __init__(self):
-        a="hello"
-        self.__getattribute__(a)=None
+from death.DNC.trainerC2 import *
 
+
+if __name__=="__main__":
+    main()
