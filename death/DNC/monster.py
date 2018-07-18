@@ -81,11 +81,6 @@ class MonsterDNC(nn.Module):
         # (N, R).
         self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).fill_(1.0 / self.N)).cuda()
 
-        '''Interface'''
-        self.logSigmoid = nn.LogSigmoid()
-        self.Sigmoid = nn.Sigmoid()
-        self.softmax = nn.Softmax(dim=1)
-
         '''COMPUTER'''
         # see paper, paragraph 2 page 7
         self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).zero_().cuda())
@@ -355,6 +350,17 @@ class MonsterDNC(nn.Module):
         term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
         self.memory = torch.mean(term1 + term2, dim=0)
 
+    def reset_parameters(self):
+        for module in self.RNN_list:
+            # this should iterate over RNN_Units only
+            module.reset_parameters()
+        stdv = 1.0 / math.sqrt(self.v_t)
+        self.W_y.data.uniform_(-stdv, stdv)
+        self.b_y.data.uniform_(-stdv, stdv)
+        stdv = 1.0 / math.sqrt(self.E_t)
+        self.W_E.data.uniform_(-stdv, stdv)
+        self.b_E.data.uniform_(-stdv, stdv)
+
     def new_sequence_reset(self):
         '''controller'''
         self.hidden_previous_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).zero_().cuda())
@@ -406,7 +412,7 @@ class MonsterDNC(nn.Module):
         # slightly different equation from the paper, should be okay
         read_strengths = interface_input[:, last_index:last_index + self.R]
         last_index = last_index + self.R
-        read_strengths = 1 - self.logSigmoid(read_strengths)
+        read_strengths = 1 - nn.functional.logsigmoid(read_strengths)
 
         # Write key, [W]
         write_key = interface_input[:, last_index:last_index + self.W]
@@ -415,12 +421,12 @@ class MonsterDNC(nn.Module):
         # write strength beta, [1]
         write_strength = interface_input[:, last_index:last_index + 1]
         last_index = last_index + 1
-        write_strength = 1 - self.logSigmoid(write_strength)
+        write_strength = 1 - nn.functional.logsigmoid(write_strength)
 
         # erase strength, [W]
         erase_vector = interface_input[:, last_index:last_index + self.W]
         last_index = last_index + self.W
-        erase_vector = self.Sigmoid(erase_vector)
+        erase_vector = nn.functional.sigmoid(erase_vector)
 
         # write vector, [W]
         write_vector = interface_input[:, last_index:last_index + self.W]
@@ -430,22 +436,22 @@ class MonsterDNC(nn.Module):
         free_gates = interface_input[:, last_index:last_index + self.R]
 
         last_index = last_index + self.R
-        free_gates = self.Sigmoid(free_gates)
+        free_gates = nn.functional.sigmoid(free_gates)
 
         # allocation gate [1]
         allocation_gate = interface_input[:, last_index:last_index + 1]
         last_index = last_index + 1
-        allocation_gate = self.Sigmoid(allocation_gate)
+        allocation_gate = nn.functional.sigmoid(allocation_gate)
 
         # write gate [1]
         write_gate = interface_input[:, last_index:last_index + 1]
         last_index = last_index + 1
-        write_gate = self.Sigmoid(write_gate)
+        write_gate = nn.functional.sigmoid(write_gate)
 
         # read modes [R,3]
         read_modes = interface_input[:, last_index:last_index + self.R * 3]
-        read_modes = self.softmax(read_modes)
-        read_modes = read_modes.view(self.bs, self.R, 3)
+        read_modes = read_modes.contiguous().view(self.bs, self.R, 3)
+        read_modes = nn.functional.softmax(read_modes,dim=2)
 
         '''memory'''
         allocation_weighting = self.allocation_weighting()
@@ -514,17 +520,21 @@ class RNN_Unit(nn.Module):
             w.data.uniform_(-stdv, stdv)
 
         self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+    #
+    # def reset_parameters(self):
+    #     # initialized the way pytorch LSTM is initialized, from normal
+    #     # initial state and cell are empty
+    #
+    #     # if this is not run, any output might be nan
+    #     stdv = 1.0 / math.sqrt(self.h)
+    #     for weight in self.parameters():
+    #         weight.data.uniform_(-stdv, stdv)
+    #     for module in self.children():
+    #         # do not use self.modules(), because it would be recursive
+    #         module.reset_parameters()
 
     def reset_parameters(self):
-        # initialized the way pytorch LSTM is initialized, from normal
-        # initial state and cell are empty
-
-        # if this is not run, any output might be nan
-        stdv = 1.0 / math.sqrt(self.h)
-        for weight in self.parameters():
-            weight.data.uniform_(-stdv, stdv)
         for module in self.children():
-            # do not use self.modules(), because it would be recursive
             module.reset_parameters()
 
     def forward(self, input_x, previous_time, previous_layer):
