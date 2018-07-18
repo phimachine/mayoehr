@@ -305,7 +305,10 @@ class InputGen(Dataset, DFManager):
                             vals = multival.split("|")
                             tss += [ts] * len(vals)
                             insidx += [dic[val] + startidx for val in vals if val == val]
-                    np.add.at(input, [tss, insidx], 1)
+                    try:
+                        np.add.at(input, [tss, insidx], 1)
+                    except IndexError:
+                        raise IndexError
         if (input!=input).any():
             raise ValueError("NA FOUND")
         # high frequency visitors have been handled smoothly, by aggregating
