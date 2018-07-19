@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein import Frankenstein as DNC
 from torch.autograd import Variable
-import gc
 import pickle
+from shutil import copy
 
 batch_size = 1
 
@@ -28,7 +28,7 @@ def save_model(net, optim, epoch, iteration):
     task_dir = os.path.dirname(abspath(__file__))
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) +  "_" + str(iteration) + ".pkl")
     pickle_file = pickle_file.open('wb')
-    torch.save((net, optim, epoch), pickle_file)
+    torch.save((net, optim, epoch, iteration), pickle_file)
     print('model saved at', pickle_file)
 
 def save_model_old(net, optim, epoch, iteration):
@@ -112,6 +112,39 @@ def load_model_old(computer):
 
     return computer, optim, epoch, iteration
 
+
+def salvage():
+    # this function will pick up the last two highest epoch training and save them somewhere else,
+    # this is to prevent unexpected data loss.
+    # We are working in a /tmp folder, and we write around 1Gb per minute.
+    # The loss of data is likely.
+
+    task_dir = os.path.dirname(abspath(__file__))
+    save_dir = Path(task_dir) / "saves"
+    highestepoch = -1
+    secondhighestiter = -1
+    highestiter = -1
+    for child in save_dir.iterdir():
+        epoch = str(child).split("_")[3]
+        iteration = str(child).split("_")[4].split('.')[0]
+        iteration = int(iteration)
+        epoch = int(epoch)
+        # some files are open but not written to yet.
+        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
+            highestepoch = epoch
+            highestiter = iteration
+    if highestepoch == -1 and highestiter == -1:
+        print("no file to salvage")
+        return
+    if secondhighestiter != -1:
+        pickle_file2 = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+        copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
+
+    pickle_file1 = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
+
+    print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
+
 def run_one_patient_one_step():
     # this is so python does garbage collection automatically.
     # we are debugging the
@@ -181,29 +214,34 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           igdl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim, logfile=False):
+    print_interval=10
     if logfile:
         open(logfile, 'w').close()
 
     for epoch in range(starting_epoch, total_epochs):
-
+        running_loss=0
         for i, (input, target, loss_type) in enumerate(igdl):
             i=starting_iter+i
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion)
+                printloss=float(train_story_loss[0])
                 computer.new_sequence_reset()
-                gc.collect()
                 del input, target, loss_type
-                if i % 10 == 0:
+                running_loss+=printloss
+                if i % print_interval == 0:
+                    running_loss=running_loss/print_interval
                     if logfile:
                         with open(logfile, 'a') as handle:
-                            handle.write("learning. count: %4d, training loss: %.4f \n" %
-                                         (i, train_story_loss[0]))
-                        print("learning. count: %4d, training loss: %.4f" %
-                              (i, train_story_loss[0]))
-                    else:
-                        print("learning. count: %4d, training loss: %.4f" %
-                              (i, train_story_loss[0]))
+                            handle.write("learning. count: %4d, training loss: %.10f \n" %
+                                         (i, printloss))
+                            if i!=0:
+                                handle.write("count: %4d, running loss: %.10f \n" % (i, running_loss))
+                    print("learning. count: %4d, training loss: %.10f" %
+                          (i, printloss))
+                    if i!=0:
+                        print("count: %4d, running loss: %.10f" % (i, running_loss))
+                running_loss=0
 
                 # TODO No validation support for now.
                 # val_freq = 16
@@ -216,11 +254,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 #     print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                 #           (epoch, batch, val_loss))
                 if i < 1000:
-                    if i % 50 == 49:
+                    if i % 100 == 99:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
                 if i> 1000:
-                    if i % 300 == 299:
+                    if i % 500 == 499:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
             else:
