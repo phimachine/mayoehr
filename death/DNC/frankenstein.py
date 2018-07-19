@@ -481,6 +481,7 @@ class Frankenstein(nn.Module):
 
         # DEBUG NAN
         if (self.last_read_vector != self.last_read_vector).any():
+            # this is a problem! TODO
             raise ValueError("nan is found.")
         if (output2 != output2).any():
             raise ValueError("nan is found.")
