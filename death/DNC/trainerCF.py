@@ -23,6 +23,7 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
+
 # def save_model2(net, optim, epoch, iteration):
 #
 #     print("saving model")
@@ -44,11 +45,12 @@ def save_model(net, optim, epoch, iteration):
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) + "_" + str(iteration) + ".pkl")
     fhand = pickle_file.open('wb')
     try:
-        pickle.dump((net,optim, epoch, iteration),fhand)
+        pickle.dump((net, optim, epoch, iteration), fhand)
         print('model saved')
     except:
         fhand.close()
         os.remove(pickle_file)
+
 
 def load_model(computer):
     task_dir = os.path.dirname(abspath(__file__))
@@ -58,15 +60,15 @@ def load_model(computer):
     for child in save_dir.iterdir():
         epoch = str(child).split("_")[3]
         iteration = str(child).split("_")[4].split('.')[0]
-        iteration=int(iteration)
+        iteration = int(iteration)
         epoch = int(epoch)
         # some files are open but not written to yet.
-        if epoch > highestepoch and iteration>highestiter and child.stat().st_size > 204800:
+        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 204800:
             highestepoch = epoch
-            highestiter=iteration
-    if highestepoch == -1 and highestepoch==-1:
+            highestiter = iteration
+    if highestepoch == -1 and highestepoch == -1:
         return computer, None, -1, -1
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(iteration) + ".pkl")
     print("loading model at ", pickle_file)
     pickle_file = pickle_file.open('rb')
     modelsd, optim, epoch, iteration = torch.load(pickle_file)
@@ -82,14 +84,15 @@ def load_model(computer):
 
     return computer, optim, epoch, iteration
 
+
 def run_one_patient_one_step():
     # this is so python does garbage collection automatically.
     # we are debugging the
     pass
 
+
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
-
     input = Variable(torch.Tensor(input).cuda())
     target = Variable(torch.Tensor(target).cuda())
 
@@ -104,32 +107,30 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         # first colon is always size 1
         feeding = input[:, timestep, :]
         output = computer(feeding)
-        assert not (output!=output).any()
+        assert not (output != output).any()
         patient_output[0, timestep, :] = output
 
     # patient_output: (batch_size 1, time_length, output_dim ~4000)
-    time_to_event_output=patient_output[:,:,0]
-    cause_of_death_output=patient_output[:,:,1:]
-    time_to_event_target=target[:,:,0]
-    cause_of_death_target=target[:,:,1:]
-
-    patient_loss=None
+    time_to_event_output = patient_output[:, :, 0]
+    cause_of_death_output = patient_output[:, :, 1:]
+    time_to_event_target = target[:, :, 0]
+    cause_of_death_target = target[:, :, 1:]
 
     # this block will not work for batch input,
     # you should modify it so that the loss evaluation is not determined by logic but function.
-    if loss_type[0]==0:
+    if loss_type[0] == 0:
         # in record
-        toe_loss = real_criterion(time_to_event_output,time_to_event_target)
-        cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
-        patient_loss=toe_loss+cod_loss
+        toe_loss = real_criterion(time_to_event_output, time_to_event_target)
+        cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+        patient_loss = toe_loss + cod_loss
     else:
         # not in record
         # be careful with the sign, penalize when and only when positive
-        underestimation = time_to_event_target-time_to_event_output
+        underestimation = time_to_event_target - time_to_event_output
         underestimation = nn.functional.relu(underestimation)
-        toe_loss = real_criterion(underestimation,torch.zeros_like(underestimation).cuda())
-        cod_loss = binary_criterion(cause_of_death_output,cause_of_death_target)
-        patient_loss=toe_loss+cod_loss
+        toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
+        cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+        patient_loss = toe_loss + cod_loss
 
     if not validate:
         # TODO UNDERSTAND WHAT THE FLAG MEANS
@@ -145,7 +146,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 def train(computer, optimizer, real_criterion, binary_criterion,
           igdl, starting_epoch, total_epochs, iter_per_epoch, target_dim, logfile=False):
     if logfile:
-        open(logfile,'w').close()
+        open(logfile, 'w').close()
 
     for epoch in range(starting_epoch, total_epochs):
 
@@ -153,21 +154,20 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                   real_criterion,binary_criterion)
+                                                   real_criterion, binary_criterion)
                 computer.new_sequence_reset()
                 gc.collect()
                 del input, target, loss_type
                 if i % 1 == 0:
                     if logfile:
-                        with open(logfile,'a') as handle:
+                        with open(logfile, 'a') as handle:
                             handle.write("learning. count: %4d, training loss: %.4f \n" %
-                                          (i, train_story_loss[0]))
+                                         (i, train_story_loss[0]))
                         print("learning. count: %4d, training loss: %.4f" %
                               (i, train_story_loss[0]))
                     else:
                         print("learning. count: %4d, training loss: %.4f" %
                               (i, train_story_loss[0]))
-
 
                 # TODO No validation support for now.
                 # val_freq = 16
@@ -188,17 +188,17 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
 def main():
     total_epochs = 10
-    iter_per_epoch=100000
+    iter_per_epoch = 100000
     lr = 1e-20
     optim = None
     starting_epoch = -1
-    target_dim=3656
-    logfile="log.txt"
+    target_dim = 3656
+    logfile = "log.txt"
 
-    num_workers=8
-    ig=InputGen()
-    igdl=DataLoader(dataset=ig,batch_size=1,shuffle=True,num_workers=8)
-    print("Using",num_workers, "workers")
+    num_workers = 8
+    ig = InputGen()
+    igdl = DataLoader(dataset=ig, batch_size=1, shuffle=True, num_workers=8)
+    print("Using", num_workers, "workers")
 
     computer = DNC()
 
@@ -211,15 +211,16 @@ def main():
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
-        optimizer=optim
+        optimizer = optim
 
-    real_criterion=nn.SmoothL1Loss()
-    binary_criterion=nn.BCEWithLogitsLoss()
+    real_criterion = nn.SmoothL1Loss()
+    binary_criterion = nn.BCEWithLogitsLoss(size_average=True, reduce=True)
 
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
           igdl, int(starting_epoch) + 1, total_epochs, iter_per_epoch, target_dim, logfile)
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()
