@@ -1,4 +1,4 @@
-from death.DNC.trainerC2 import *
+from death.DNC.trainerCF import *
 
 
 if __name__=="__main__":

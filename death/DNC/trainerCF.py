@@ -46,7 +46,7 @@ def save_model(net, optim, epoch, iteration):
     fhand = pickle_file.open('wb')
     try:
         pickle.dump((net, optim, epoch, iteration), fhand)
-        print('model saved')
+        print('model saved at ', pickle_file)
     except:
         fhand.close()
         os.remove(pickle_file)
@@ -118,19 +118,22 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
     # this block will not work for batch input,
     # you should modify it so that the loss evaluation is not determined by logic but function.
-    if loss_type[0] == 0:
-        # in record
-        toe_loss = real_criterion(time_to_event_output, time_to_event_target)
-        cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        patient_loss = toe_loss + cod_loss
-    else:
-        # not in record
-        # be careful with the sign, penalize when and only when positive
-        underestimation = time_to_event_target - time_to_event_output
-        underestimation = nn.functional.relu(underestimation)
-        toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
-        cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        patient_loss = toe_loss + cod_loss
+    # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
+    #
+    # if loss_type[0] == 0:
+    #     # in record
+    #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
+    #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+    #     patient_loss = toe_loss/100 + cod_loss
+    # else:
+    #     # not in record
+    #     # be careful with the sign, penalize when and only when positive
+    #     underestimation = time_to_event_target - time_to_event_output
+    #     underestimation = nn.functional.relu(underestimation)
+    #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
+    #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+    #     patient_loss = toe_loss/100 + cod_loss
+    patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
     if not validate:
         # TODO UNDERSTAND WHAT THE FLAG MEANS
@@ -158,7 +161,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 computer.new_sequence_reset()
                 gc.collect()
                 del input, target, loss_type
-                if i % 1 == 0:
+                if i % 10 == 0:
                     if logfile:
                         with open(logfile, 'a') as handle:
                             handle.write("learning. count: %4d, training loss: %.4f \n" %
@@ -179,7 +182,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 #     val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
                 #     print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                 #           (epoch, batch, val_loss))
-                if i % 1000 == 999:
+                if i % 100 == 99:
                     save_model(computer, optimizer, epoch, i)
                     print("model saved for epoch", epoch, "input", i)
             else:
@@ -189,15 +192,15 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 def main():
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-20
+    lr = 1e-5
     optim = None
     starting_epoch = -1
     target_dim = 3656
     logfile = "log.txt"
 
-    num_workers = 8
+    num_workers = 4
     ig = InputGen()
-    igdl = DataLoader(dataset=ig, batch_size=1, shuffle=True, num_workers=8)
+    igdl = DataLoader(dataset=ig, batch_size=1, shuffle=True, num_workers=num_workers)
     print("Using", num_workers, "workers")
 
     computer = DNC()
@@ -214,7 +217,7 @@ def main():
         optimizer = optim
 
     real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss(size_average=True, reduce=True)
+    binary_criterion = nn.BCEWithLogitsLoss(size_average=True)
 
     # starting with the epoch after the loaded one
 
