@@ -1,4 +1,4 @@
-from .archi.computer import Computer
+from death.DNC.archi.computer import Computer
 import torch
 import numpy
 import pdb

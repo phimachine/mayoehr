@@ -166,7 +166,7 @@ class DFManager(object):
     def load_pickle(self, verbose=False):
         try:
             # load df
-            print("loading from pickle file")
+            print("Loading dataframes from pickle file")
             with open("/infodev1/rep/projects/jason/pickle/pddfs.pkl", 'rb') as f:
                 self.death, self.demo, self.dia, self.ahos, self.dhos, self.lab, self.pres, \
                 self.serv, self.surg, self.vital = pickle.load(f)
