@@ -1,3 +1,5 @@
+# I will change the original piece by piece to see which one is causing the error
+
 import torch
 from torch import nn
 import pdb
@@ -7,8 +9,8 @@ from torch.nn.parameter import Parameter
 import math
 
 debug = False
-detach_previous_timestep=True
-reset_memory= False
+detach_previous_timestep = True
+reset_memory = False
 
 
 def test_simplex_bound(tensor, dim=1):
@@ -25,6 +27,7 @@ def test_simplex_bound(tensor, dim=1):
     if (t != t).any():
         raise ValueError('test simple bound failed due to NA')
     return True
+
 
 class Original(nn.Module):
     def __init__(self,
@@ -50,26 +53,26 @@ class Original(nn.Module):
         self.E_t = W * R + 3 * W + 5 * R + 3
 
         """CONTROLLER"""
-        self.RNN_list=nn.ModuleList()
+        self.RNN_list = nn.ModuleList()
         for _ in range(self.L):
             self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
 
-        self.hidden_previous_timestep=Variable(torch.Tensor(self.bs,self.L,self.h).zero_().cuda())
-        self.W_y=nn.Linear(self.L*self.h,self.v_t)
-        self.W_E=nn.Linear(self.L*self.h,self.E_t)
+        self.hidden_previous_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).zero_().cuda())
+        self.W_y = nn.Linear(self.L * self.h, self.v_t)
+        self.W_E = nn.Linear(self.L * self.h, self.E_t)
 
         '''memory'''
         '''these should not receive any gradient'''
         # u_0
-        self.usage_vector=Variable(torch.Tensor(self.bs,self.N).zero_()).cuda()
+        self.usage_vector = Variable(torch.Tensor(self.bs, self.N).zero_()).cuda()
         # p, (N), should be simplex bound
-        self.precedence_weighting=Variable(torch.Tensor(self.bs,self.N).zero_()).cuda()
+        self.precedence_weighting = Variable(torch.Tensor(self.bs, self.N).zero_()).cuda()
         # (N,N)
-        self.temporal_memory_linkage=Variable(torch.Tensor(self.bs,self.N, self.N).zero_()).cuda()
+        self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N).zero_()).cuda()
         # (N,W)
-        self.memory=Variable(torch.Tensor(self.N,self.W).zero_()).cuda()
+        self.memory = Variable(torch.Tensor(self.N, self.W).zero_()).cuda()
         # (N, R). Does this require gradient?
-        self.last_read_weightings=Variable(torch.Tensor(self.bs, self.N, self.R).fill_(1.0/self.N)).cuda()
+        self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).fill_(1.0 / self.N)).cuda()
 
         '''computer'''
         self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).zero_().cuda())
@@ -79,20 +82,20 @@ class Original(nn.Module):
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
 
         '''Controller'''
-        hidden_previous_layer=Variable(torch.Tensor(self.bs,self.h).zero_().cuda())
-        hidden_this_timestep=Variable(torch.Tensor(self.bs,self.L,self.h).cuda())
+        hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+        hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
         for i in range(self.L):
-            hidden_output=self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:,i,:],
-                                           hidden_previous_layer)
-            hidden_this_timestep[:,i,:]=hidden_output
-            hidden_previous_layer=hidden_output
+            hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
+                                             hidden_previous_layer)
+            hidden_this_timestep[:, i, :] = hidden_output
+            hidden_previous_layer = hidden_output
 
-        flat_hidden=hidden_this_timestep.view((self.bs,self.L*self.h))
-        output=self.W_y(flat_hidden)
-        interface_input =self.W_E(flat_hidden)
+        flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
+        output = self.W_y(flat_hidden)
+        interface_input = self.W_E(flat_hidden)
         if detach_previous_timestep:
             # I'm detaching every passed on variables. Not sure whether this should be done?
-            self.hidden_previous_timestep=hidden_this_timestep.detach()
+            self.hidden_previous_timestep = hidden_this_timestep.detach()
 
         '''interface'''
         last_index = self.W * self.R
@@ -147,27 +150,27 @@ class Original(nn.Module):
         read_modes = interface_input[:, last_index:last_index + self.R * 3]
         # TODO
         read_modes = read_modes.contiguous().view(self.bs, self.R, 3)
-        read_modes = nn.functional.softmax(read_modes,dim=2)
+        read_modes = nn.functional.softmax(read_modes, dim=2)
 
         '''memory'''
         # then write
-        allocation_weighting=self.allocation_weighting()
-        write_weighting=self.write_weighting(write_key,write_strength,
-                                             allocation_gate,write_gate,allocation_weighting)
-        self.write_to_memory(write_weighting,erase_vector,write_vector)
+        allocation_weighting = self.allocation_weighting()
+        write_weighting = self.write_weighting(write_key, write_strength,
+                                               allocation_gate, write_gate, allocation_weighting)
+        self.write_to_memory(write_weighting, erase_vector, write_vector)
         # update some
         memory_retention = self.memory_retention(free_gates)
         self.update_usage_vector(write_weighting, memory_retention)
         self.update_temporal_linkage_matrix(write_weighting)
         self.update_precedence_weighting(write_weighting)
 
-        forward_weighting=self.forward_weighting()
-        backward_weighting=self.backward_weighting()
+        forward_weighting = self.forward_weighting()
+        backward_weighting = self.backward_weighting()
 
-        read_weightings=self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
-                                             read_modes)
+        read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
+                                               read_modes)
         # read from memory last, a new modification.
-        read_vectors=self.read_memory(read_weightings)
+        read_vectors = self.read_memory(read_weightings)
 
         '''computer'''
         if detach_previous_timestep:
@@ -176,7 +179,6 @@ class Original(nn.Module):
         output = output + self.W_r(self.last_read_vector.view(self.bs, self.W * self.R))
         return output
 
-
     def reset_parameters(self):
         for module in self.RNN_list:
             # this should iterate over RNN_Units only
@@ -184,6 +186,7 @@ class Original(nn.Module):
         self.W_y.reset_parameters()
         self.W_E.reset_parameters()
         self.W_r.reset_parameters()
+
     def new_sequence_reset(self):
         ''''''
 
@@ -195,7 +198,7 @@ class Original(nn.Module):
         for RNN in self.RNN_list:
             RNN.new_sequence_reset()
 
-        self.hidden_previous_timestep = Variable(torch.Tensor(self.bs,self.L,self.h).zero_()).cuda()
+        self.hidden_previous_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).zero_()).cuda()
         self.W_y.weight.detach()
         self.W_y.bias.detach()
         self.W_E.weight.detach()
@@ -204,13 +207,12 @@ class Original(nn.Module):
         '''interface has none'''
         '''memory'''
         # memory is the only value that is not reset after new sequence
-        self.usage_vector=Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
-        self.precedence_weighting= Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
+        self.usage_vector = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
+        self.precedence_weighting = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
         self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N).zero_().cuda())
-        self.last_read_weightings=Variable(torch.Tensor(self.bs, self.N, self.R).fill_(1.0/self.N).cuda())
+        self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).fill_(1.0 / self.N).cuda())
         if reset_memory:
-            self.memory=Variable(torch.Tensor(self.N,self.W).zero_()).cuda()
-
+            self.memory = Variable(torch.Tensor(self.N, self.W).zero_()).cuda()
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
         '''
@@ -227,16 +229,16 @@ class Original(nn.Module):
         # I expect a return of (N,bs), which marks the similiarity of each W with each mem loc
 
         # (self.bs, self.N)
-        innerprod=torch.matmul(write_key,self.memory.t())
+        innerprod = torch.matmul(write_key, self.memory.t())
         # (parm.N)
-        memnorm=torch.norm(self.memory,2,1)
+        memnorm = torch.norm(self.memory, 2, 1)
         # (self.bs)
-        writenorm=torch.norm(write_key,2,1)
+        writenorm = torch.norm(write_key, 2, 1)
         # (self.N, self.bs)
-        normalizer=torch.ger(memnorm,writenorm)
-        similarties=innerprod/normalizer.t().clamp(min=eps)
-        similarties=similarties*key_strength.expand(-1,self.N)
-        normalized= softmax(similarties,dim=1)
+        normalizer = torch.ger(memnorm, writenorm)
+        similarties = innerprod / normalizer.t().clamp(min=eps)
+        similarties = similarties * key_strength.expand(-1, self.N)
+        normalized = softmax(similarties, dim=1)
         return normalized
 
     def read_content_weighting(self, read_keys, key_strengths, eps=1e-8):
@@ -258,25 +260,25 @@ class Original(nn.Module):
                 return w12 / (w1 * w2).clamp(min=eps)
         '''
 
-        innerprod=torch.matmul(self.memory.unsqueeze(0),read_keys)
+        innerprod = torch.matmul(self.memory.unsqueeze(0), read_keys)
         # this is confusing. matrix[n] access nth row, not column
         # this is very counter-intuitive, since columns have meaning,
         # because they represent vectors
-        mem_norm=torch.norm(self.memory,p=2,dim=1)
-        read_norm=torch.norm(read_keys,p=2,dim=1)
-        mem_norm=mem_norm.unsqueeze(1)
-        read_norm=read_norm.unsqueeze(1)
+        mem_norm = torch.norm(self.memory, p=2, dim=1)
+        read_norm = torch.norm(read_keys, p=2, dim=1)
+        mem_norm = mem_norm.unsqueeze(1)
+        read_norm = read_norm.unsqueeze(1)
         # (batch_size, locations, read_heads)
-        normalizer=torch.matmul(mem_norm,read_norm)
+        normalizer = torch.matmul(mem_norm, read_norm)
 
         # if transposed then similiarities[0] refers to the first read key
-        similarties= innerprod/normalizer.clamp(min=eps)
-        weighted=similarties*key_strengths.unsqueeze(1).expand(-1,self.N,-1)
-        ret= softmax(weighted,dim=1)
+        similarties = innerprod / normalizer.clamp(min=eps)
+        weighted = similarties * key_strengths.unsqueeze(1).expand(-1, self.N, -1)
+        ret = softmax(weighted, dim=1)
         return ret
 
     # the highest freed will be retained? What does it mean?
-    def memory_retention(self,free_gate):
+    def memory_retention(self, free_gate):
         '''
 
         :param free_gate: f, (R), [0,1], from interface vector
@@ -289,8 +291,8 @@ class Original(nn.Module):
         # a single read head weighting is a (N) dimensional simplex bounded value
 
         # (N, R)
-        inside_bracket = 1 - self.last_read_weightings * free_gate.unsqueeze(1).expand(-1,self.N,-1)
-        ret= torch.prod(inside_bracket, 2)
+        inside_bracket = 1 - self.last_read_weightings * free_gate.unsqueeze(1).expand(-1, self.N, -1)
+        ret = torch.prod(inside_bracket, 2)
         return ret
 
     def update_usage_vector(self, write_wighting, memory_retention):
@@ -302,11 +304,10 @@ class Original(nn.Module):
         :return: u_t, (N), [0,1], the next usage,
         '''
 
-        ret= (self.usage_vector+write_wighting-self.usage_vector*write_wighting)*memory_retention
+        ret = (self.usage_vector + write_wighting - self.usage_vector * write_wighting) * memory_retention
 
-        self.usage_vector=ret
+        self.usage_vector = ret
         return ret
-
 
     def allocation_weighting(self):
         '''
@@ -323,16 +324,15 @@ class Original(nn.Module):
         :param usage_vector: u_t, (N), [0,1]
         :return: allocation_wighting: a_t, (N), simplex bound
         '''
-        sorted, indices= self.usage_vector.sort(dim=1)
-        cum_prod=torch.cumprod(sorted,1)
+        sorted, indices = self.usage_vector.sort(dim=1)
+        cum_prod = torch.cumprod(sorted, 1)
         # notice the index on the product
-        cum_prod=torch.cat([Variable(torch.ones(self.bs,1).cuda()),cum_prod],1)[:,:-1]
-        sorted_inv=1-sorted
-        allocation_weighting=sorted_inv*cum_prod
+        cum_prod = torch.cat([Variable(torch.ones(self.bs, 1).cuda()), cum_prod], 1)[:, :-1]
+        sorted_inv = 1 - sorted
+        allocation_weighting = sorted_inv * cum_prod
         # to shuffle back in place
-        ret=torch.gather(allocation_weighting,1,indices)
+        ret = torch.gather(allocation_weighting, 1, indices)
         return ret
-
 
     def write_weighting(self, write_key, write_strength, allocation_gate, write_gate, allocation_weighting):
         '''
@@ -347,12 +347,13 @@ class Original(nn.Module):
         :return: write_weighting: (N), simplex bound
         '''
         # measures content similarity
-        content_weighting=self.write_content_weighting(write_key,write_strength)
-        write_weighting=write_gate*(allocation_gate*allocation_weighting+(1-allocation_gate)*content_weighting)
-        test_simplex_bound(write_weighting,1)
+        content_weighting = self.write_content_weighting(write_key, write_strength)
+        write_weighting = write_gate * (
+                    allocation_gate * allocation_weighting + (1 - allocation_gate) * content_weighting)
+        test_simplex_bound(write_weighting, 1)
         return write_weighting
 
-    def update_precedence_weighting(self,write_weighting):
+    def update_precedence_weighting(self, write_weighting):
         '''
 
         :param write_weighting: (N)
@@ -361,12 +362,12 @@ class Original(nn.Module):
         # this is the bug. I called the python default sum() instead of torch.sum()
         # Took me 3 hours.
         # sum_ww=sum(write_weighting,1)
-        sum_ww=torch.sum(write_weighting,dim=1)
-        self.precedence_weighting=(1-sum_ww).unsqueeze(1)*self.precedence_weighting+write_weighting
-        test_simplex_bound(self.precedence_weighting,1)
+        sum_ww = torch.sum(write_weighting, dim=1)
+        self.precedence_weighting = (1 - sum_ww).unsqueeze(1) * self.precedence_weighting + write_weighting
+        test_simplex_bound(self.precedence_weighting, 1)
         return self.precedence_weighting
 
-    def update_temporal_linkage_matrix(self,write_weighting):
+    def update_temporal_linkage_matrix(self, write_weighting):
         '''
 
         :param write_weighting: (N)
@@ -374,13 +375,13 @@ class Original(nn.Module):
         :return: updated_temporal_linkage_matrix
         '''
 
-        ww_j=write_weighting.unsqueeze(1).expand(-1,self.N,-1)
-        ww_i=write_weighting.unsqueeze(2).expand(-1,-1,self.N)
-        p_j=self.precedence_weighting.unsqueeze(1).expand(-1,self.N,-1)
-        batch_temporal_memory_linkage=self.temporal_memory_linkage.expand(self.bs,-1,-1)
-        self.temporal_memory_linkage= (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
-        test_simplex_bound(self.temporal_memory_linkage,1)
-        test_simplex_bound(torch.transpose(self.temporal_memory_linkage,1,2),1)
+        ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
+        ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
+        p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
+        batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(self.bs, -1, -1)
+        self.temporal_memory_linkage = (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
+        test_simplex_bound(self.temporal_memory_linkage, 1)
+        test_simplex_bound(torch.transpose(self.temporal_memory_linkage, 1, 2), 1)
         return self.temporal_memory_linkage
 
     def backward_weighting(self):
@@ -388,8 +389,8 @@ class Original(nn.Module):
 
         :return: backward_weighting: b^i_t, (N,R)
         '''
-        ret= torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
-        test_simplex_bound(ret,1)
+        ret = torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
+        test_simplex_bound(ret, 1)
         return ret
 
     def forward_weighting(self):
@@ -397,9 +398,10 @@ class Original(nn.Module):
 
         :return: forward_weighting: f^i_t, (N,R)
         '''
-        ret= torch.matmul(self.temporal_memory_linkage.transpose(1,2), self.last_read_weightings)
-        test_simplex_bound(ret,1)
+        ret = torch.matmul(self.temporal_memory_linkage.transpose(1, 2), self.last_read_weightings)
+        test_simplex_bound(ret, 1)
         return ret
+
     # TODO sparse update, skipped because it's for performance improvement.
 
     def read_weightings(self, forward_weighting, backward_weighting, read_keys,
@@ -416,25 +418,25 @@ class Original(nn.Module):
 
         '''
 
-        content_weighting=self.read_content_weighting(read_keys,read_strengths)
-        test_simplex_bound(content_weighting,1)
-        test_simplex_bound(backward_weighting,1)
-        test_simplex_bound(forward_weighting,1)
+        content_weighting = self.read_content_weighting(read_keys, read_strengths)
+        test_simplex_bound(content_weighting, 1)
+        test_simplex_bound(backward_weighting, 1)
+        test_simplex_bound(forward_weighting, 1)
         # has dimension (bs,3,N,R)
-        all_weightings=torch.stack([backward_weighting,content_weighting,forward_weighting],dim=1)
+        all_weightings = torch.stack([backward_weighting, content_weighting, forward_weighting], dim=1)
         # permute to dimension (bs,R,N,3)
-        all_weightings=all_weightings.permute(0,3,2,1)
+        all_weightings = all_weightings.permute(0, 3, 2, 1)
         # this is becuase torch.matmul is designed to iterate all dimension excluding the last two
         # dimension (bs,R,3,1)
-        read_modes=read_modes.unsqueeze(3)
+        read_modes = read_modes.unsqueeze(3)
         # dimension (bs,N,R)
-        read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1,2)
-        self.last_read_weightings=read_weightings
+        read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1, 2)
+        self.last_read_weightings = read_weightings
         # last read weightings
-        test_simplex_bound(self.last_read_weightings,1)
+        test_simplex_bound(self.last_read_weightings, 1)
         return read_weightings
 
-    def read_memory(self,read_weightings):
+    def read_memory(self, read_weightings):
         '''
 
         memory: (N,W)
@@ -443,9 +445,9 @@ class Original(nn.Module):
         :return: read_vectors: [r^i_R], (W,R)
         '''
 
-        return torch.matmul(self.memory.t(),read_weightings)
+        return torch.matmul(self.memory.t(), read_weightings)
 
-    def write_to_memory(self,write_weighting,erase_vector,write_vector):
+    def write_to_memory(self, write_weighting, erase_vector, write_vector):
         '''
 
         :param write_weighting: the strength of writing
@@ -454,10 +456,10 @@ class Original(nn.Module):
         interfere with each other
         :return:
         '''
-        term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
-        term1=self.memory.unsqueeze(0)*(Variable(torch.ones((self.bs,self.N,self.W)).cuda())-term1_2)
-        term2=torch.matmul(write_weighting.unsqueeze(2),write_vector.unsqueeze(1))
-        self.memory=torch.mean(term1+term2, dim=0)
+        term1_2 = torch.matmul(write_weighting.unsqueeze(2), erase_vector.unsqueeze(1))
+        term1 = self.memory.unsqueeze(0) * (Variable(torch.ones((self.bs, self.N, self.W)).cuda()) - term1_2)
+        term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
+        self.memory = torch.mean(term1 + term2, dim=0)
 
 
 class RNN_Unit(nn.Module):
@@ -474,33 +476,31 @@ class RNN_Unit(nn.Module):
         self.h = h
         self.bs = bs
 
-        self.W_input=nn.Linear(self.x+self.R*self.W+2*self.h,self.h)
-        self.W_forget=nn.Linear(self.x+self.R*self.W+2*self.h,self.h)
-        self.W_output=nn.Linear(self.x+self.R*self.W+2*self.h,self.h)
-        self.W_state=nn.Linear(self.x+self.R*self.W+2*self.h,self.h)
+        self.W_input = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_forget = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
 
-        self.old_state=Variable(torch.Tensor(self.bs,self.h).zero_().cuda())
-
+        self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
 
     def reset_parameters(self):
         for module in self.children():
             module.reset_parameters()
 
-
-    def forward(self,input_x,previous_time,previous_layer):
+    def forward(self, input_x, previous_time, previous_layer):
         # a hidden unit outputs a hidden output new_hidden.
         # state also changes, but it's hidden inside a hidden unit.
 
-        semicolon_input=torch.cat([input_x,previous_time,previous_layer],dim=1)
+        semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
 
         # 5 equations
-        input_gate=torch.sigmoid(self.W_input(semicolon_input))
-        forget_gate=torch.sigmoid(self.W_forget(semicolon_input))
-        new_state=forget_gate * self.old_state + input_gate * \
-                  torch.tanh(self.W_state(semicolon_input))
-        output_gate=torch.sigmoid(self.W_output(semicolon_input))
-        new_hidden=output_gate*torch.tanh(new_state)
-        self.old_state=new_state
+        input_gate = torch.sigmoid(self.W_input(semicolon_input))
+        forget_gate = torch.sigmoid(self.W_forget(semicolon_input))
+        new_state = forget_gate * self.old_state + input_gate * \
+                    torch.tanh(self.W_state(semicolon_input))
+        output_gate = torch.sigmoid(self.W_output(semicolon_input))
+        new_hidden = output_gate * torch.tanh(new_state)
+        self.old_state = new_state
 
         return new_hidden
 
@@ -514,7 +514,7 @@ class RNN_Unit(nn.Module):
         self.W_state.weight.detach()
         self.W_state.bias.detach()
 
-        self.old_state=Variable(torch.Tensor(self.bs,self.h).zero_().cuda())
+        self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
 
-        
+
 
