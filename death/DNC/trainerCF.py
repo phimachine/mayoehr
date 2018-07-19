@@ -23,36 +23,31 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-
-# def save_model2(net, optim, epoch, iteration):
-#
-#     print("saving model")
-#     epoch = int(epoch)
-#     task_dir = os.path.dirname(abspath(__file__))
-#     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch)+ "_"+str(iteration) + ".pkl")
-#     fhand = pickle_file.open('wb')
-#     try:
-#         pickle.dump((net,optim, epoch, iteration),fhand)
-#         print('model saved')
-#     except:
-#         fhand.close()
-#         os.remove(pickle_file)
-
 def save_model(net, optim, epoch, iteration):
+    epoch = int(epoch)
+    task_dir = os.path.dirname(abspath(__file__))
+    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) +  "_" + str(iteration) + ".pkl")
+    pickle_file = pickle_file.open('wb')
+    torch.save((net, optim, epoch), pickle_file)
+    print('model saved at', pickle_file)
+
+def save_model_old(net, optim, epoch, iteration):
     print("saving model")
     epoch = int(epoch)
+    state_dict = net.state_dict()
+    for key in state_dict.keys():
+        state_dict[key] = state_dict[key].cpu()
     task_dir = os.path.dirname(abspath(__file__))
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) + "_" + str(iteration) + ".pkl")
     fhand = pickle_file.open('wb')
     try:
-        pickle.dump((net, optim, epoch, iteration), fhand)
-        print('model saved at ', pickle_file)
+        pickle.dump((state_dict,optim, epoch, iteration),fhand)
+        print('model saved at', pickle_file)
     except:
         fhand.close()
         os.remove(pickle_file)
 
-
-def load_model(computer):
+def load_model(computer, optim, starting_epoch, starting_iteration):
     task_dir = os.path.dirname(abspath(__file__))
     save_dir = Path(task_dir) / "saves"
     highestepoch = -1
@@ -63,12 +58,12 @@ def load_model(computer):
         iteration = int(iteration)
         epoch = int(epoch)
         # some files are open but not written to yet.
-        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 204800:
+        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
             highestepoch = epoch
             highestiter = iteration
-    if highestepoch == -1 and highestepoch == -1:
+    if highestepoch == -1 and highestiter == -1:
         return computer, None, -1, -1
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at ", pickle_file)
     pickle_file = pickle_file.open('rb')
     modelsd, optim, epoch, iteration = torch.load(pickle_file)
@@ -85,76 +80,114 @@ def load_model(computer):
     return computer, optim, epoch, iteration
 
 
+def load_model_old(computer):
+    task_dir = os.path.dirname(abspath(__file__))
+    save_dir = Path(task_dir) / "saves"
+    highestepoch = -1
+    highestiter = -1
+    for child in save_dir.iterdir():
+        epoch = str(child).split("_")[3]
+        iteration = str(child).split("_")[4].split('.')[0]
+        iteration=int(iteration)
+        epoch = int(epoch)
+        # some files are open but not written to yet.
+        if epoch > highestepoch and iteration>highestiter and child.stat().st_size > 204800:
+            highestepoch = epoch
+            highestiter=iteration
+    if highestepoch == -1 and highestepoch==-1:
+        return computer, None, -1, -1
+    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
+    print("loading model at ", pickle_file)
+    pickle_file = pickle_file.open('rb')
+    modelsd, optim, epoch, iteration = torch.load(pickle_file)
+    computer.load_state_dict(modelsd)
+    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
+
+    for child in save_dir.iterdir():
+        epoch = str(child).split("_")[3].split('.')[0]
+        iteration = str(child).split("_")[4].split('.')[0]
+        if int(epoch) != highestepoch and int(iteration) != highestiter:
+            os.remove(child)
+    print('Removed incomplete save file and all else.')
+
+    return computer, optim, epoch, iteration
+
 def run_one_patient_one_step():
     # this is so python does garbage collection automatically.
     # we are debugging the
     pass
 
-
+global global_exception_counter
+global_exception_counter=0
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
-    input = Variable(torch.Tensor(input).cuda())
-    target = Variable(torch.Tensor(target).cuda())
+    try:
+        input = Variable(torch.Tensor(input).cuda())
+        target = Variable(torch.Tensor(target).cuda())
 
-    # we have no critical index, becuase critical index are those timesteps that
-    # DNC is required to produce outputs. This is not the case for our project.
-    # criterion does not need to be reinitiated for every story, because we are not using a mask
+        # we have no critical index, becuase critical index are those timesteps that
+        # DNC is required to produce outputs. This is not the case for our project.
+        # criterion does not need to be reinitiated for every story, because we are not using a mask
 
-    time_length = input.size()[1]
-    # with torch.no_grad if validate else dummy_context_mgr():
-    patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
-    for timestep in range(time_length):
-        # first colon is always size 1
-        feeding = input[:, timestep, :]
-        output = computer(feeding)
-        assert not (output != output).any()
-        patient_output[0, timestep, :] = output
+        time_length = input.size()[1]
+        # with torch.no_grad if validate else dummy_context_mgr():
+        patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
+        for timestep in range(time_length):
+            # first colon is always size 1
+            feeding = input[:, timestep, :]
+            output = computer(feeding)
+            assert not (output != output).any()
+            patient_output[0, timestep, :] = output
 
-    # patient_output: (batch_size 1, time_length, output_dim ~4000)
-    time_to_event_output = patient_output[:, :, 0]
-    cause_of_death_output = patient_output[:, :, 1:]
-    time_to_event_target = target[:, :, 0]
-    cause_of_death_target = target[:, :, 1:]
+        # patient_output: (batch_size 1, time_length, output_dim ~4000)
+        time_to_event_output = patient_output[:, :, 0]
+        cause_of_death_output = patient_output[:, :, 1:]
+        time_to_event_target = target[:, :, 0]
+        cause_of_death_target = target[:, :, 1:]
 
-    # this block will not work for batch input,
-    # you should modify it so that the loss evaluation is not determined by logic but function.
-    # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
-    #
-    # if loss_type[0] == 0:
-    #     # in record
-    #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
-    #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-    #     patient_loss = toe_loss/100 + cod_loss
-    # else:
-    #     # not in record
-    #     # be careful with the sign, penalize when and only when positive
-    #     underestimation = time_to_event_target - time_to_event_output
-    #     underestimation = nn.functional.relu(underestimation)
-    #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
-    #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-    #     patient_loss = toe_loss/100 + cod_loss
-    patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
+        # this block will not work for batch input,
+        # you should modify it so that the loss evaluation is not determined by logic but function.
+        # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
+        #
+        # if loss_type[0] == 0:
+        #     # in record
+        #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
+        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+        #     patient_loss = toe_loss/100 + cod_loss
+        # else:
+        #     # not in record
+        #     # be careful with the sign, penalize when and only when positive
+        #     underestimation = time_to_event_target - time_to_event_output
+        #     underestimation = nn.functional.relu(underestimation)
+        #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
+        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+        #     patient_loss = toe_loss/100 + cod_loss
+        patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
-    if not validate:
-        # TODO UNDERSTAND WHAT THE FLAG MEANS
-        patient_loss.backward()
-        optimizer.step()
+        if not validate:
+            # TODO UNDERSTAND WHAT THE FLAG MEANS
+            patient_loss.backward()
+            optimizer.step()
+    except ValueError:
+        global_exception_counter+=1
+        if global_exception_counter==10:
+            raise ValueError("Global exception counter reached 10. Likely the model has nan in memory")
+        else:
+            pass
 
-    del input
-    del target
 
     return patient_loss
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          igdl, starting_epoch, total_epochs, iter_per_epoch, target_dim, logfile=False):
+          igdl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim, logfile=False):
     if logfile:
         open(logfile, 'w').close()
 
     for epoch in range(starting_epoch, total_epochs):
 
         for i, (input, target, loss_type) in enumerate(igdl):
-
+            i=starting_iter+i
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion)
@@ -182,9 +215,14 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 #     val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
                 #     print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                 #           (epoch, batch, val_loss))
-                if i % 100 == 99:
-                    save_model(computer, optimizer, epoch, i)
-                    print("model saved for epoch", epoch, "input", i)
+                if i < 1000:
+                    if i % 50 == 49:
+                        save_model(computer, optimizer, epoch, i)
+                        print("model saved for epoch", epoch, "input", i)
+                if i> 1000:
+                    if i % 300 == 299:
+                        save_model(computer, optimizer, epoch, i)
+                        print("model saved for epoch", epoch, "input", i)
             else:
                 break
 
@@ -195,18 +233,22 @@ def main():
     lr = 1e-5
     optim = None
     starting_epoch = -1
+    starting_iteration=-1
     target_dim = 3656
     logfile = "log.txt"
 
-    num_workers = 4
+    num_workers = 3
     ig = InputGen()
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
     igdl = DataLoader(dataset=ig, batch_size=1, shuffle=True, num_workers=num_workers)
     print("Using", num_workers, "workers")
 
     computer = DNC()
 
     # load model:
-    # computer, optim, starting_epoch, starting_iteration = load_model(computer)
+    print("loading model")
+    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
 
     computer = computer.cuda()
     if optim is None:
@@ -222,7 +264,7 @@ def main():
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          igdl, int(starting_epoch) + 1, total_epochs, iter_per_epoch, target_dim, logfile)
+          igdl, int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
 
 
 if __name__ == "__main__":
