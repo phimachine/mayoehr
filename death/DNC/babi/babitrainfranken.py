@@ -1,6 +1,6 @@
 # I decide to run my model on babi again to see if the convergen ce problem is with my model or dataset
 
-from death.DNC.monster import MonsterDNC as DNC
+from death.DNC.frankenstein import Frankenstein as DNC
 import torch
 import numpy
 import death.DNC.archi.param as param

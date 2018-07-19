@@ -29,7 +29,7 @@ def test_simplex_bound(tensor, dim=1):
     return True
 
 
-class MonsterDNC(nn.Module):
+class Frankenstein(nn.Module):
     def __init__(self,
                  x=47782,
                  h=128,
@@ -39,7 +39,7 @@ class MonsterDNC(nn.Module):
                  R=16,
                  N=64,
                  bs=1):
-        super(MonsterDNC, self).__init__()
+        super(Frankenstein, self).__init__()
 
         '''PARAMETERS'''
         self.x = x
@@ -486,10 +486,13 @@ class MonsterDNC(nn.Module):
             raise ValueError("nan is found.")
         return output2
 
+# the problem seems to be in the RNN Unit.
+# we exchange the RNN units and one has memory overflow, the other has convergence issues.
 
+#### MEMORY OVERFLOW ISSUE
 class RNN_Unit(nn.Module):
     """
-    LSTM
+    A single unit of deep RNN
     """
 
     def __init__(self, x, R, W, h, bs):
@@ -501,37 +504,12 @@ class RNN_Unit(nn.Module):
         self.h = h
         self.bs = bs
 
-        self.W_input = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(), requires_grad=True)
-        self.W_forget = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(),
-                                  requires_grad=True)
-        self.W_output = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(),
-                                  requires_grad=True)
-        self.W_state = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(), requires_grad=True)
-
-        self.b_input = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
-        self.b_forget = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
-        self.b_output = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
-        self.b_state = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
-
-        wls = (self.W_forget, self.W_output, self.W_input, self.W_state, self.b_input, self.b_forget, self.b_output,
-               self.b_state)
-        stdv = 1.0 / math.sqrt(self.h)
-        for w in wls:
-            w.data.uniform_(-stdv, stdv)
+        self.W_input = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_forget = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
 
         self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
-    #
-    # def reset_parameters(self):
-    #     # initialized the way pytorch LSTM is initialized, from normal
-    #     # initial state and cell are empty
-    #
-    #     # if this is not run, any output might be nan
-    #     stdv = 1.0 / math.sqrt(self.h)
-    #     for weight in self.parameters():
-    #         weight.data.uniform_(-stdv, stdv)
-    #     for module in self.children():
-    #         # do not use self.modules(), because it would be recursive
-    #         module.reset_parameters()
 
     def reset_parameters(self):
         for module in self.children():
@@ -541,42 +519,123 @@ class RNN_Unit(nn.Module):
         # a hidden unit outputs a hidden output new_hidden.
         # state also changes, but it's hidden inside a hidden unit.
 
-        # I think .data call is safe whenever new Variable should be initated.
-        # Unless I wish to have the gradients recursively flow back to the beginning of history
-        # I do not wish so.
-        semicolon_input = torch.cat((input_x, previous_time, previous_layer), dim=1)
+        semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
 
         # 5 equations
-        input_gate = torch.sigmoid(torch.matmul(semicolon_input, self.W_input) + self.b_input)
-        forget_gate = torch.sigmoid(torch.matmul(semicolon_input, self.W_forget) + self.b_forget)
+        input_gate = torch.sigmoid(self.W_input(semicolon_input))
+        forget_gate = torch.sigmoid(self.W_forget(semicolon_input))
         new_state = forget_gate * self.old_state + input_gate * \
-                    torch.tanh(torch.matmul(semicolon_input, self.W_state) + self.b_state)
-        output_gate = torch.sigmoid(torch.matmul(semicolon_input, self.W_output) + self.b_output)
+                    torch.tanh(self.W_state(semicolon_input))
+        output_gate = torch.sigmoid(self.W_output(semicolon_input))
         new_hidden = output_gate * torch.tanh(new_state)
-
-        # TODO Warning: needs to assign, not sure if this is right
-        # Good warning, I have changed the assignment and I hope this now works better.
         self.old_state = new_state
 
         return new_hidden
 
     def new_sequence_reset(self):
-        self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
-        # self.W_input.weight.detach()
-        # self.W_input.bias.detach()
-        # self.W_forget.weight.detach()
-        # self.W_forget.bias.detach()
-        # self.W_output.weight.detach()
-        # self.W_output.bias.detach()
-        # self.W_state.weight.detach()
-        # self.W_state.bias.detach()
-        # self.old_state.detach()
-        self.W_input = Parameter(self.W_input.data, requires_grad=True)
-        self.W_forget = Parameter(self.W_forget.data, requires_grad=True)
-        self.W_output = Parameter(self.W_output.data, requires_grad=True)
-        self.W_state = Parameter(self.W_state.data, requires_grad=True)
+        self.W_input.weight.detach()
+        self.W_input.bias.detach()
+        self.W_output.weight.detach()
+        self.W_output.bias.detach()
+        self.W_forget.weight.detach()
+        self.W_forget.bias.detach()
+        self.W_state.weight.detach()
+        self.W_state.bias.detach()
 
-        self.b_input = Parameter(self.b_input.data, requires_grad=True)
-        self.b_forget = Parameter(self.b_forget.data, requires_grad=True)
-        self.b_output = Parameter(self.b_output.data, requires_grad=True)
-        self.b_state = Parameter(self.b_state.data, requires_grad=True)
+        self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+
+#### CONVERGENCE ISSUE
+#
+# class RNN_Unit(nn.Module):
+#     """
+#     LSTM
+#     """
+#
+#     def __init__(self, x, R, W, h, bs):
+#         super(RNN_Unit, self).__init__()
+#
+#         self.x = x
+#         self.R = R
+#         self.W = W
+#         self.h = h
+#         self.bs = bs
+#
+#         self.W_input = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(), requires_grad=True)
+#         self.W_forget = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(),
+#                                   requires_grad=True)
+#         self.W_output = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(),
+#                                   requires_grad=True)
+#         self.W_state = Parameter(torch.Tensor(self.x + self.R * self.W + 2 * self.h, self.h).cuda(), requires_grad=True)
+#
+#         self.b_input = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
+#         self.b_forget = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
+#         self.b_output = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
+#         self.b_state = Parameter(torch.Tensor(self.h).cuda(), requires_grad=True)
+#
+#         wls = (self.W_forget, self.W_output, self.W_input, self.W_state, self.b_input, self.b_forget, self.b_output,
+#                self.b_state)
+#         stdv = 1.0 / math.sqrt(self.h)
+#         for w in wls:
+#             w.data.uniform_(-stdv, stdv)
+#
+#         self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+#     #
+#     # def reset_parameters(self):
+#     #     # initialized the way pytorch LSTM is initialized, from normal
+#     #     # initial state and cell are empty
+#     #
+#     #     # if this is not run, any output might be nan
+#     #     stdv = 1.0 / math.sqrt(self.h)
+#     #     for weight in self.parameters():
+#     #         weight.data.uniform_(-stdv, stdv)
+#     #     for module in self.children():
+#     #         # do not use self.modules(), because it would be recursive
+#     #         module.reset_parameters()
+#
+#     def reset_parameters(self):
+#         for module in self.children():
+#             module.reset_parameters()
+#
+#     def forward(self, input_x, previous_time, previous_layer):
+#         # a hidden unit outputs a hidden output new_hidden.
+#         # state also changes, but it's hidden inside a hidden unit.
+#
+#         # I think .data call is safe whenever new Variable should be initated.
+#         # Unless I wish to have the gradients recursively flow back to the beginning of history
+#         # I do not wish so.
+#         semicolon_input = torch.cat((input_x, previous_time, previous_layer), dim=1)
+#
+#         # 5 equations
+#         input_gate = torch.sigmoid(torch.matmul(semicolon_input, self.W_input) + self.b_input)
+#         forget_gate = torch.sigmoid(torch.matmul(semicolon_input, self.W_forget) + self.b_forget)
+#         new_state = forget_gate * self.old_state + input_gate * \
+#                     torch.tanh(torch.matmul(semicolon_input, self.W_state) + self.b_state)
+#         output_gate = torch.sigmoid(torch.matmul(semicolon_input, self.W_output) + self.b_output)
+#         new_hidden = output_gate * torch.tanh(new_state)
+#
+#         # TODO Warning: needs to assign, not sure if this is right
+#         # Good warning, I have changed the assignment and I hope this now works better.
+#         self.old_state = new_state
+#
+#         return new_hidden
+#
+#     def new_sequence_reset(self):
+#         self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+#         # self.W_input.weight.detach()
+#         # self.W_input.bias.detach()
+#         # self.W_forget.weight.detach()
+#         # self.W_forget.bias.detach()
+#         # self.W_output.weight.detach()
+#         # self.W_output.bias.detach()
+#         # self.W_state.weight.detach()
+#         # self.W_state.bias.detach()
+#         # self.old_state.detach()
+#         self.W_input = Parameter(self.W_input.data, requires_grad=True)
+#         self.W_forget = Parameter(self.W_forget.data, requires_grad=True)
+#         self.W_output = Parameter(self.W_output.data, requires_grad=True)
+#         self.W_state = Parameter(self.W_state.data, requires_grad=True)
+#
+#         self.b_input = Parameter(self.b_input.data, requires_grad=True)
+#         self.b_forget = Parameter(self.b_forget.data, requires_grad=True)
+#         self.b_output = Parameter(self.b_output.data, requires_grad=True)
+#         self.b_state = Parameter(self.b_state.data, requires_grad=True)
