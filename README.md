@@ -29,3 +29,13 @@ __getitem__() is the main function for this class, which will integrate seamless
 The name is legacy as a result of project development contingency.
 All modules are in the same file. BaBi has memory overflow, but our project does not.
 Loss goes down. The model is finished.
+
+### Training: DNC/trainerCF.py
+You should run the run.py script at the root of this project, however, since that
+allows Python to find its submodules.
+
+Just do "python run.py".
+
+run.py is an empty file. The training logic is in trainerCF.py
+
+C refers to loss design C. F refers to model Frankenstein.

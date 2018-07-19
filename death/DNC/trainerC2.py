@@ -44,7 +44,7 @@ def save_model(net, optim, epoch, iteration):
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) + "_" + str(iteration) + ".pkl")
     fhand = pickle_file.open('wb')
     try:
-        pickle.dump((net,optim, epoch, iteration),fhand)
+        pickle.dump((net.state_dict(),optim, epoch, iteration),fhand)
         print('model saved')
     except:
         fhand.close()
