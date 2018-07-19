@@ -13,22 +13,24 @@ import torch
 
 # This is the plan C.
 
-def get_timestep_location(earliest, time):
+def get_timestep_location(earliest, dates):
     '''
     Uses numpy instead of panda.
+    dates must be month based, otherwise errors will arise.
 
     :param earliest: pandas.Timestamp
-    :param time: ndarray of datetime64
+    :param dates: ndarray of datetime64
     :return: cc: int numpy array, the index location of the corresponding records
     '''
+    dates=dates.apply(lambda x: x.replace(day=1))
     earliest = earliest.to_datetime64()
     # if not isinstance(time,pd.Timestamp):
     # # if it's a series as it should be
     #     time=time.values
     # else:
     #     time=time.to_datetime64()
-    time = time.values
-    cc = (time - earliest).astype('timedelta64[M]')
+    dates = dates.values
+    cc = (dates - earliest).astype('timedelta64[M]')
     return cc.astype("int")
 
 
@@ -276,7 +278,11 @@ class InputGen(Dataset, DFManager):
                     # this line will increment only 1:
                     # input[tsloc,startidx]+=allrows[coln]
                     # this line will accumulate count:
-                    np.add.at(input, (tsloc, startidx), np.nan_to_num(allrows[coln].values))
+                    # TODO THERE IS A BUG HERE
+                    try:
+                        np.add.at(input, (tsloc, startidx), np.nan_to_num(allrows[coln].values))
+                    except IndexError:
+                        print("we found it")
                 if (input != input).any():
                     raise ValueError("NA FOUND")
                 for coln in nobarsep:
@@ -287,7 +293,7 @@ class InputGen(Dataset, DFManager):
 
                     for ts, val in zip(tsloc, allrows[coln]):
                         # if not nan
-                        if val == val:
+                        if val == val and val!="":
                             insidx += [dic[val] + startidx]
                             nantsloc += [ts]
                     np.add.at(input, [nantsloc, insidx], 1)
@@ -303,6 +309,7 @@ class InputGen(Dataset, DFManager):
                     for ts, multival in zip(tsloc, allrows[coln]):
                         if multival == multival:
                             vals = multival.split("|")
+                            vals = list(filter(lambda a: a!="", vals))
                             tss += [ts] * len(vals)
                             insidx += [dic[val] + startidx for val in vals if val == val]
                     try:
