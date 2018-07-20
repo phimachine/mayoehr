@@ -164,51 +164,109 @@ global_exception_counter = 0
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
     try:
-        input = Variable(torch.Tensor(input).cuda())
-        target = Variable(torch.Tensor(target).cuda())
-
-        # we have no critical index, becuase critical index are those timesteps that
-        # DNC is required to produce outputs. This is not the case for our project.
-        # criterion does not need to be reinitiated for every story, because we are not using a mask
-
-        time_length = input.size()[1]
-        # with torch.no_grad if validate else dummy_context_mgr():
-        patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
-        for timestep in range(time_length):
-            # first colon is always size 1
-            feeding = input[:, timestep, :]
-            output = computer(feeding)
-            assert not (output != output).any()
-            patient_output[0, timestep, :] = output
-
-        # patient_output: (batch_size 1, time_length, output_dim ~4000)
-        time_to_event_output = patient_output[:, :, 0]
-        cause_of_death_output = patient_output[:, :, 1:]
-        time_to_event_target = target[:, :, 0]
-        cause_of_death_target = target[:, :, 1:]
-
-        # this block will not work for batch input,
-        # you should modify it so that the loss evaluation is not determined by logic but function.
-        # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
-        #
-        # if loss_type[0] == 0:
-        #     # in record
-        #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
-        # else:
-        #     # not in record
-        #     # be careful with the sign, penalize when and only when positive
-        #     underestimation = time_to_event_target - time_to_event_output
-        #     underestimation = nn.functional.relu(underestimation)
-        #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
-        patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-
         if not validate:
-            patient_loss.backward()
+            # train
+
+            computer.train()
+            optimizer.zero_grad()
+
+            input = Variable(torch.Tensor(input).cuda(),volatile=False)
+            target = Variable(torch.Tensor(target).cuda(),volatile=False)
+
+            # we have no critical index, becuase critical index are those timesteps that
+            # DNC is required to produce outputs. This is not the case for our project.
+            # criterion does not need to be reinitiated for every story, because we are not using a mask
+
+            time_length = input.size()[1]
+            # with torch.no_grad if validate else dummy_context_mgr():
+            patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
+            for timestep in range(time_length):
+                # first colon is always size 1
+                feeding = input[:, timestep, :]
+                output = computer(feeding)
+                assert not (output != output).any()
+                patient_output[0, timestep, :] = output
+
+            # patient_output: (batch_size 1, time_length, output_dim ~4000)
+            time_to_event_output = patient_output[:, :, 0]
+            cause_of_death_output = patient_output[:, :, 1:]
+            time_to_event_target = target[:, :, 0]
+            cause_of_death_target = target[:, :, 1:]
+
+            # this block will not work for batch input,
+            # you should modify it so that the loss evaluation is not determined by logic but function.
+            # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
+            #
+            # if loss_type[0] == 0:
+            #     # in record
+            #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
+            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+            #     patient_loss = toe_loss/100 + cod_loss
+            # else:
+            #     # not in record
+            #     # be careful with the sign, penalize when and only when positive
+            #     underestimation = time_to_event_target - time_to_event_output
+            #     underestimation = nn.functional.relu(underestimation)
+            #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
+            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+            #     patient_loss = toe_loss/100 + cod_loss
+            patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+            try:
+                patient_loss.backward()
+            except RuntimeError:
+                traceback.print_exc()
+                raise
             optimizer.step()
+            print_loss=float(patient_loss[0])
+            del input, target, patient_loss
+        else:
+            # validate
+
+            computer.eval()
+            optimizer.zero_grad()
+            input_val = Variable(torch.Tensor(input).cuda(),volatile=True)
+            target_val = Variable(torch.Tensor(target).cuda(),volatile=True)
+
+            # we have no critical index, becuase critical index are those timesteps that
+            # DNC is required to produce outputs. This is not the case for our project.
+            # criterion does not need to be reinitiated for every story, because we are not using a mask
+
+            time_length_val = input_val.size()[1]
+            # with torch.no_grad if validate else dummy_context_mgr():
+            patient_output_val = Variable(torch.Tensor(1, time_length_val, target_dim), volatile=True).cuda()
+            for timestep in range(time_length_val):
+                # first colon is always size 1
+                feeding_val = input_val[:, timestep, :]
+                output_val = computer(feeding_val)
+                assert not (output_val != output_val).any()
+                patient_output_val[0, timestep, :] = output_val
+
+            # patient_output: (batch_size 1, time_length, output_dim ~4000)
+            time_to_event_output_val = patient_output_val[:, :, 0]
+            cause_of_death_output_val = patient_output_val[:, :, 1:]
+            time_to_event_target_val = target_val[:, :, 0]
+            cause_of_death_target_val = target_val[:, :, 1:]
+
+            # this block will not work for batch input,
+            # you should modify it so that the loss evaluation is not determined by logic but function.
+            # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
+            #
+            # if loss_type[0] == 0:
+            #     # in record
+            #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
+            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+            #     patient_loss = toe_loss/100 + cod_loss
+            # else:
+            #     # not in record
+            #     # be careful with the sign, penalize when and only when positive
+            #     underestimation = time_to_event_target - time_to_event_output
+            #     underestimation = nn.functional.relu(underestimation)
+            #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
+            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+            #     patient_loss = toe_loss/100 + cod_loss
+            patient_loss_val = binary_criterion(cause_of_death_output_val, cause_of_death_target_val)
+            print_loss=float(patient_loss_val[0])
+            del input_val, target_val, patient_loss_val
     except ValueError:
         traceback.print_exc()
         print("Value Error reached")
@@ -218,7 +276,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         else:
             pass
 
-    return patient_loss
+    return print_loss
 
 
 def log_print(string, logfile):
@@ -234,29 +292,29 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     print_interval = 10
     val_interval = 10
     save_interval = 500
-    val_batch = 10
+    val_batch = 1
     if logfile:
         open(logfile, 'w').close()
 
     for epoch in range(starting_epoch, total_epochs):
         running_loss = 0
-        for i, (input, target, loss_type) in enumerate(train):
-            i = starting_iter + i
-            if i < iter_per_epoch:
+        for train_index, (input, target, loss_type) in enumerate(train):
+            train_index = starting_iter + train_index
+            if train_index < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion)
-                printloss = float(train_story_loss[0])
+                printloss = train_story_loss
                 computer.new_sequence_reset()
                 del input, target, loss_type
                 running_loss += printloss
-                if i % print_interval == 0:
+                if train_index % print_interval == 0:
                     running_loss = running_loss / print_interval
-                    if i==0:
+                    if train_index==0:
                         log_print("learning.   count: %4d, training loss: %.10f" %
-                                  (i, printloss), logfile)
+                                  (train_index, printloss), logfile)
                     else:
                         log_print("learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
-                                  (i, printloss, running_loss), logfile)
+                                  (train_index, printloss, running_loss), logfile)
                     # if logfile:
                     #     with open(logfile, 'a') as handle:
                     #         handle.write("learning.   count: %4d, training loss: %.10f \n" %
@@ -270,33 +328,35 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     running_loss = 0
 
                 # every validation seems to produce some garbage in the GPU, why?
-                if i % val_interval == val_interval - 1:
+                if train_index % val_interval == val_interval - 1:
                     print("we have reached validation block.")
                     printloss = 0
-                    for i in range(val_interval):
+                    for _ in range(val_batch):
                         (input, target, loss_type) = next(valid_iterator)
                         val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion, validate=True)
-                        printloss += float(val_loss[0])
+                        printloss += val_loss
+                        del val_loss
                     log_print("validation. count: %4d, val loss     : %.10f" %
-                              (i, printloss / val_batch), logfile)
+                              (train_index, printloss / val_batch), logfile)
                     #     with open(logfile, 'a') as handle:
                     #         handle.write("validation. count: %4d, val loss     : %.10f \n" %
                     #                      (i, printloss/val_batch))
                     # print("validation. count: %4d, training loss: %.10f" %
                     #       (i, printloss/val_batch))
-                if i == 0:
-                    save_model(computer, optimizer, epoch, i)
-                    print("model saved for epoch", epoch, "iteration", i)
+
+                if train_index == 0:
+                    save_model(computer, optimizer, epoch, train_index)
+                    print("model saved for epoch", epoch, "iteration", train_index)
                 else:
-                    if i < save_interval:
-                        if i % save_interval // 10 == save_interval // 10 - 1:
-                            save_model(computer, optimizer, epoch, i)
-                            print("model saved for epoch", epoch, "iteration", i)
-                    if i > save_interval:
-                        if i % save_interval // 2 == save_interval // 2 - 1:
-                            save_model(computer, optimizer, epoch, i)
-                            print("model saved for epoch", epoch, "iteration", i)
+                    if train_index < save_interval:
+                        if train_index % save_interval // 10 == save_interval // 10 - 1:
+                            save_model(computer, optimizer, epoch, train_index)
+                            print("model saved for epoch", epoch, "iteration", train_index)
+                    if train_index > save_interval:
+                        if train_index % save_interval // 2 == save_interval // 2 - 1:
+                            save_model(computer, optimizer, epoch, train_index)
+                            print("model saved for epoch", epoch, "iteration", train_index)
             else:
                 break
 
@@ -318,6 +378,7 @@ def main():
     print("Using", num_workers, "workers for training set")
 
     computer = DNC()
+    computer.train()
 
     # load model:
     if True:
