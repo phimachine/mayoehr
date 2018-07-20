@@ -247,7 +247,10 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
 
                 if i % val_interval == val_interval - 1:
+<<<<<<< HEAD
                     # we should consider running validation multiple times and average. TODO
+=======
+>>>>>>> ce0f632164297a09452e367a86a8e26b88d74e4e
                     (input,target,loss_type)=next(valid_iterator)
                     val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion, validate=True)
@@ -285,7 +288,11 @@ def main():
     ig = InputGen()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
+<<<<<<< HEAD
     trainds,validds=train_valid_split(ig,split_fold=10)
+=======
+    trainds,validds=train_valid_split(ig,split_fold=50)
+>>>>>>> ce0f632164297a09452e367a86a8e26b88d74e4e
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
