@@ -1,0 +1,947 @@
+22:11:23.642661Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 289, in main
+    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 70, in load_model
+    computer.load_state_dict(modelsd)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 508, in load_state_dict
+    for name, param in state_dict.items():
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 398, in __getattr__
+    type(self).__name__, name))
+AttributeError: 'Frankenstein' object has no attribute 'items'
+22:14:40.896984Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 289, in main
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 70, in load_model
+    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 70, in load_model
+    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+22:17:23.132424Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 304, in main
+    igdl, int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 226, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 99977) exited unexpectedly with exit code 1.
+22:21:36.858445Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 304, in main
+    igdl, int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 216, in train
+    print_interval=10
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 216, in train
+    print_interval=10
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+22:23:21.142354Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 304, in main
+    igdl, int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 226, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: cuda runtime error (2) : out of memory at /pytorch/torch/lib/THC/generic/THCStorage.cu:58
+22:35:09.010267Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 304, in main
+    igdl, int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 226, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 101044) exited unexpectedly with exit code 1.
+22:37:57.200518Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 305, in main
+    train(computer, optimizer, real_criterion, binary_criterion,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 226, in train
+    train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 170, in run_one_patient
+    feeding = input[:, timestep, :]
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 471, in forward
+    read_modes)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 305, in read_weightings
+    content_weighting = self.read_content_weighting(read_keys, read_strengths)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 137, in read_content_weighting
+    innerprod = torch.matmul(self.memory.unsqueeze(0), read_keys)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/functional.py", line 212, in matmul
+    tensor2_exp_size = torch.Size((1,) * max(3 - tensor2.dim(), 0) + tensor2.size())
+KeyboardInterrupt
+22:48:01.154252Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 307, in main
+    igdl, int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 258, in train
+    save_model(computer, optimizer, epoch, i)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 30, in save_model
+    pickle_file = pickle_file.open('wb')
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/pathlib.py", line 1181, in open
+    opener=self._opener)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/pathlib.py", line 1035, in _opener
+    return self._accessor.open(self, flags, mode)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/pathlib.py", line 387, in wrapped
+    return strfunc(str(pathobj), *args)
+FileNotFoundError: [Errno 2] No such file or directory: '/local2/tmp/pycharm_project_292/death/DNC/saves/DNCfull_0_99.pkl'
+01:54:12.799558Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 314, in main
+    train(computer, optimizer, real_criterion, binary_criterion,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 263, in train
+    if i % save_interval//10 == save_interval//10-1:
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 30, in save_model
+    pickle_file = pickle_file.open('wb')
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/pathlib.py", line 1181, in open
+    opener=self._opener)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/pathlib.py", line 1035, in _opener
+    return self._accessor.open(self, flags, mode)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/pathlib.py", line 387, in wrapped
+    return strfunc(str(pathobj), *args)
+FileNotFoundError: [Errno 2] No such file or directory: '/local2/tmp/pycharm_project_292/death/DNC/saves/DNCfull_0_990.pkl'
+12:29:03.466182Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 313, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 262, in train
+    save_model(computer, optimizer, epoch, i)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 31, in save_model
+    torch.save((net, optim, epoch, iteration), pickle_file)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/serialization.py", line 135, in save
+    return _with_file_like(f, "wb", lambda f: _save(obj, f, pickle_module, pickle_protocol))
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/serialization.py", line 117, in _with_file_like
+    return body(f)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/serialization.py", line 135, in <lambda>
+    return _with_file_like(f, "wb", lambda f: _save(obj, f, pickle_module, pickle_protocol))
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/serialization.py", line 204, in _save
+    serialized_storages[key]._write_file(f)
+KeyboardInterrupt
+12:38:06.199977Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 315, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 229, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 171, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 457, in forward
+    allocation_weighting = self.allocation_weighting()
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 209, in allocation_weighting
+    cum_prod = torch.cat([Variable(torch.ones(self.bs, 1).cuda()), cum_prod], 1)[:, :-1]
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/_utils.py", line 69, in _cuda
+    return new_type(self.size()).copy_(self, async)
+KeyboardInterrupt
+12:48:08.000762Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 326, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 234, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 122067) exited unexpectedly with exit code 1.
+12:55:26.838607Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 326, in main
+    train(computer, optimizer, real_criterion, binary_criterion,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 234, in train
+    train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 122088) exited unexpectedly with exit code 1.
+12:56:05.030753Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 327, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 243, in train
+    (i, printloss))
+TypeError: log_print() missing 1 required positional argument: 'logfile'
+12:58:06.175431Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 327, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 235, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 122172) exited unexpectedly with exit code 1.
+12:59:12.269230Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 327, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 235, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 201, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 122192) exited unexpectedly with exit code 1.
+13:04:38.429404Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 328, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 235, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 171, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 457, in forward
+    allocation_weighting = self.allocation_weighting()
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 209, in allocation_weighting
+    cum_prod = torch.cat([Variable(torch.ones(self.bs, 1).cuda()), cum_prod], 1)[:, :-1]
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/_utils.py", line 69, in _cuda
+    return new_type(self.size()).copy_(self, async)
+KeyboardInterrupt
+13:06:22.359980Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 298, in main
+    logfile = "log.txt"
+  File "/local2/tmp/pycharm_project_292/death/post/inputgen_planC.py", line 60, in __init__
+    print("Input Gen initiated")
+KeyboardInterrupt
+13:06:32.227689Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 301, in main
+    ig = InputGen()
+  File "/local2/tmp/pycharm_project_292/death/post/inputgen_planC.py", line 45, in __init__
+    self.load_pickle(verbose=verbose)
+  File "/local2/tmp/pycharm_project_292/death/post/qdata.py", line 172, in load_pickle
+    self.serv, self.surg, self.vital = pickle.load(f)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/pandas/core/indexes/base.py", line 169, in _new_Index
+    def _new_Index(cls, d):
+KeyboardInterrupt
+13:08:09.438072Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 174, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 333, in main
+    traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 238, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 209, in run_one_patient
+    global_exception_counter+=1
+UnboundLocalError: local variable 'global_exception_counter' referenced before assignment
+13:12:04.430964Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 204, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 333, in main
+    train(computer, optimizer, real_criterion, binary_criterion,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 238, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 204, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 122679) exited unexpectedly with exit code 1.
+13:15:41.838576Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 334, in main
+    optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 240, in train
+    val_batch = 10
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 368, in new_sequence_reset
+    RNN.new_sequence_reset()
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 541, in new_sequence_reset
+    self.W_forget.weight.detach()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 246, in detach
+    result = NoGrad()(self)  # this is needed, because it merges version counters
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/_functions/tensor.py", line 143, in _do_forward
+    result = super(NoGrad, self)._do_forward(*args, **kwargs)
+KeyboardInterrupt
+13:27:52.086075Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 348, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 280, in train
+    real_criterion, binary_criterion, validate=True)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 183, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 393, in forward
+    hidden_previous_layer)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 523, in forward
+    semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
+RuntimeError: cuda runtime error (2) : out of memory at /pytorch/torch/lib/THC/generic/THCStorage.cu:58
+13:28:48.431772Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 316, in main
+    ig = InputGen()
+  File "/local2/tmp/pycharm_project_292/death/post/inputgen_planC.py", line 45, in __init__
+    self.load_pickle(verbose=verbose)
+  File "/local2/tmp/pycharm_project_292/death/post/qdata.py", line 172, in load_pickle
+    self.serv, self.surg, self.vital = pickle.load(f)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/pandas/core/indexes/base.py", line 169, in _new_Index
+    def _new_Index(cls, d):
+KeyboardInterrupt
+13:29:50.308481Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 345, in main
+    traindl, iter(validdl), int(starting_epoch) , total_epochs, int(starting_iteration) , iter_per_epoch,
+UnboundLocalError: local variable 'starting_epoch' referenced before assignment
+13:32:05.407757Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 343, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 290, in train
+    save_model(computer, optimizer, epoch, i)
+KeyboardInterrupt
+13:42:57.932729Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 345, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 282, in train
+    real_criterion, binary_criterion, validate=True)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 185, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 393, in forward
+    hidden_previous_layer)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 523, in forward
+    semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
+RuntimeError: cuda runtime error (2) : out of memory at /pytorch/torch/lib/THC/generic/THCStorage.cu:58
+13:45:56.302163Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 215, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 345, in main
+    traindl, iter(validdl), int(starting_epoch) , total_epochs, int(starting_iteration) , iter_per_epoch,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 252, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 215, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 123979) exited unexpectedly with exit code 1.
+13:51:27.223218Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 215, in run_one_patient
+    global_exception_counter += 1
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 345, in main
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 252, in train
+    if i % print_interval == 0:
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 215, in run_one_patient
+    global_exception_counter += 1
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 124080) exited unexpectedly with exit code 1.
+14:14:32.926727Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 389, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 291, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+14:20:38.163644Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 389, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 291, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+14:25:01.545305Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 391, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 327, in train
+    printloss += float(val_loss[0])
+UnboundLocalError: local variable 'val_loss' referenced before assignment
+14:28:48.267991Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 391, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 292, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+14:34:59.320245Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 393, in main
+    traindl, iter(validdl), int(starting_epoch) , total_epochs, int(starting_iteration) , iter_per_epoch,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 294, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 212, in run_one_patient
+    raise
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 212, in run_one_patient
+    raise
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+14:39:21.755817Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 394, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 340, in train
+    save_model(computer, optimizer, epoch, train_index)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 29, in save_model
+    epoch = int(epoch)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 29, in save_model
+    epoch = int(epoch)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+14:57:48.130860Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 394, in main
+    train(computer, optimizer, real_criterion, binary_criterion,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 294, in train
+    if train_index < iter_per_epoch:
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 212, in run_one_patient
+    raise
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 212, in run_one_patient
+    raise
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+14:58:43.146775Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 396, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 297, in train
+    printloss = float(train_story_loss[0])
+TypeError: 'float' object is not subscriptable
+15:02:22.120158Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 396, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 296, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    patient_loss.backward()
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 406, in trace_dispatch
+    def trace_dispatch(self, frame, event, arg):
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 129886) exited unexpectedly with exit code 1.
+15:05:13.040267Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 396, in main
+    traindl, iter(validdl), int(starting_epoch) , total_epochs, int(starting_iteration) , iter_per_epoch,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 296, in train
+    train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 212, in run_one_patient
+    traceback.print_exc()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 212, in run_one_patient
+    traceback.print_exc()
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+15:06:37.575768Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 397, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 343, in train
+    save_model(computer, optimizer, epoch, train_index)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_trace_dispatch_regular.py", line 38, in trace_dispatch
+    def trace_dispatch(py_db, frame, event, arg):
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 130855) exited unexpectedly with exit code 1.
+15:06:54.067518Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/post/qdata.py", line 172, in load_pickle
+    self.serv, self.surg, self.vital = pickle.load(f)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/pandas/core/indexes/base.py", line 169, in _new_Index
+    def _new_Index(cls, d):
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_trace_dispatch_regular.py", line 84, in __call__
+    def __call__(self, frame, event, arg):
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 366, in main
+    ig = InputGen()
+  File "/local2/tmp/pycharm_project_292/death/post/inputgen_planC.py", line 45, in __init__
+    self.load_pickle(verbose=verbose)
+  File "/local2/tmp/pycharm_project_292/death/post/qdata.py", line 172, in load_pickle
+    self.serv, self.surg, self.vital = pickle.load(f)
+KeyboardInterrupt
+15:16:32.193535Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 210, in run_one_patient
+    #     underestimation = nn.functional.relu(underestimation)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 397, in main
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 297, in train
+    val_batch = 1
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 213, in run_one_patient
+    #     patient_loss = toe_loss/100 + cod_loss
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 213, in run_one_patient
+    #     patient_loss = toe_loss/100 + cod_loss
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+15:17:23.989987Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 405, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 307, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 173, in run_one_patient
+    with torch.set_grad_enabled(True):
+AttributeError: module 'torch' has no attribute 'set_grad_enabled'
+15:54:32.054176Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 215, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+RuntimeError: element 0 of variables tuple is volatile
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 403, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 305, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 218, in run_one_patient
+    raise
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 218, in run_one_patient
+    raise
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+15:55:16.747711Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 390, in main
+    optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/adam.py", line 29, in __init__
+    super(Adam, self).__init__(params, defaults)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 39, in __init__
+    self.add_param_group(param_group)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 153, in add_param_group
+    raise ValueError("optimizing a parameter that doesn't require gradients")
+ValueError: optimizing a parameter that doesn't require gradients
+15:57:59.512991Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 403, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 305, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 186, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 393, in forward
+    hidden_previous_layer)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 532, in forward
+    self.old_state = new_state
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 417, in __setattr__
+    .format(torch.typename(value), name))
+TypeError: cannot assign 'torch.autograd.variable.Variable' as parameter 'old_state' (torch.nn.Parameter or None expected)
+16:12:21.979342Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 403, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 305, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 186, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 467, in forward
+    self.update_temporal_linkage_matrix(write_weighting)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 266, in update_temporal_linkage_matrix
+    ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j).data,requires_grad=False)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 417, in __setattr__
+    .format(torch.typename(value), name))
+TypeError: cannot assign 'torch.autograd.variable.Variable' as parameter 'temporal_memory_linkage' (torch.nn.Parameter or None expected)
+16:13:13.414766Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 403, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 305, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 186, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 474, in forward
+    read_modes)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 322, in read_weightings
+    self.last_read_weightings = Variable(read_weightings.data,requires_grad=False)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 417, in __setattr__
+    .format(torch.typename(value), name))
+TypeError: cannot assign 'torch.autograd.variable.Variable' as parameter 'last_read_weightings' (torch.nn.Parameter or None expected)
+16:17:50.276144Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 403, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 305, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 186, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 460, in forward
+    allocation_weighting = self.allocation_weighting()
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 209, in allocation_weighting
+    cum_prod = torch.cat([Variable(torch.ones(self.bs, 1).cuda()), cum_prod], 1)[:, :-1]
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/_utils.py", line 69, in _cuda
+    return new_type(self.size()).copy_(self, async)
+KeyboardInterrupt
+16:18:27.732318Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 372, in main
+    ig = InputGen()
+  File "/local2/tmp/pycharm_project_292/death/post/inputgen_planC.py", line 45, in __init__
+    self.load_pickle(verbose=verbose)
+  File "/local2/tmp/pycharm_project_292/death/post/qdata.py", line 172, in load_pickle
+    self.serv, self.surg, self.vital = pickle.load(f)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/pandas/core/indexes/base.py", line 169, in _new_Index
+    def _new_Index(cls, d):
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_trace_dispatch_regular.py", line 84, in __call__
+    def __call__(self, frame, event, arg):
+KeyboardInterrupt
+16:38:18.923743Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 215, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/variable.py", line 167, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph, retain_variables)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/autograd/__init__.py", line 99, in backward
+    variables, grad_variables, retain_graph)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 403, in main
+    target_dim, logfile)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 305, in train
+    real_criterion, binary_criterion)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 215, in run_one_patient
+    patient_loss.backward()
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 175, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 137704) exited unexpectedly with exit code 1.
+17:03:43.432944Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 303, in main
+    optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/adam.py", line 29, in __init__
+    super(Adam, self).__init__(params, defaults)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 39, in __init__
+    self.add_param_group(param_group)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 153, in add_param_group
+    raise ValueError("optimizing a parameter that doesn't require gradients")
+ValueError: optimizing a parameter that doesn't require gradients
+17:07:01.971087Traceback (most recent call last):
+  File "run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 303, in main
+    optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/adam.py", line 29, in __init__
+    super(Adam, self).__init__(params, defaults)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 39, in __init__
+    self.add_param_group(param_group)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 153, in add_param_group
+    raise ValueError("optimizing a parameter that doesn't require gradients")
+ValueError: optimizing a parameter that doesn't require gradients
+17:12:43.502157Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 303, in main
+    optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 303, in main
+    optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 620, in trace_dispatch
+    self.do_wait_suspend(thread, frame, event, arg)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydevd_bundle/pydevd_frame.py", line 125, in do_wait_suspend
+    self._args[0].do_wait_suspend(*args, **kwargs)
+  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 812, in do_wait_suspend
+    time.sleep(0.01)
+KeyboardInterrupt
+17:17:06.812831Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/run.py", line 10, in <module>
+    main()
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerCF.py", line 303, in main
+    optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/adam.py", line 29, in __init__
+    super(Adam, self).__init__(params, defaults)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 39, in __init__
+    self.add_param_group(param_group)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/optim/optimizer.py", line 153, in add_param_group
+    raise ValueError("optimizing a parameter that doesn't require gradients")
+ValueError: optimizing a parameter that doesn't require gradients
