@@ -352,8 +352,43 @@ class InputGen(Dataset, DFManager):
         print("performance probe finished")
         print("speed is now 3x faster")
 
+class GenHelper(Dataset):
+    def __init__(self, mother, length, mapping):
+        # here is a mapping from this index to the mother ds index
+        self.mapping=mapping
+        self.length=length
+        self.mother=mother
 
-if __name__ == "__main__":
+    def __getitem__(self, index):
+        return self.mother[self.mapping[index]]
+
+    def __len__(self):
+        return self.length
+
+
+def train_valid_split(ds, split_fold=10, random_seed=None):
+    '''
+    This is a pytorch generic function that takes a data.Dataset object and splits it to validation and training
+    efficiently.
+    This is just a factory method, nothing special. Can't believe no one ever did this for PyTorch.
+
+    :return:
+    '''
+    if random_seed!=None:
+        np.random.seed(random_seed)
+
+    dslen=len(ds)
+    indices= list(range(dslen))
+    valid_size=dslen//split_fold
+    np.random.shuffle(indices)
+    train_mapping=indices[valid_size:]
+    valid_mapping=indices[:valid_size]
+    train=GenHelper(ds, dslen - valid_size, train_mapping)
+    valid=GenHelper(ds, valid_size, valid_mapping)
+
+    return train, valid
+
+def oldmain():
     ig = InputGen(load_pickle=True, verbose=False)
     ig.performance_probe()
 
@@ -380,3 +415,19 @@ if __name__ == "__main__":
     # or maybe not, if the input dimension is so high.
     # well, if we don't have batch, then we don't have batch normalization.
     print("script finished")
+
+
+if __name__ == "__main__":
+    ig = InputGen(load_pickle=True, verbose=False)
+    train,valid=train_valid_split(ig)
+    traindl=DataLoader(dataset=train,batch_size=1)
+    validdl=DataLoader(dataset=valid,batch_size=1)
+    print(train[1])
+    for x, y in enumerate(traindl):
+        if x==2:
+            break
+        print(y)
+    for x, y in enumerate(validdl):
+        if x == 2:
+            break
+        print(y)
