@@ -5,16 +5,16 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planC import InputGen
+from death.post.inputgen_planC import InputGen, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
+import traceback
 
 batch_size = 1
-
 
 class dummy_context_mgr():
     def __enter__(self):
@@ -66,18 +66,18 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at ", pickle_file)
     pickle_file = pickle_file.open('rb')
-    modelsd, optim, epoch, iteration = torch.load(pickle_file)
-    computer.load_state_dict(modelsd)
+    computer, optim, epoch, iteration = torch.load(pickle_file)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
 
     for child in save_dir.iterdir():
         epoch = str(child).split("_")[3].split('.')[0]
         iteration = str(child).split("_")[4].split('.')[0]
         if int(epoch) != highestepoch and int(iteration) != highestiter:
+            # TODO might have a bug here.
             os.remove(child)
     print('Removed incomplete save file and all else.')
 
-    return computer, optim, epoch, iteration
+    return computer, optim, highestepoch, highestiter
 
 
 def load_model_old(computer):
@@ -198,29 +198,31 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
-            # TODO UNDERSTAND WHAT THE FLAG MEANS
             patient_loss.backward()
             optimizer.step()
     except ValueError:
+        traceback.print_exc()
+        print("Value Error reached")
         global_exception_counter+=1
         if global_exception_counter==10:
             raise ValueError("Global exception counter reached 10. Likely the model has nan in memory")
         else:
             pass
 
-
     return patient_loss
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          igdl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim, logfile=False):
+          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim, logfile=False):
     print_interval=10
+    val_interval=100
+    save_interval=1000
     if logfile:
         open(logfile, 'w').close()
 
     for epoch in range(starting_epoch, total_epochs):
         running_loss=0
-        for i, (input, target, loss_type) in enumerate(igdl):
+        for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
@@ -233,32 +235,36 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     running_loss=running_loss/print_interval
                     if logfile:
                         with open(logfile, 'a') as handle:
-                            handle.write("learning. count: %4d, training loss: %.10f \n" %
+                            handle.write("learning.   count: %4d, training loss: %.10f \n" %
                                          (i, printloss))
                             if i!=0:
                                 handle.write("count: %4d, running loss: %.10f \n" % (i, running_loss))
-                    print("learning. count: %4d, training loss: %.10f" %
+                    print("learning.   count: %4d, training loss: %.10f" %
                           (i, printloss))
                     if i!=0:
                         print("count: %4d, running loss: %.10f" % (i, running_loss))
                 running_loss=0
 
-                # TODO No validation support for now.
-                # val_freq = 16
-                # if batch % val_freq == val_freq - 1:
-                #     print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f' %
-                #           (epoch, batch, running_loss / val_freq))
-                #     running_loss = 0
-                #     # also test the model
-                #     val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, validate=False)
-                #     print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
-                #           (epoch, batch, val_loss))
-                if i < 1000:
-                    if i % 100 == 99:
+
+                if i % val_interval == val_interval - 1:
+                    # we should consider running validation multiple times and average. TODO
+                    (input,target,loss_type)=next(valid_iterator)
+                    val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+                                                   real_criterion, binary_criterion, validate=True)
+                    printloss=float(val_loss[0])
+                    if logfile:
+                        with open(logfile, 'a') as handle:
+                            handle.write("validation. count: %4d, val loss     : %.10f \n" %
+                                         (i, printloss))
+                    print("validation. count: %4d, training loss: %.10f" %
+                          (i, printloss))
+
+                if i < save_interval:
+                    if i % save_interval//10 == save_interval//10-1:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
-                if i> 1000:
-                    if i % 500 == 499:
+                if i> save_interval:
+                    if i % save_interval//2 == save_interval//2-1:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
             else:
@@ -279,14 +285,18 @@ def main():
     ig = InputGen()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
-    igdl = DataLoader(dataset=ig, batch_size=1, shuffle=True, num_workers=num_workers)
-    print("Using", num_workers, "workers")
+    trainds,validds=train_valid_split(ig,split_fold=10)
+    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
+    validdl = DataLoader(dataset=validds, batch_size=1)
+    print("Using", num_workers, "workers for training set")
 
     computer = DNC()
 
     # load model:
-    print("loading model")
-    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
+    load_model=False
+    if load_model:
+        print("loading model")
+        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
 
     computer = computer.cuda()
     if optim is None:
@@ -297,12 +307,12 @@ def main():
         optimizer = optim
 
     real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss(size_average=True)
+    binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
 
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          igdl, int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+          traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
 
 
 if __name__ == "__main__":
