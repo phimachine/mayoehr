@@ -290,9 +290,9 @@ def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim,
           logfile=False):
     print_interval = 10
-    val_interval = 100
+    val_interval = 10
     save_interval = 500
-    val_batch = 10
+    val_batch = 1
     if logfile:
         open(logfile, 'w').close()
 
@@ -387,7 +387,7 @@ def main():
 
     computer = computer.cuda()
     if optim is None:
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, computer.parameters()), lr=lr)
+        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
