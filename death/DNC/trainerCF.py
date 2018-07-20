@@ -237,8 +237,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                         with open(logfile, 'a') as handle:
                             handle.write("learning.   count: %4d, training loss: %.10f \n" %
                                          (i, printloss))
-                            if i!=0:
-                                handle.write("count: %4d, running loss: %.10f \n" % (i, running_loss))
                     print("learning.   count: %4d, training loss: %.10f" %
                           (i, printloss))
                     if i!=0:
@@ -246,11 +244,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 running_loss=0
 
 
-                if i % val_interval == val_interval - 1:
-<<<<<<< HEAD
+                if i % val_interval == 0:
                     # we should consider running validation multiple times and average. TODO
-=======
->>>>>>> ce0f632164297a09452e367a86a8e26b88d74e4e
                     (input,target,loss_type)=next(valid_iterator)
                     val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion, validate=True)
@@ -263,11 +258,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                           (i, printloss))
 
                 if i < save_interval:
-                    if i % save_interval//10 == save_interval//10-1:
+                    if i % save_interval//10 == 0:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
                 if i> save_interval:
-                    if i % save_interval//2 == save_interval//2-1:
+                    if i % save_interval//2 == 0:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
             else:
@@ -288,11 +283,7 @@ def main():
     ig = InputGen()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
-<<<<<<< HEAD
     trainds,validds=train_valid_split(ig,split_fold=10)
-=======
-    trainds,validds=train_valid_split(ig,split_fold=50)
->>>>>>> ce0f632164297a09452e367a86a8e26b88d74e4e
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
