@@ -258,14 +258,9 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     print("validation. count: %4d, training loss: %.10f" %
                           (i, printloss))
 
-                if i < save_interval:
-                    if i % (save_interval//10) == 0:
-                        save_model(computer, optimizer, epoch, i)
-                        print("model saved for epoch", epoch, "input", i)
-                if i> save_interval:
-                    if i % (save_interval//2) == 0:
-                        save_model(computer, optimizer, epoch, i)
-                        print("model saved for epoch", epoch, "input", i)
+                if i % save_interval == 0:
+                    save_model(computer, optimizer, epoch, i)
+                    print("model saved for epoch", epoch, "input", i)
             else:
                 break
 
