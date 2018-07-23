@@ -17,8 +17,8 @@ class Computer(nn.Module):
         self.memory = Memory()
         self.controller = MyController()
         self.interface = Interface()
-        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
-        self.W_r = Parameter(torch.Tensor(param.W * param.R, param.v_t).cuda())
+        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_())
+        self.W_r = Parameter(torch.Tensor(param.W * param.R, param.v_t))
 
         stdv = 1.0 / math.sqrt(param.v_t)
         self.W_r.data.uniform_(-stdv, stdv)
@@ -74,7 +74,7 @@ class Computer(nn.Module):
         self.controller.new_sequence_reset()
         self.memory.new_sequence_reset()
         # initiate new object, so the old container history is reset.
-        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_().cuda())
+        self.last_read_vector = Variable(torch.Tensor(param.bs, param.W, param.R).zero_())
         self.W_r=Parameter(self.W_r.data)
         torch.cuda.empty_cache()
         print("************ NEW SEQUENCE RESET ***************")

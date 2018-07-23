@@ -34,25 +34,25 @@ class Memory(nn.Module):
         # None here requires gradient
 
         # u_0
-        self.usage_vector=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
+        self.usage_vector=Variable(torch.Tensor(param.bs,param.N).zero_())
         # p, (N), should be simplex bound
-        self.precedence_weighting=Variable(torch.Tensor(param.bs,param.N).zero_().cuda())
+        self.precedence_weighting=Variable(torch.Tensor(param.bs,param.N).zero_())
         # (N,N)
-        self.temporal_memory_linkage=Variable(torch.Tensor(param.bs,param.N, param.N).zero_().cuda())
+        self.temporal_memory_linkage=Variable(torch.Tensor(param.bs,param.N, param.N).zero_())
         # (N,W)
-        self.memory=Variable(torch.Tensor(param.N,param.W).zero_().cuda())
+        self.memory=Variable(torch.Tensor(param.N,param.W).zero_())
         # (N, R).
-        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N)).cuda()
+        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N))
 
 
     def new_sequence_reset(self):
         # memory is the only value that is not reset after new sequence
         # since memory is not reset after a new sequence, we should reinitiate with every new sequence
         self.memory.detach()
-        self.usage_vector=Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
-        self.precedence_weighting= Variable(torch.Tensor(param.bs, param.N).zero_().cuda())
-        self.temporal_memory_linkage = Variable(torch.Tensor(param.bs, param.N, param.N).zero_().cuda())
-        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N).cuda())
+        self.usage_vector=Variable(torch.Tensor(param.bs, param.N).zero_())
+        self.precedence_weighting= Variable(torch.Tensor(param.bs, param.N).zero_())
+        self.temporal_memory_linkage = Variable(torch.Tensor(param.bs, param.N, param.N).zero_())
+        self.last_read_weightings=Variable(torch.Tensor(param.bs, param.N, param.R).fill_(1.0/param.N))
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
         '''
@@ -173,7 +173,7 @@ class Memory(nn.Module):
         sorted, indices= self.usage_vector.sort(dim=1)
         cum_prod=torch.cumprod(sorted,1)
         # notice the index on the product
-        cum_prod=torch.cat([Variable(torch.ones(param.bs,1).cuda()),cum_prod],1)[:,:-1]
+        cum_prod=torch.cat([Variable(torch.ones(param.bs,1)),cum_prod],1)[:,:-1]
         sorted_inv=1-sorted
         allocation_weighting=sorted_inv*cum_prod
         # to shuffle back in place
@@ -311,7 +311,7 @@ class Memory(nn.Module):
         :return:
         '''
         term1_2=torch.matmul(write_weighting.unsqueeze(2),erase_vector.unsqueeze(1))
-        # term1=self.memory.unsqueeze(0)*Variable(torch.ones((param.bs,param.N,param.W)).cuda()-term1_2.data)
+        # term1=self.memory.unsqueeze(0)*Variable(torch.ones((param.bs,param.N,param.W))-term1_2.data)
         term1=self.memory.unsqueeze(0)*(1-term1_2)
         term2=torch.matmul(write_weighting.unsqueeze(2),write_vector.unsqueeze(1))
         self.memory=torch.mean(term1+term2, dim=0)

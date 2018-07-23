@@ -23,13 +23,13 @@ from torch.autograd import Variable
 #                                          dropout=True,
 #                                          bidirectional=False)
 #         self.reset_parameters()
-#         self.last_hidden = Variable(torch.Tensor(param.L, param.bs, param.h).zero_().cuda())
-#         # self.last_hidden = Variable(torch.Tensor(param.bs, param.L, param.h).zero_().cuda())
-#         self.last_cell = Variable(torch.Tensor(param.L, param.bs, param.h).zero_().cuda())
-#         self.W_y = Parameter(torch.Tensor(param.L * param.h, param.v_t),requires_grad=True).cuda()
-#         self.W_E = Parameter(torch.Tensor(param.L * param.h, param.E_t),requires_grad=True).cuda()
-#         self.b_y = Parameter(torch.Tensor(param.v_t),requires_grad=True).cuda()
-#         self.b_E = Parameter(torch.Tensor(param.E_t),requires_grad=True).cuda()
+#         self.last_hidden = Variable(torch.Tensor(param.L, param.bs, param.h).zero_())
+#         # self.last_hidden = Variable(torch.Tensor(param.bs, param.L, param.h).zero_())
+#         self.last_cell = Variable(torch.Tensor(param.L, param.bs, param.h).zero_())
+#         self.W_y = Parameter(torch.Tensor(param.L * param.h, param.v_t),requires_grad=True)
+#         self.W_E = Parameter(torch.Tensor(param.L * param.h, param.E_t),requires_grad=True)
+#         self.b_y = Parameter(torch.Tensor(param.v_t),requires_grad=True)
+#         self.b_E = Parameter(torch.Tensor(param.E_t),requires_grad=True)
 #         wls=[self.W_y,self.W_E,self.b_y,self.b_E]
 #         stdv = 1.0 / math.sqrt(self.hidden_size)
 #         for w in wls:
@@ -51,9 +51,9 @@ from torch.autograd import Variable
 #         return output, interface
 #
 #     def new_sequence_reset(self):
-#         self.last_hidden = Variable(torch.Tensor(param.L, param.bs, param.h).zero_().cuda())
+#         self.last_hidden = Variable(torch.Tensor(param.L, param.bs, param.h).zero_())
 #         # stateless, per paper
-#         self.last_cell = Variable(torch.Tensor(param.L, param.bs, param.h).zero_().cuda())
+#         self.last_cell = Variable(torch.Tensor(param.L, param.bs, param.h).zero_())
 #         # self.last_cell = Variable(self.last_cell.data)
 #         self.W_y = Parameter(self.W_y.data,requires_grad=True)
 #         self.b_y = Parameter(self.b_y.data,requires_grad=True)
@@ -72,13 +72,13 @@ class MyController(nn.Module):
         self.RNN_list=nn.ModuleList()
         for _ in range(param.L):
             self.RNN_list.append(RNN_Unit())
-        self.hidden_previous_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
+        self.hidden_previous_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).zero_())
         # self.W_y=nn.Linear(param.L*param.h,param.v_t)
         # self.W_E=nn.Linear(param.L*param.h,param.E_t)
-        self.W_y = Parameter(torch.Tensor(param.L * param.h, param.v_t).cuda(),requires_grad=True)
-        self.W_E = Parameter(torch.Tensor(param.L * param.h, param.E_t).cuda(),requires_grad=True)
-        self.b_y = Parameter(torch.Tensor(param.v_t).cuda(),requires_grad=True)
-        self.b_E = Parameter(torch.Tensor(param.E_t).cuda(),requires_grad=True)
+        self.W_y = Parameter(torch.Tensor(param.L * param.h, param.v_t),requires_grad=True)
+        self.W_E = Parameter(torch.Tensor(param.L * param.h, param.E_t),requires_grad=True)
+        self.b_y = Parameter(torch.Tensor(param.v_t),requires_grad=True)
+        self.b_E = Parameter(torch.Tensor(param.E_t),requires_grad=True)
 
         wls=(self.W_y,self.W_E,self.b_y,self.b_E)
         stdv = 1.0 / math.sqrt(param.h)
@@ -91,8 +91,8 @@ class MyController(nn.Module):
         :param input_x: raw input concatenated with flattened memory input
         :return:
         '''
-        hidden_previous_layer=Variable(torch.Tensor(param.bs,param.h).zero_().cuda())
-        hidden_this_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).cuda())
+        hidden_previous_layer=Variable(torch.Tensor(param.bs,param.h).zero_())
+        hidden_this_timestep=Variable(torch.Tensor(param.bs,param.L,param.h))
         for i in range(param.L):
             hidden_output=self.RNN_list[i](input_x, self.hidden_previous_timestep[:,i,:],
                                            hidden_previous_layer)
@@ -113,7 +113,7 @@ class MyController(nn.Module):
         self.W_E.reset_parameters()
 
     def new_sequence_reset(self):
-        self.hidden_previous_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).zero_().cuda())
+        self.hidden_previous_timestep=Variable(torch.Tensor(param.bs,param.L,param.h).zero_())
         for RNN in self.RNN_list:
             RNN.new_sequence_reset()
         # self.hidden_previous_timestep.detach()
@@ -138,22 +138,22 @@ class RNN_Unit(nn.Module):
         # self.W_output=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
         # self.W_state=nn.Linear(param.x+param.R*param.W+2*param.h,param.h)
 
-        self.W_input=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h).cuda(),requires_grad=True)
-        self.W_forget=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h).cuda(),requires_grad=True)
-        self.W_output=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h).cuda(),requires_grad=True)
-        self.W_state=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h).cuda(),requires_grad=True)
+        self.W_input=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h),requires_grad=True)
+        self.W_forget=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h),requires_grad=True)
+        self.W_output=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h),requires_grad=True)
+        self.W_state=Parameter(torch.Tensor(param.x+param.R*param.W+2*param.h,param.h),requires_grad=True)
 
-        self.b_input=Parameter(torch.Tensor(param.h).cuda(),requires_grad=True)
-        self.b_forget=Parameter(torch.Tensor(param.h).cuda(),requires_grad=True)
-        self.b_output=Parameter(torch.Tensor(param.h).cuda(),requires_grad=True)
-        self.b_state=Parameter(torch.Tensor(param.h).cuda(),requires_grad=True)
+        self.b_input=Parameter(torch.Tensor(param.h),requires_grad=True)
+        self.b_forget=Parameter(torch.Tensor(param.h),requires_grad=True)
+        self.b_output=Parameter(torch.Tensor(param.h),requires_grad=True)
+        self.b_state=Parameter(torch.Tensor(param.h),requires_grad=True)
 
         wls=(self.W_forget,self.W_output,self.W_input,self.W_state,self.b_input,self.b_forget,self.b_output,self.b_state)
         stdv = 1.0 / math.sqrt(param.h)
         for w in wls:
             w.data.uniform_(-stdv, stdv)
 
-        self.old_state=Variable(torch.Tensor(param.bs,param.h).zero_().cuda())
+        self.old_state=Variable(torch.Tensor(param.bs,param.h).zero_())
 
 
     def reset_parameters(self):
@@ -193,7 +193,7 @@ class RNN_Unit(nn.Module):
         return new_hidden
 
     def new_sequence_reset(self):
-        self.old_state=Variable(torch.Tensor(param.bs,param.h).zero_().cuda())
+        self.old_state=Variable(torch.Tensor(param.bs,param.h).zero_())
         # self.W_input.weight.detach()
         # self.W_input.bias.detach()
         # self.W_forget.weight.detach()
