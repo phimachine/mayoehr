@@ -172,6 +172,7 @@ def validate_batch_patients(cpu_computer, valid_iterator, target_dim, optimizer,
                             binary_criterion, valid_batch_num=10):
     optimizer.zero_grad()
     global global_exception_counter
+<<<<<<< HEAD
 
     # this copies, right? You should check that by examining it after copying it back.
     # see if all weights are volatile
@@ -243,6 +244,79 @@ def validate_batch_patients(cpu_computer, valid_iterator, target_dim, optimizer,
     return running_loss
 
 
+=======
+
+    # this copies, right? You should check that by examining it after copying it back.
+    # see if all weights are volatile
+
+    running_loss=0
+    computer=cpu_computer.cuda()
+
+    for _ in range(valid_batch_num):
+        if debug:
+            print("validation")
+        try:
+            (input, target, loss_type) = next(valid_iterator)
+
+            input = Variable(torch.Tensor(input).cuda(), volatile=True)
+            target = Variable(torch.Tensor(target).cuda(), volatile=True)
+
+            # we have no critical index, becuase critical index are those timesteps that
+            # DNC is required to produce outputs. This is not the case for our project.
+            # criterion does not need to be reinitiated for every story, because we are not using a mask
+
+            time_length = input.size()[1]
+            # with torch.no_grad if validate else dummy_context_mgr():
+            patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
+            for timestep in range(time_length):
+                # first colon is always size 1
+                feeding = input[:, timestep, :]
+                output = computer(feeding)
+                assert not (output != output).any()
+                patient_output[0, timestep, :] = output
+
+            # patient_output: (batch_size 1, time_length, output_dim ~4000)
+            time_to_event_output = patient_output[:, :, 0]
+            cause_of_death_output = patient_output[:, :, 1:]
+            time_to_event_target = target[:, :, 0]
+            cause_of_death_target = target[:, :, 1:]
+
+            # this block will not work for batch input,
+            # you should modify it so that the loss evaluation is not determined by logic but function.
+            # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
+            #
+            # if loss_type[0] == 0:
+            #     # in record
+            #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
+            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+            #     patient_loss = toe_loss/100 + cod_loss
+            # else:
+            #     # not in record
+            #     # be careful with the sign, penalize when and only when positive
+            #     underestimation = time_to_event_target - time_to_event_output
+            #     underestimation = nn.functional.relu(underestimation)
+            #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
+            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+            #     patient_loss = toe_loss/100 + cod_loss
+            patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+
+            running_loss += float(patient_loss[0])
+            # del input, target, time_length, patient_output, timestep, feeding, output, \
+            #     time_to_event_output, cause_of_death_output, time_to_event_target, cause_of_death_target, patient_loss
+            # gc.collect()
+
+        except ValueError:
+            traceback.print_exc()
+            print("Value Error reached")
+            global_exception_counter += 1
+            if global_exception_counter == 10:
+                raise ValueError("Global exception counter reached 10. Likely the model has nan in memory")
+            else:
+                pass
+    return running_loss
+
+
+>>>>>>> 2d6af9b93a1a9d3ea5dcd7d8248b6290d1374e04
 def train_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                       binary_criterion):
     optimizer.zero_grad()
