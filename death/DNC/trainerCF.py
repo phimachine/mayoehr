@@ -4,22 +4,17 @@ import pandas as pd
 import torch
 import numpy
 import pdb
-from pathlib import Path
-import os
-from os.path import abspath
 from death.post.inputgen_planC import InputGen, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
-import shutil
-import copy
 import traceback
+import copy
 
 batch_size = 1
 debug=False
-
 
 class dummy_context_mgr():
     def __enter__(self):
@@ -27,138 +22,6 @@ class dummy_context_mgr():
 
     def __exit__(self, exc_type, exc_value, traceback):
         return False
-
-
-def save_model(net, optim, epoch, iteration):
-    epoch = int(epoch)
-    task_dir = os.path.dirname(abspath(__file__))
-    data_dir = Path(task_dir) / "saves"
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-    pickle_path = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) + "_" + str(iteration) + ".pkl")
-    pickle_file = pickle_path.open('wb')
-    torch.save((net, optim, epoch, iteration), pickle_file)
-    print('model saved at', pickle_path)
-
-
-def save_model_old(net, optim, epoch, iteration):
-    print("saving model")
-    epoch = int(epoch)
-    state_dict = net.state_dict()
-    for key in state_dict.keys():
-        state_dict[key] = state_dict[key].cpu()
-    task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) + "_" + str(iteration) + ".pkl")
-    fhand = pickle_file.open('wb')
-    try:
-        pickle.dump((state_dict, optim, epoch, iteration), fhand)
-        print('model saved at', pickle_file)
-    except:
-        fhand.close()
-        os.remove(pickle_file)
-
-
-def load_model(computer, remove=True):
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"
-    highestepoch = 0
-    highestiter = 0
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
-        iteration = int(iteration)
-        epoch = int(epoch)
-        # some files are open but not written to yet.
-        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
-            highestepoch = epoch
-            highestiter = iteration
-    if highestepoch == 0 and highestiter == 0:
-        print("Nothing to load.")
-        return computer, None, 0, 0
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-    print("loading model at ", pickle_file)
-    pickle_file = pickle_file.open('rb')
-    computer, optim, epoch, iteration = torch.load(pickle_file)
-    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-
-    if remove:
-        for child in save_dir.iterdir():
-            epoch = str(child).split("_")[3].split('.')[0]
-            iteration = str(child).split("_")[4].split('.')[0]
-            if int(epoch) != highestepoch and int(iteration) != highestiter:
-                # TODO might have a bug here.
-                os.remove(child)
-                print("removed saved weighting", child)
-        print('Removed incomplete save file and all else.')
-
-    return computer, optim, highestepoch, highestiter
-
-
-def load_model_old(computer):
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"
-    highestepoch = 0
-    highestiter = 0
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
-        iteration = int(iteration)
-        epoch = int(epoch)
-        # some files are open but not written to yet.
-        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 204800:
-            highestepoch = epoch
-            highestiter = iteration
-    if highestepoch == 0 and highestepoch == 0:
-        return computer, None, 0, 0
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(iteration) + ".pkl")
-    print("loading model at ", pickle_file)
-    pickle_file = pickle_file.open('rb')
-    modelsd, optim, epoch, iteration = torch.load(pickle_file)
-    computer.load_state_dict(modelsd)
-    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3].split('.')[0]
-        iteration = str(child).split("_")[4].split('.')[0]
-        if int(epoch) != highestepoch and int(iteration) != highestiter:
-            os.remove(child)
-    print('Removed incomplete save file and all else.')
-
-    return computer, optim, epoch, iteration
-
-
-def salvage():
-    # this function will pick up the last two highest epoch training and save them somewhere else,
-    # this is to prevent unexpected data loss.
-    # We are working in a /tmp folder, and we write around 1Gb per minute.
-    # The loss of data is likely.
-
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"
-    highestepoch = 0
-    secondhighestiter = 0
-    highestiter = 0
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
-        iteration = int(iteration)
-        epoch = int(epoch)
-        # some files are open but not written to yet.
-        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
-            highestepoch = epoch
-            highestiter = iteration
-    if highestepoch == 0 and highestiter == 0:
-        print("no file to salvage")
-        return
-    if secondhighestiter != 0:
-        pickle_file2 = Path(task_dir).joinpath(
-            "saves/DNCfull_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
-        shutil.copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
-
-    pickle_file1 = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-    shutil.copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
-
-    print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
 
 def copy_model_to_cpu(computer):
     model_dict=computer.state_dict()
@@ -172,7 +35,6 @@ def validate_batch_patients(cpu_computer, valid_iterator, target_dim, optimizer,
                             binary_criterion, valid_batch_num=10):
     optimizer.zero_grad()
     global global_exception_counter
-<<<<<<< HEAD
 
     # this copies, right? You should check that by examining it after copying it back.
     # see if all weights are volatile
@@ -244,79 +106,6 @@ def validate_batch_patients(cpu_computer, valid_iterator, target_dim, optimizer,
     return running_loss
 
 
-=======
-
-    # this copies, right? You should check that by examining it after copying it back.
-    # see if all weights are volatile
-
-    running_loss=0
-    computer=cpu_computer.cuda()
-
-    for _ in range(valid_batch_num):
-        if debug:
-            print("validation")
-        try:
-            (input, target, loss_type) = next(valid_iterator)
-
-            input = Variable(torch.Tensor(input).cuda(), volatile=True)
-            target = Variable(torch.Tensor(target).cuda(), volatile=True)
-
-            # we have no critical index, becuase critical index are those timesteps that
-            # DNC is required to produce outputs. This is not the case for our project.
-            # criterion does not need to be reinitiated for every story, because we are not using a mask
-
-            time_length = input.size()[1]
-            # with torch.no_grad if validate else dummy_context_mgr():
-            patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
-            for timestep in range(time_length):
-                # first colon is always size 1
-                feeding = input[:, timestep, :]
-                output = computer(feeding)
-                assert not (output != output).any()
-                patient_output[0, timestep, :] = output
-
-            # patient_output: (batch_size 1, time_length, output_dim ~4000)
-            time_to_event_output = patient_output[:, :, 0]
-            cause_of_death_output = patient_output[:, :, 1:]
-            time_to_event_target = target[:, :, 0]
-            cause_of_death_target = target[:, :, 1:]
-
-            # this block will not work for batch input,
-            # you should modify it so that the loss evaluation is not determined by logic but function.
-            # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
-            #
-            # if loss_type[0] == 0:
-            #     # in record
-            #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
-            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-            #     patient_loss = toe_loss/100 + cod_loss
-            # else:
-            #     # not in record
-            #     # be careful with the sign, penalize when and only when positive
-            #     underestimation = time_to_event_target - time_to_event_output
-            #     underestimation = nn.functional.relu(underestimation)
-            #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
-            #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-            #     patient_loss = toe_loss/100 + cod_loss
-            patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-
-            running_loss += float(patient_loss[0])
-            # del input, target, time_length, patient_output, timestep, feeding, output, \
-            #     time_to_event_output, cause_of_death_output, time_to_event_target, cause_of_death_target, patient_loss
-            # gc.collect()
-
-        except ValueError:
-            traceback.print_exc()
-            print("Value Error reached")
-            global_exception_counter += 1
-            if global_exception_counter == 10:
-                raise ValueError("Global exception counter reached 10. Likely the model has nan in memory")
-            else:
-                pass
-    return running_loss
-
-
->>>>>>> 2d6af9b93a1a9d3ea5dcd7d8248b6290d1374e04
 def train_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                       binary_criterion):
     optimizer.zero_grad()
@@ -383,12 +172,6 @@ def train_one_patient(computer, input, target, target_dim, optimizer, loss_type,
 
     return printloss
 
-
-def log_print(string, logfile):
-    if logfile:
-        with open(logfile, 'a') as handle:
-            handle.write(string + "\n")
-    print(string)
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim,
@@ -474,7 +257,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             else:
                 break
 
-
 def main():
 
     # this function is setup so that it tests validation and model saving first.
@@ -482,6 +264,7 @@ def main():
     iter_per_epoch = 100000
     lr = 1e-5
     target_dim = 3656
+
     logfile = "log.txt"
 
     num_workers = 3
