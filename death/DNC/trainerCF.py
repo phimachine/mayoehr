@@ -155,6 +155,7 @@ global_exception_counter=0
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
     try:
+        optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
 
@@ -215,8 +216,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim, logfile=False):
     print_interval=10
-    val_interval=100
-    save_interval=1000
+    val_interval=50
+    save_interval=100
     if logfile:
         open(logfile, 'w').close()
 
@@ -258,11 +259,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                           (i, printloss))
 
                 if i < save_interval:
-                    if i % save_interval//10 == 0:
+                    if i % (save_interval//10) == 0:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
                 if i> save_interval:
-                    if i % save_interval//2 == 0:
+                    if i % (save_interval//2) == 0:
                         save_model(computer, optimizer, epoch, i)
                         print("model saved for epoch", epoch, "input", i)
             else:
@@ -272,7 +273,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 def main():
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-5
+    lr = 1e-3
+    lr = 1e-3
     optim = None
     starting_epoch = -1
     starting_iteration=-1
