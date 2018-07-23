@@ -1,3 +1,5 @@
+import gc
+
 import pandas as pd
 import torch
 import numpy
@@ -15,6 +17,7 @@ from shutil import copy
 import traceback
 
 batch_size = 1
+debug=True
 
 
 class dummy_context_mgr():
@@ -57,8 +60,8 @@ def save_model_old(net, optim, epoch, iteration):
 def load_model(computer, remove=True):
     task_dir = os.path.dirname(abspath(__file__))
     save_dir = Path(task_dir) / "saves"
-    highestepoch = -1
-    highestiter = -1
+    highestepoch = 0
+    highestiter = 0
     for child in save_dir.iterdir():
         epoch = str(child).split("_")[3]
         iteration = str(child).split("_")[4].split('.')[0]
@@ -69,6 +72,7 @@ def load_model(computer, remove=True):
             highestepoch = epoch
             highestiter = iteration
     if highestepoch == 0 and highestiter == 0:
+        print("Nothing to load.")
         return computer, None, 0, 0
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at ", pickle_file)
@@ -103,7 +107,7 @@ def load_model_old(computer):
         if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 204800:
             highestepoch = epoch
             highestiter = iteration
-    if highestepoch == -1 and highestepoch == -1:
+    if highestepoch == 0 and highestepoch == 0:
         return computer, None, 0, 0
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(iteration) + ".pkl")
     print("loading model at ", pickle_file)
@@ -130,9 +134,9 @@ def salvage():
 
     task_dir = os.path.dirname(abspath(__file__))
     save_dir = Path(task_dir) / "saves"
-    highestepoch = -1
-    secondhighestiter = -1
-    highestiter = -1
+    highestepoch = 0
+    secondhighestiter = 0
+    highestiter = 0
     for child in save_dir.iterdir():
         epoch = str(child).split("_")[3]
         iteration = str(child).split("_")[4].split('.')[0]
@@ -142,10 +146,10 @@ def salvage():
         if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
             highestepoch = epoch
             highestiter = iteration
-    if highestepoch == -1 and highestiter == -1:
+    if highestepoch == 0 and highestiter == 0:
         print("no file to salvage")
         return
-    if secondhighestiter != -1:
+    if secondhighestiter != 0:
         pickle_file2 = Path(task_dir).joinpath(
             "saves/DNCfull_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
@@ -157,12 +161,13 @@ def salvage():
 
 
 
-global global_exception_counter
 global_exception_counter = 0
 
 
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
+    optimizer.zero_grad()
+    global global_exception_counter
     try:
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
@@ -209,6 +214,12 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         if not validate:
             patient_loss.backward()
             optimizer.step()
+
+        printloss = float(patient_loss[0])
+        # del input, target, time_length, patient_output, timestep, feeding, output, \
+        #     time_to_event_output, cause_of_death_output, time_to_event_target, cause_of_death_target, patient_loss
+        # gc.collect()
+
     except ValueError:
         traceback.print_exc()
         print("Value Error reached")
@@ -218,7 +229,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         else:
             pass
 
-    return patient_loss
+    return printloss
 
 
 def log_print(string, logfile):
@@ -227,13 +238,12 @@ def log_print(string, logfile):
             handle.write(string + "\n")
     print(string)
 
-
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim,
           logfile=False):
-    print_interval = 10
-    val_interval = 10
-    save_interval = 500
+    print_interval = 1
+    val_interval = 100
+    save_interval = 100
     val_batch = 10
     if logfile:
         open(logfile, 'w').close()
@@ -243,9 +253,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
         for i, (input, target, loss_type) in enumerate(train):
             i = starting_iter + i
             if i < iter_per_epoch:
-                train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+                printloss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion)
-                printloss = float(train_story_loss[0])
                 computer.new_sequence_reset()
                 del input, target, loss_type
                 running_loss += printloss
@@ -270,16 +279,19 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     running_loss = 0
 
                 # every validation seems to produce some garbage in the GPU, why?
-                if i % val_interval == val_interval - 1:
+                if i % val_interval == 0:
                     print("we have reached validation block.")
-                    printloss = 0
+                    running_loss = 0
                     for i in range(val_interval):
+                        if debug:
+                            print("validation")
                         (input, target, loss_type) = next(valid_iterator)
                         val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion, validate=True)
-                        printloss += float(val_loss[0])
+                        del input, target, loss_type
+                        running_loss += val_loss
                     log_print("validation. count: %4d, val loss     : %.10f" %
-                              (i, printloss / val_batch), logfile)
+                              (i, running_loss / val_batch), logfile)
                     #     with open(logfile, 'a') as handle:
                     #         handle.write("validation. count: %4d, val loss     : %.10f \n" %
                     #                      (i, printloss/val_batch))
@@ -310,8 +322,9 @@ def main():
 
     num_workers = 3
     ig = InputGen()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
+    # multiprocessing needs to be careful, because socket request seems unstable.
+    # if you request more workers than needed, you close and reopen sockets and the program might abort.
+    # performance is best at 3
     trainds, validds = train_valid_split(ig, split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
