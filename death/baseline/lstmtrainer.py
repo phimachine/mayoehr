@@ -8,7 +8,7 @@ from os.path import abspath
 from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein import Frankenstein as DNC
+from torch.nn.modules import LSTM
 from torch.autograd import Variable
 import pickle
 from shutil import copy
@@ -28,7 +28,7 @@ class dummy_context_mgr():
 def save_model(net, optim, epoch, iteration):
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) +  "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(epoch) +  "_" + str(iteration) + ".pkl")
     pickle_file = pickle_file.open('wb')
     torch.save((net,  optim, epoch, iteration), pickle_file)
     print('model saved at', pickle_file)
@@ -40,7 +40,7 @@ def save_model_old(net, optim, epoch, iteration):
     for key in state_dict.keys():
         state_dict[key] = state_dict[key].cpu()
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(epoch) + "_" + str(iteration) + ".pkl")
     fhand = pickle_file.open('wb')
     try:
         pickle.dump((state_dict,optim, epoch, iteration),fhand)
@@ -51,7 +51,7 @@ def save_model_old(net, optim, epoch, iteration):
 
 def load_model(computer, optim, starting_epoch, starting_iteration):
     task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"
+    save_dir = Path(task_dir) / "lstmsaves"
     highestepoch = 0
     highestiter = 0
     for child in save_dir.iterdir():
@@ -67,7 +67,7 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
     if highestepoch == 0 and highestiter == 0:
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
     computer, optim, epoch, iteration = torch.load(pickle_file)
@@ -86,7 +86,7 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
 
 def load_model_old(computer):
     task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"
+    save_dir = Path(task_dir) / "lstmsaves"
     highestepoch = -1
     highestiter = -1
     for child in save_dir.iterdir():
@@ -100,7 +100,7 @@ def load_model_old(computer):
             highestiter=iteration
     if highestepoch == -1 and highestepoch==-1:
         return computer, None, -1, -1
-    pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
     print("loading model at ", pickle_file)
     pickle_file = pickle_file.open('rb')
     modelsd, optim, epoch, iteration = torch.load(pickle_file)
@@ -124,7 +124,7 @@ def salvage():
     # The loss of data is likely.
 
     task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"
+    save_dir = Path(task_dir) / "lstmsaves"
     highestepoch = -1
     secondhighestiter = -1
     highestiter = -1
@@ -141,13 +141,13 @@ def salvage():
         print("no file to salvage")
         return
     if secondhighestiter != -1:
-        pickle_file2 = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
-        copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
+        pickle_file2 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+        copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/lstmsalvage2.pkl")
 
-    pickle_file1 = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file1 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
 
-    print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
+    print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
 
 def run_one_patient_one_step():
     # this is so python does garbage collection automatically.
@@ -297,17 +297,18 @@ def main():
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
-    computer=DNC()
+    lstm=LSTM(input_size=47764,hidden_size=128,num_layers=16,batch_first=True,
+                  dropout=True)
 
     # load model:
-    load=True
+    load=False
     if load:
         print("loading model")
-        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
+        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
 
-    computer = computer.cuda()
+    lstm = lstm.cuda()
     if optim is None:
-        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
@@ -318,7 +319,7 @@ def main():
 
     # starting with the epoch after the loaded one
 
-    train(computer, optimizer, real_criterion, binary_criterion,
+    train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 

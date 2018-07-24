@@ -42,7 +42,7 @@ class InputGenD(InputGen):
         self.all_indices = np.concatenate((death_rep_person_id, no_death_rep_person_id))
         np.random.shuffle(self.all_indices)
         self.len = len(self.all_indices)
-        print("Using InputGen Plan D")
+        print("Using InputGen Plan D, with death proportion", self.death_proportion)
 
     def __getitem__(self, index, debug=False):
         # TODO there is a critical bug that shows that my post processing might need to be updated.
