@@ -52,7 +52,7 @@ class InputGenD(InputGen):
         # id=99102
         id = self.all_indices[index]
         return self.get_by_id(id, debug)
-
+        # return torch.Tensor(i),torch.Tensor(o)
     def __len__(self):
         return self.len
 

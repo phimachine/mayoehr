@@ -29,7 +29,7 @@ def save_model(net, optim, epoch, iteration):
     task_dir = os.path.dirname(abspath(__file__))
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) +  "_" + str(iteration) + ".pkl")
     pickle_file = pickle_file.open('wb')
-    torch.save((net, optim, epoch, iteration), pickle_file)
+    torch.save((net.state_dict(), optim, epoch, iteration), pickle_file)
     print('model saved at', pickle_file)
 
 def save_model_old(net, optim, epoch, iteration):
@@ -64,11 +64,12 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
                 highestepoch = epoch
                 highestiter = iteration
     if highestepoch == -1 and highestiter == -1:
-        return computer, None, -1, -1
+        return None, None, -1, -1
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
-    computer, optim, epoch, iteration = torch.load(pickle_file)
+    computersd, optim, epoch, iteration = torch.load(pickle_file)
+    computer.load_state_dict(computersd)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
     #
     # for child in save_dir.iterdir():
@@ -288,14 +289,13 @@ def main():
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
-
-    computer = DNC()
+    computer=DNC()
 
     # load model:
-    load=False
+    load=True
     if load:
         print("loading model")
-        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
+        computer, optim, starting_epoch, starting_iteration = load_model(optim, starting_epoch, starting_iteration)
 
     computer = computer.cuda()
     if optim is None:

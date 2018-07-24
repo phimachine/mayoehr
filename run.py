@@ -1,4 +1,4 @@
-from death.DNC.trainerCF import *
+from death.DNC.trainerD import *
 import os
 from shutil import copy
 import traceback
@@ -14,5 +14,3 @@ if __name__ == "__main__":
             f.write(str(datetime.datetime.now().time()))
             traceback.print_exc(file=f)
         salvage()
-
-
