@@ -82,3 +82,9 @@ mydeath<- mydeath %>% mutate(death_date=ymd(death_date)) %>% setDT()
 newdeath<-rbind(mydeath,natural)
 newdeath<-newdeath%>% arrange(rep_person_id, id) %>% setDT()
 fwrite(newdeath,"/infodev1/rep/projects/jason/newdeath.csv")
+
+
+##### newdeath contains patients with no EHR records
+newdeath<-newdeath[rep_person_id %in% demo$rep_person_id]
+fwrite(newdeath,"/infodev1/rep/projects/jason/newdeath.csv")
+
