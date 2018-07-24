@@ -155,6 +155,7 @@ def run_one_patient_one_step():
 global_exception_counter=0
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
+    patient_loss=None
     try:
         optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
@@ -208,7 +209,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         global global_exception_counter
         global_exception_counter+=1
         if global_exception_counter==10:
-            raise ValueError("Global exception counter reached 10. Likely the model has nan in memory")
+            raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
             pass
 
@@ -235,7 +236,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion)
-                printloss=float(train_story_loss[0])
+                if train_story_loss is not None:
+                    printloss=float(train_story_loss[0])
                 computer.new_sequence_reset()
                 del input, target, loss_type
                 running_loss_deque.appendleft(printloss)
@@ -255,7 +257,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     (input,target,loss_type)=next(valid_iterator)
                     val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion, validate=True)
-                    printloss=float(val_loss[0])
+                    if val_loss is not None:
+                        printloss = float(val_loss[0])
                     if logfile:
                         with open(logfile, 'a') as handle:
                             handle.write("validation. count: %4d, val loss     : %.10f \n" %
@@ -273,8 +276,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 def main():
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-3
-    lr = 1e-3
+    lr = 1e-4
     optim = None
     starting_epoch = -1
     starting_iteration=-1
@@ -291,7 +293,7 @@ def main():
     computer=DNC()
 
     # load model:
-    load=True
+    load=False
     if load:
         print("loading model")
         computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
