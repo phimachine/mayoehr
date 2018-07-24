@@ -144,6 +144,9 @@ class InputGen(Dataset, DFManager):
         :return:
         '''
         id = self.rep_person_id[index]
+        return self.get_by_id(id,debug)
+
+    def get_by_id(self,id,debug=False):
         time_length = self.earla.loc[id]["int"] + 1
         earliest = self.earla.loc[id]["earliest"]
         latest = self.earla.loc[id]["latest"]
@@ -165,7 +168,7 @@ class InputGen(Dataset, DFManager):
             if val == val:
                 insidx = dic[val] + startidx
                 np.add.at(input, [tss, insidx], 1)
-        if (input!=input).any():
+        if (input != input).any():
             raise ValueError("NA FOUND")
 
         coln = "male"
@@ -174,7 +177,7 @@ class InputGen(Dataset, DFManager):
         if val == val:
             np.add.at(input, [tss, insidx], 1)
         # this might have problem, we should use two dimensions for bool. But for now, let's not go back to prep.
-        if (input!=input).any():
+        if (input != input).any():
             raise ValueError("NA FOUND")
         coln = "birth_date"
         insidx, _ = self.get_column_index_range(dfn, coln)
@@ -184,7 +187,7 @@ class InputGen(Dataset, DFManager):
             earliest_month_age = (earliest.to_datetime64() - bd.to_datetime64()).astype("timedelta64[M]").astype("int")
             age_val = np.arange(earliest_month_age, earliest_month_age + time_length)
             np.add.at(input, [tss, insidx], age_val)
-        if (input!=input).any():
+        if (input != input).any():
             raise ValueError("NA FOUND")
         #####
         # death
@@ -220,10 +223,9 @@ class InputGen(Dataset, DFManager):
             loss_type = 0
         else:
             loss_type = 1
-            countdown_val=np.arange(time_length-1,-1,-1)
+            countdown_val = np.arange(time_length - 1, -1, -1)
             np.add.at(target, [tss, 0], countdown_val)
             # TODO do not pass gradient to code if loss_type is 1
-
 
         # TODO use bottom layer bias to offset missing data.
 
@@ -293,7 +295,7 @@ class InputGen(Dataset, DFManager):
 
                     for ts, val in zip(tsloc, allrows[coln]):
                         # if not nan
-                        if val == val and val!="":
+                        if val == val and val != "":
                             insidx += [dic[val] + startidx]
                             nantsloc += [ts]
                     np.add.at(input, [nantsloc, insidx], 1)
@@ -309,19 +311,19 @@ class InputGen(Dataset, DFManager):
                     for ts, multival in zip(tsloc, allrows[coln]):
                         if multival == multival:
                             vals = multival.split("|")
-                            vals = list(filter(lambda a: a!="", vals))
+                            vals = list(filter(lambda a: a != "", vals))
                             tss += [ts] * len(vals)
                             insidx += [dic[val] + startidx for val in vals if val == val]
                     try:
                         np.add.at(input, [tss, insidx], 1)
                     except IndexError:
                         raise IndexError
-        if (input!=input).any():
+        if (input != input).any():
             raise ValueError("NA FOUND")
         # high frequency visitors have been handled smoothly, by aggregating
         if debug:
             print("get item finished")
-        if (input!=input).any():
+        if (input != input).any():
             raise ValueError("NA FOUND")
         return input.astype("float32"), target.astype("float32"), loss_type
 
