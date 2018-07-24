@@ -5,7 +5,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planC import InputGen, train_valid_split
+from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein import Frankenstein as DNC
@@ -215,10 +215,11 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, target_dim, logfile=False):
+          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
     print_interval=10
     val_interval=50
     save_interval=100
+    target_dim=None
     if logfile:
         open(logfile, 'w').close()
 
@@ -226,6 +227,9 @@ def train(computer, optimizer, real_criterion, binary_criterion,
         running_loss=0
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
+            if target_dim is None:
+                target_dim=target.shape[2]
+
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion)
@@ -243,7 +247,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                           (i, printloss))
                     if i!=0:
                         print("count: %4d, running loss: %.10f" % (i, running_loss))
-                running_loss=0
+                    running_loss=0
 
 
                 if i % val_interval == 0:
@@ -274,11 +278,10 @@ def main():
     optim = None
     starting_epoch = -1
     starting_iteration=-1
-    target_dim = 3656
     logfile = "log.txt"
 
     num_workers = 3
-    ig = InputGen()
+    ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds,validds=train_valid_split(ig,split_fold=10)
@@ -289,7 +292,7 @@ def main():
     computer = DNC()
 
     # load model:
-    load=True
+    load=False
     if load:
         print("loading model")
         computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
@@ -308,7 +311,7 @@ def main():
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, target_dim, logfile)
+          traindl, iter(validdl), int(starting_epoch) + 1, total_epochs,int(starting_iteration)+1, iter_per_epoch, logfile)
 
 
 if __name__ == "__main__":
