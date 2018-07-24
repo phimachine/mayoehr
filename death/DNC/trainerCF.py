@@ -58,24 +58,25 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
         iteration = int(iteration)
         epoch = int(epoch)
         # some files are open but not written to yet.
-        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
-            highestepoch = epoch
-            highestiter = iteration
+        if child.stat().st_size > 20480:
+            if epoch > highestepoch or (iteration > highestiter and epoch==highestepoch):
+                highestepoch = epoch
+                highestiter = iteration
     if highestepoch == -1 and highestiter == -1:
         return computer, None, -1, -1
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-    print("loading model at ", pickle_file)
+    print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
     computer, optim, epoch, iteration = torch.load(pickle_file)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3].split('.')[0]
-        iteration = str(child).split("_")[4].split('.')[0]
-        if int(epoch) != highestepoch and int(iteration) != highestiter:
-            # TODO might have a bug here.
-            os.remove(child)
-    print('Removed incomplete save file and all else.')
+    #
+    # for child in save_dir.iterdir():
+    #     epoch = str(child).split("_")[3].split('.')[0]
+    #     iteration = str(child).split("_")[4].split('.')[0]
+    #     if int(epoch) != highestepoch and int(iteration) != highestiter:
+    #         # TODO might have a bug here.
+    #         os.remove(child)
+    # print('Removed incomplete save file and all else.')
 
     return computer, optim, highestepoch, highestiter
 
@@ -150,7 +151,6 @@ def run_one_patient_one_step():
     # we are debugging the
     pass
 
-global global_exception_counter
 global_exception_counter=0
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
@@ -204,6 +204,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
     except ValueError:
         traceback.print_exc()
         print("Value Error reached")
+        global global_exception_counter
         global_exception_counter+=1
         if global_exception_counter==10:
             raise ValueError("Global exception counter reached 10. Likely the model has nan in memory")
@@ -288,8 +289,8 @@ def main():
     computer = DNC()
 
     # load model:
-    load_model=False
-    if load_model:
+    load=True
+    if load:
         print("loading model")
         computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
 
