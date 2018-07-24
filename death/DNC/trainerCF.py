@@ -1,6 +1,6 @@
 import pandas as pd
 import torch
-import numpy
+import numpy as np
 import pdb
 from pathlib import Path
 import os
@@ -13,6 +13,7 @@ from torch.autograd import Variable
 import pickle
 from shutil import copy
 import traceback
+from collections import deque
 
 batch_size = 1
 
@@ -220,11 +221,12 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     val_interval=50
     save_interval=100
     target_dim=None
+    rldmax_len=50
+    running_loss_deque=deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
 
     for epoch in range(starting_epoch, total_epochs):
-        running_loss=0
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
             if target_dim is None:
@@ -236,9 +238,9 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 printloss=float(train_story_loss[0])
                 computer.new_sequence_reset()
                 del input, target, loss_type
-                running_loss+=printloss
+                running_loss_deque.appendleft(printloss)
                 if i % print_interval == 0:
-                    running_loss=running_loss/print_interval
+                    running_loss=np.mean(running_loss_deque)
                     if logfile:
                         with open(logfile, 'a') as handle:
                             handle.write("learning.   count: %4d, training loss: %.10f \n" %
@@ -247,8 +249,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                           (i, printloss))
                     if i!=0:
                         print("count: %4d, running loss: %.10f" % (i, running_loss))
-                    running_loss=0
-
 
                 if i % val_interval == 0:
                     # we should consider running validation multiple times and average. TODO

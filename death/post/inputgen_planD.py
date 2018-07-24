@@ -30,7 +30,7 @@ def get_timestep_location(earliest, dates):
 
 class InputGenD(InputGen):
     # inherit this class mainly so that I can reuse the code and maintain faster
-    def __init__(self, death_proportion=0.5, load_pickle=True, verbose=False, debug=False):
+    def __init__(self, death_proportion=0.9, load_pickle=True, verbose=False, debug=False):
         super(InputGenD, self).__init__(load_pickle=load_pickle, verbose=verbose, debug=debug)
         # This is sorted
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
@@ -42,7 +42,7 @@ class InputGenD(InputGen):
         self.all_indices = np.concatenate((death_rep_person_id, no_death_rep_person_id))
         np.random.shuffle(self.all_indices)
         self.len = len(self.all_indices)
-        print("InputGenD finished")
+        print("Using InputGen Plan D")
 
     def __getitem__(self, index, debug=False):
         # TODO there is a critical bug that shows that my post processing might need to be updated.
