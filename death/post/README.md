@@ -37,6 +37,30 @@ The advantange of this model is that its output is very homogenous with the inpu
 
 The disadvantage of this model is that its output is less diverse, and we can do very little to exploit the parallel knowledge. To interpret anything meaningful, we will need to slide the pointer across future timesteps. We can interpret the output as cause of death without caring about "registration flag". Also, the model might be inclined to produce 0 for all outputs, because the dataset is imbalanced. This is not a problem for Plan A.
 
+### Plan C
+Plan C is actually just plan B. There was some implementation reason why I changed the name here.
+
+### Plan D
+Plan D tries to address the training set imbalance. I have not concluded why the performance of Plan C was so good, but
+a big assumption is that the model consists largely sparse signals and common causes, and therefore the model
+learnt to output those values and therefore nothing real.
+
+Splitting the dataset will allows us to understand how the model performs in the two cases where death records exist and
+don't.
+
+There is a parameter in InputGen that controls the proportion of death records. I have injected a bias that is not true
+of the population by artificially increasing the proportion of death records. Here is my argument.
+
+A good model does not bet based on background probability. It tries to learn from the inputs, not the targets.
+If in the end all the model does is it predict by the background probability,
+the performance is trash anyway. I train tne model with a wrong background probability,
+given the assumption that the model will learn more from the inputs than the targets,
+not a proven assumption to be sure. But if it's true, I should increase the proportion of deaths so that the model
+trains faster by feeding more signals. Right now the dataset is too big to process. This allows me to train faster.
+
+The model would have a bias. But given my training resources, I use more data and reduce variance, and I think the
+bias would not be big since much information can be extracted from the inputs. I hope.
+
 ## my DNC
 For experiment purposes, I will use my own DNC implementation and feed the input in.
 
