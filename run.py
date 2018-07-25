@@ -1,4 +1,4 @@
-from death.DNC.trainerCF import *
+from death.DNC.trainerD import *
 import os
 from shutil import copy
 import traceback
@@ -7,7 +7,7 @@ import datetime
 if __name__ == "__main__":
     print("Salvage mode, will attempt to save the most recent weights you have")
     try:
-        main()
+        forevermain()
     except:
         traceback.print_exc()
         with open("error.log", 'a') as f:

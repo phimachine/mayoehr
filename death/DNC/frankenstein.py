@@ -31,10 +31,10 @@ def test_simplex_bound(tensor, dim=1):
 
 class Frankenstein(nn.Module):
     def __init__(self,
-                 x=47782,
+                 x=47764,
                  h=128,
                  L=16,
-                 v_t=3656,
+                 v_t=3620,
                  W=32,
                  R=16,
                  N=64,
