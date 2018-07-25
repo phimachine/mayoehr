@@ -290,7 +290,7 @@ def forevermain():
             pass
 
 
-def main(load=True):
+def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = 1e-3
@@ -316,7 +316,7 @@ def main(load=True):
 
     computer = computer.cuda()
     if optim is None:
-        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+        optimizer = torch.optim.Adam([i for i in computer.parameters() if i.requires_grad], lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)

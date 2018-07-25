@@ -364,6 +364,11 @@ class Frankenstein(nn.Module):
         self.W_E.data.uniform_(-stdv, stdv)
         self.b_E.data.uniform_(-stdv, stdv)
 
+        # all memory is the same?
+        stdv=1.0/math.sqrt(self.W)
+        self.memory.data.uniform_(-stdv,stdv)
+
+
     def new_sequence_reset(self):
         '''controller'''
         self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
