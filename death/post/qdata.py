@@ -1,9 +1,9 @@
-# This is a script unique to our project
-# Much of the training/test data will need to be genereatd at run time, and this file takes care of the querying
-# of all data files and return an input/label that can be fed into our model.
-# Our end goal is to wrap our data object into a Torch Dataloader()
+# this file reads all post processed R .csv files and put them in pandas
+# you need to run the main function every time you change any .csv file to update the pickled pandas
+# dataframes.
+# usually you do not need to modify anything in this script and pickling will be automatic
+# it will take a few minutes.
 
-# numpy genfromtxt is extremely slow
 import numpy as np
 import pandas as pd
 from pathlib import Path

@@ -1,11 +1,11 @@
 import pandas as pd
 import torch
-import numpy
+import numpy as np
 import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planC import InputGen, train_valid_split
+from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein import Frankenstein as DNC
@@ -13,6 +13,7 @@ from torch.autograd import Variable
 import pickle
 from shutil import copy
 import traceback
+from collections import deque
 
 batch_size = 1
 
@@ -71,9 +72,10 @@ def load_model(computer, remove=True):
     if highestepoch == 0 and highestiter == 0:
         return computer, None, 0, 0
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-    print("loading model at ", pickle_file)
+    print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
-    computer, optim, epoch, iteration = torch.load(pickle_file)
+    computersd, optim, epoch, iteration = torch.load(pickle_file)
+    computer.load_state_dict(computersd)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
 
     if remove:
@@ -369,7 +371,7 @@ def main():
     logfile = "log.txt"
 
     num_workers = 3
-    ig = InputGen()
+    ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
