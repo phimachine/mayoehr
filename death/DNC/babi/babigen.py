@@ -180,7 +180,7 @@ def write_babi_to_disk(story_limit=150):
     # babi_command(task,sets,True,train=False, files_count=int(train_files_count/5))
 
     task_dir = os.path.dirname(abspath(__file__))
-    data_dir = join(task_dir, 'data/q13/')
+    data_dir = join(task_dir, 'data/')
     joint_train = True
     files_list = []
 

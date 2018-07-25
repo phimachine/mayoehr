@@ -290,7 +290,7 @@ def forevermain():
             pass
 
 
-def main(load=True):
+def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = 1e-3

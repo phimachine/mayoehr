@@ -214,7 +214,7 @@ def main():
     with torch.cuda.device(1):
         total_epochs = 10
         iter_per_epoch = 100000
-        lr = 1e-3
+        lr = 1e-2
         optim = None
         starting_epoch = 0
         starting_iteration= 0
