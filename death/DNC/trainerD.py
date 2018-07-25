@@ -214,7 +214,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         print("Value Error reached")
         print(datetime.datetime.now().time())
         global_exception_counter+=1
-        if global_exception_counter==10:
+        if global_exception_counter==100:
             save_model(computer,optimizer,epoch=123,iteration=456)
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
