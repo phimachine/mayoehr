@@ -300,7 +300,7 @@ def main():
     computer=DNC()
 
     # load model:
-    load=True
+    load=False
     if load:
         print("loading model")
         computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
