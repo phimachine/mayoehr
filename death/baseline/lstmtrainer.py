@@ -33,22 +33,6 @@ def save_model(net, optim, epoch, iteration):
     torch.save((net,  optim, epoch, iteration), pickle_file)
     print('model saved at', pickle_file)
 
-def save_model_old(net, optim, epoch, iteration):
-    print("saving model")
-    epoch = int(epoch)
-    state_dict = net.state_dict()
-    for key in state_dict.keys():
-        state_dict[key] = state_dict[key].cpu()
-    task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(epoch) + "_" + str(iteration) + ".pkl")
-    fhand = pickle_file.open('wb')
-    try:
-        pickle.dump((state_dict,optim, epoch, iteration),fhand)
-        print('model saved at', pickle_file)
-    except:
-        fhand.close()
-        os.remove(pickle_file)
-
 def load_model(computer, optim, starting_epoch, starting_iteration):
     task_dir = os.path.dirname(abspath(__file__))
     save_dir = Path(task_dir) / "lstmsaves"
@@ -83,40 +67,6 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
 
     return computer, optim, highestepoch, highestiter
 
-
-def load_model_old(computer):
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "lstmsaves"
-    highestepoch = -1
-    highestiter = -1
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
-        iteration=int(iteration)
-        epoch = int(epoch)
-        # some files are open but not written to yet.
-        if epoch > highestepoch and iteration>highestiter and child.stat().st_size > 204800:
-            highestepoch = epoch
-            highestiter=iteration
-    if highestepoch == -1 and highestepoch==-1:
-        return computer, None, -1, -1
-    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
-    print("loading model at ", pickle_file)
-    pickle_file = pickle_file.open('rb')
-    modelsd, optim, epoch, iteration = torch.load(pickle_file)
-    computer.load_state_dict(modelsd)
-    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3].split('.')[0]
-        iteration = str(child).split("_")[4].split('.')[0]
-        if int(epoch) != highestepoch and int(iteration) != highestiter:
-            os.remove(child)
-    print('Removed incomplete save file and all else.')
-
-    return computer, optim, epoch, iteration
-
-
 def salvage():
     # this function will pick up the last two highest epoch training and save them somewhere else,
     # this is to prevent unexpected data loss.
@@ -149,11 +99,6 @@ def salvage():
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
 
-def run_one_patient_one_step():
-    # this is so python does garbage collection automatically.
-    # we are debugging the
-    pass
-
 global_exception_counter=0
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
@@ -168,39 +113,10 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         # DNC is required to produce outputs. This is not the case for our project.
         # criterion does not need to be reinitiated for every story, because we are not using a mask
 
-        time_length = input.size()[1]
-        # with torch.no_grad if validate else dummy_context_mgr():
-        patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
-        for timestep in range(time_length):
-            # first colon is always size 1
-            feeding = input[:, timestep, :]
-            output = computer(feeding)
-            assert not (output != output).any()
-            patient_output[0, timestep, :] = output
-
-        # patient_output: (batch_size 1, time_length, output_dim ~4000)
-        time_to_event_output = patient_output[:, :, 0]
+        patient_output=computer(input)
         cause_of_death_output = patient_output[:, :, 1:]
-        time_to_event_target = target[:, :, 0]
         cause_of_death_target = target[:, :, 1:]
 
-        # this block will not work for batch input,
-        # you should modify it so that the loss evaluation is not determined by logic but function.
-        # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
-        #
-        # if loss_type[0] == 0:
-        #     # in record
-        #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
-        # else:
-        #     # not in record
-        #     # be careful with the sign, penalize when and only when positive
-        #     underestimation = time_to_event_target - time_to_event_output
-        #     underestimation = nn.functional.relu(underestimation)
-        #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
         patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
@@ -215,7 +131,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         print(datetime.datetime.now().time())
         global_exception_counter+=1
         if global_exception_counter==10:
-            save_model(computer,optimizer,epoch=123,iteration=456)
+            save_model(computer,optimizer,epoch=0,iteration=global_exception_counter)
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
             pass
@@ -227,7 +143,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
     print_interval=10
     val_interval=50
-    save_interval=100
+    save_interval=400
     target_dim=None
     rldmax_len=50
     running_loss_deque=deque(maxlen=rldmax_len)
@@ -245,8 +161,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                                                    real_criterion, binary_criterion)
                 if train_story_loss is not None:
                     printloss=float(train_story_loss[0])
-                computer.new_sequence_reset()
-                del input, target, loss_type
                 running_loss_deque.appendleft(printloss)
                 if i % print_interval == 0:
                     running_loss=np.mean(running_loss_deque)
@@ -279,48 +193,66 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             else:
                 break
 
+class lstmwrapper(nn.Module):
+    def __init__(self,input_size=47764, output_size=3620,hidden_size=128,num_layers=16,batch_first=True,
+                 dropout=True):
+        super(lstmwrapper, self).__init__()
+        self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
+                       batch_first=batch_first,dropout=dropout)
+        self.output=nn.Linear(hidden_size,output_size)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.lstm.reset_parameters()
+        self.output.reset_parameters()
+
+    def forward(self, input, hx=None):
+        output,statetuple=self.lstm(input,hx)
+        return self.output(output)
 
 def main():
-    total_epochs = 10
-    iter_per_epoch = 100000
-    lr = 1e-3
-    optim = None
-    starting_epoch = 0
-    starting_iteration= 0
-    logfile = "log.txt"
+    with torch.cuda.device(1):
+        total_epochs = 10
+        iter_per_epoch = 100000
+        lr = 1e-3
+        optim = None
+        starting_epoch = 0
+        starting_iteration= 0
+        logfile = "log.txt"
 
-    num_workers = 3
-    ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds,validds=train_valid_split(ig,split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
-    validdl = DataLoader(dataset=validds, batch_size=1)
-    print("Using", num_workers, "workers for training set")
-    lstm=LSTM(input_size=47764,hidden_size=128,num_layers=16,batch_first=True,
-                  dropout=True)
+        num_workers = 3
+        ig = InputGenD()
+        # multiprocessing disabled, because socket request seems unstable.
+        # performance should not be too bad?
+        trainds,validds=train_valid_split(ig,split_fold=10)
+        traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
+        validdl = DataLoader(dataset=validds, batch_size=1)
+        print("Using", num_workers, "workers for training set")
+        # testing whether this LSTM works is basically a question whether
+        lstm=lstmwrapper(input_size=47764,hidden_size=128,num_layers=16,batch_first=True,
+                         dropout=True)
 
-    # load model:
-    load=False
-    if load:
-        print("loading model")
-        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
+        # load model:
+        load=False
+        if load:
+            print("loading model")
+            lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
 
-    lstm = lstm.cuda()
-    if optim is None:
-        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
-    else:
-        # print('use Adadelta optimizer with learning rate ', lr)
-        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
-        optimizer = optim
+        lstm = lstm.cuda()
+        if optim is None:
+            optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
+        else:
+            # print('use Adadelta optimizer with learning rate ', lr)
+            # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+            optimizer = optim
 
-    real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
+        real_criterion = nn.SmoothL1Loss()
+        binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
 
-    # starting with the epoch after the loaded one
+        # starting with the epoch after the loaded one
 
-    train(lstm, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
+        train(lstm, optimizer, real_criterion, binary_criterion,
+              traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 
 if __name__ == "__main__":

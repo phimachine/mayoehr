@@ -214,12 +214,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         print("Value Error reached")
         print(datetime.datetime.now().time())
         global_exception_counter+=1
-<<<<<<< HEAD
-        if global_exception_counter==100:
-=======
         if global_exception_counter==10:
->>>>>>> 93a645f3d0353d7f4a1c8cd35ea7d735614855ad
-            save_model(computer,optimizer,epoch=123,iteration=456)
+            save_model(computer,optimizer,epoch=0,iteration=np.random.randint(0,1000))
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
             pass
@@ -249,6 +245,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                                                    real_criterion, binary_criterion)
                 if train_story_loss is not None:
                     printloss=float(train_story_loss[0])
+                else:
+                    printloss=10000
                 computer.new_sequence_reset()
                 del input, target, loss_type
                 running_loss_deque.appendleft(printloss)
@@ -283,8 +281,16 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             else:
                 break
 
+def forevermain():
+    print("Will run main() forever in a loop.")
+    while True:
+        try:
+            main(True)
+        except ValueError:
+            pass
 
-def main():
+
+def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = 1e-3
@@ -304,7 +310,6 @@ def main():
     computer=DNC()
 
     # load model:
-    load=True
     if load:
         print("loading model")
         computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
