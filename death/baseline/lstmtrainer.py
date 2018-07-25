@@ -220,7 +220,7 @@ def main():
         starting_iteration= 0
         logfile = "log.txt"
 
-        num_workers = 3
+        num_workers = 24
         ig = InputGenD()
         # multiprocessing disabled, because socket request seems unstable.
         # performance should not be too bad?
@@ -229,7 +229,7 @@ def main():
         validdl = DataLoader(dataset=validds, batch_size=1)
         print("Using", num_workers, "workers for training set")
         # testing whether this LSTM works is basically a question whether
-        lstm=lstmwrapper(input_size=47764,hidden_size=128,num_layers=16,batch_first=True,
+        lstm=lstmwrapper(input_size=47764,hidden_size=512,num_layers=128,batch_first=True,
                          dropout=True)
 
         # load model:
