@@ -26,6 +26,7 @@ class dummy_context_mgr():
         return False
 
 def save_model(net, optim, epoch, iteration):
+    return
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) +  "_" + str(iteration) + ".pkl")
@@ -209,7 +210,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
         if global_exception_counter>-1:
             global_exception_counter-=1
-    except ValueError:
+    except NotImplementedError: #ValueError:
         traceback.print_exc()
         print("Value Error reached")
         print(datetime.datetime.now().time())
@@ -293,7 +294,7 @@ def forevermain():
 def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-3
+    lr = 1e-4
     optim = None
     starting_epoch = 0
     starting_iteration= 0
@@ -316,6 +317,7 @@ def main(load=False):
 
     computer = computer.cuda()
     if optim is None:
+        print("Using Adam with lr", lr)
         optimizer = torch.optim.Adam([i for i in computer.parameters() if i.requires_grad], lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
