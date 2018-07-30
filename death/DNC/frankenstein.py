@@ -10,6 +10,7 @@ from torch.nn.functional import cosine_similarity, softmax, normalize
 from torch.nn.parameter import Parameter
 import math
 import numpy as np
+import traceback
 
 debug = True
 
@@ -102,6 +103,8 @@ class Frankenstein(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
+        if debug:
+            print("parameters are reset")
         for module in self.RNN_list:
             # this should iterate over RNN_Units only
             module.reset_parameters()
@@ -121,6 +124,8 @@ class Frankenstein(nn.Module):
         self.first_t_flag=True
 
     def new_sequence_reset(self):
+        if debug:
+            print('new sequence reset')
         '''controller'''
         self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
         for RNN in self.RNN_list:
@@ -428,7 +433,7 @@ class Frankenstein(nn.Module):
         '''
 
         # TODO We need to mathematically understand why this function will
-        # maintain the simplex bound condition.
+        # TODO maintain the simplex bound condition.
         if self.first_t_flag:
             return self.temporal_memory_linkage
         else:
@@ -445,8 +450,13 @@ class Frankenstein(nn.Module):
                 idx = torch.arange(0, 5, out=torch.LongTensor())
             newtml[:,idx,idx]=0
             if debug:
-                test_simplex_bound(newtml, 1)
-                test_simplex_bound(newtml.transpose(1, 2), 1)
+                try:
+                    test_simplex_bound(newtml, 1)
+                    test_simplex_bound(newtml.transpose(1, 2), 1)
+                except ValueError:
+                    traceback.print_exc()
+                    print("precedence close to one?", self.precedence_weighting.sum()>1)
+                    raise
             self.temporal_memory_linkage=Parameter(newtml.data,requires_grad=False)
             return self.temporal_memory_linkage
 
