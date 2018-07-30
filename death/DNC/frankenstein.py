@@ -9,9 +9,13 @@ from torch.autograd import Variable
 from torch.nn.functional import cosine_similarity, softmax, normalize
 from torch.nn.parameter import Parameter
 import math
+import numpy as np
+import traceback
 
-debug = False
+debug = True
 
+def nnnn(var):
+    return var.data.cpu().numpy()
 
 def test_simplex_bound(tensor, dim=1):
     # it's impossible to deal with dimensions
@@ -40,6 +44,9 @@ class Frankenstein(nn.Module):
                  N=64,
                  bs=1):
         super(Frankenstein, self).__init__()
+
+        # debugging usages
+        self.last_state_dict=None
 
         '''PARAMETERS'''
         self.x = x
@@ -70,8 +77,6 @@ class Frankenstein(nn.Module):
         self.b_E.data.uniform_(-stdv, stdv)
 
         '''MEMORY'''
-        # u_0
-        self.usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
         # p, (N), should be simplex bound
         self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
         # (N,N)
@@ -79,7 +84,13 @@ class Frankenstein(nn.Module):
         # (N,W)
         self.memory = Parameter(torch.Tensor(self.N, self.W).zero_().cuda(), requires_grad=False)
         # (N, R).
-        self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).fill_(1.0 / self.N).cuda(), requires_grad=False)
+        self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).cuda(), requires_grad=False)
+        # u_t, (N)
+        self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+        # store last write weightings for the calculation of usage vector
+        self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(),requires_grad=False)
+
+        self.first_t_flag=True
 
         '''COMPUTER'''
         # see paper, paragraph 2 page 7
@@ -88,6 +99,166 @@ class Frankenstein(nn.Module):
 
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_r.data.uniform_(-stdv, stdv)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        if debug:
+            print("parameters are reset")
+        for module in self.RNN_list:
+            # this should iterate over RNN_Units only
+            module.reset_parameters()
+        stdv = 1.0 / math.sqrt(self.v_t)
+        self.W_y.data.uniform_(-stdv, stdv)
+        self.b_y.data.uniform_(-stdv, stdv)
+        stdv = 1.0 / math.sqrt(self.E_t)
+        self.W_E.data.uniform_(-stdv, stdv)
+        self.b_E.data.uniform_(-stdv, stdv)
+
+        self.last_read_weightings.zero_()
+        self.last_read_vector.zero_()
+        self.last_write_weighting
+        # memory must be initialized like this, otherwise usage vector will be stuck at zero.
+        stdv=1.0
+        self.memory.data.uniform_(-stdv,stdv)
+        self.first_t_flag=True
+
+    def new_sequence_reset(self):
+        if debug:
+            print('new sequence reset')
+        '''controller'''
+        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
+        for RNN in self.RNN_list:
+            RNN.new_sequence_reset()
+        self.W_y = Parameter(self.W_y.data)
+        self.b_y = Parameter(self.b_y.data)
+        self.W_E = Parameter(self.W_E.data)
+        self.b_E = Parameter(self.b_E.data)
+
+        '''memory'''
+        # if usage vector is
+        self.memory = Parameter(self.memory.data,requires_grad=False)
+        self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+        self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
+        self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
+        self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).cuda(),requires_grad=False)
+        self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(),requires_grad=False)
+        self.first_t_flag=True
+
+        '''computer'''
+        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
+        self.W_r = Parameter(self.W_r.data)
+
+    def forward(self, input):
+        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
+
+        '''Controller'''
+        hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+        hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
+        for i in range(self.L):
+            hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
+                                             hidden_previous_layer)
+            hidden_this_timestep[:, i, :] = hidden_output
+            hidden_previous_layer = hidden_output
+
+        flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
+        output = torch.matmul(flat_hidden, self.W_y)
+        interface_input = torch.matmul(flat_hidden, self.W_E)
+        self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
+
+        '''interface'''
+        last_index = self.W * self.R
+
+        # Read keys, each W dimensions, [W*R] in total
+        # no processing needed
+        # this is the address keys, not the contents
+        read_keys = interface_input[:, 0:last_index].contiguous().view(self.bs, self.W, self.R)
+
+        # Read strengths, [R]
+        # 1 to infinity
+        # slightly different equation from the paper, should be okay
+        read_strengths = interface_input[:, last_index:last_index + self.R]
+        last_index = last_index + self.R
+        read_strengths = 1 - nn.functional.logsigmoid(read_strengths)
+
+        # Write key, [W]
+        write_key = interface_input[:, last_index:last_index + self.W]
+        last_index = last_index + self.W
+
+        # write strength beta, [1]
+        write_strength = interface_input[:, last_index:last_index + 1]
+        last_index = last_index + 1
+        write_strength = 1 - nn.functional.logsigmoid(write_strength)
+
+        # erase strength, [W]
+        erase_vector = interface_input[:, last_index:last_index + self.W]
+        last_index = last_index + self.W
+        erase_vector = nn.functional.sigmoid(erase_vector)
+
+        # write vector, [W]
+        write_vector = interface_input[:, last_index:last_index + self.W]
+        last_index = last_index + self.W
+
+        # R free gates? [R]
+        free_gates = interface_input[:, last_index:last_index + self.R]
+
+        last_index = last_index + self.R
+        free_gates = nn.functional.sigmoid(free_gates)
+
+        # allocation gate [1]
+        allocation_gate = interface_input[:, last_index:last_index + 1]
+        last_index = last_index + 1
+        allocation_gate = nn.functional.sigmoid(allocation_gate)
+
+        # write gate [1]
+        write_gate = interface_input[:, last_index:last_index + 1]
+        last_index = last_index + 1
+        write_gate = nn.functional.sigmoid(write_gate)
+
+        # read modes [R,3]
+        read_modes = interface_input[:, last_index:last_index + self.R * 3]
+        read_modes = read_modes.contiguous().view(self.bs, self.R, 3)
+        read_modes = nn.functional.softmax(read_modes,dim=2)
+
+        '''memory'''
+        memory_retention = self.memory_retention(free_gates)
+        # usage vector update must be called before allocation weighting.
+        self.update_usage_vector(memory_retention)
+        allocation_weighting = self.allocation_weighting()
+
+        write_weighting = self.write_weighting(write_key, write_strength,
+                                               allocation_gate, write_gate, allocation_weighting)
+        self.write_to_memory(write_weighting, erase_vector, write_vector)
+
+        # update some
+        self.update_temporal_linkage_matrix(write_weighting)
+        self.update_precedence_weighting(write_weighting)
+
+        forward_weighting = self.forward_weighting()
+        backward_weighting = self.backward_weighting()
+
+        read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
+                                               read_modes)
+        # read from memory last, a new modification.
+        read_vector = Parameter(self.read_memory(read_weightings).data,requires_grad=False)
+        # DEBUG NAN
+        if (read_vector != read_vector).any():
+            # this is a problem! TODO
+            raise ValueError("nan is found.")
+
+
+
+        '''back to computer'''
+        output2 = output + torch.matmul(read_vector.view(self.bs, self.W * self.R), self.W_r)
+
+        # update the last weightings
+        self.last_read_vector=read_vector
+        self.last_read_weightings = Parameter(read_weightings.data,requires_grad=False)
+        self.last_write_weighting = Parameter(write_weighting.data,requires_grad=False)
+        self.first_t_flag=False
+        if (output2 != output2).any():
+            raise ValueError("nan is found.")
+        return output2
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
         '''
@@ -169,23 +340,24 @@ class Frankenstein(nn.Module):
         ret = torch.prod(inside_bracket, 2)
         return ret
 
-    def update_usage_vector(self, write_wighting, memory_retention):
+    def update_usage_vector(self, memory_retention):
         '''
 
-        :param previous_usage: u_{t-1}, (N), [0,1]
-        :param write_wighting: w^w_{t-1}, (N), simplex bound
         :param memory_retention: \psi_t, (N), simplex bound
-        :return: u_t, (N), [0,1], the next usage,
+        :return: u_t, (N), [0,1], the next usage
         '''
-
-        ret = (self.usage_vector + write_wighting - self.usage_vector * write_wighting) * memory_retention
+        if self.first_t_flag:
+            ret = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+            return ret
+        ret = (self.last_usage_vector + self.last_write_weighting - self.last_usage_vector * self.last_write_weighting) \
+              * memory_retention
 
         # Here we should use .data instead? Like:
         # self.usage_vector.data=ret.data
         # Usage vector contain all computation history,
         # which is not necessary? I'm not sure, maybe the write weighting should be back_propped here?
         # We reset usage vector for every seq, but should we for every timestep?
-        self.usage_vector = Parameter(ret.data,requires_grad=False)
+        self.last_usage_vector = Parameter(ret.data, requires_grad=False)
         return ret
 
     def allocation_weighting(self):
@@ -203,7 +375,9 @@ class Frankenstein(nn.Module):
         :param usage_vector: u_t, (N), [0,1]
         :return: allocation_wighting: a_t, (N), simplex bound
         '''
-        sorted, indices = self.usage_vector.sort(dim=1)
+
+        # not the last usage, since we will update usage before this
+        sorted, indices = self.last_usage_vector.sort(dim=1)
         cum_prod = torch.cumprod(sorted, 1)
         # notice the index on the product
         cum_prod = torch.cat([Variable(torch.ones(self.bs, 1).cuda()), cum_prod], 1)[:, :-1]
@@ -258,16 +432,33 @@ class Frankenstein(nn.Module):
         :return: updated_temporal_linkage_matrix
         '''
 
-        ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
-        ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
-        p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
-        batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(self.bs, -1, -1)
-        self.temporal_memory_linkage = Parameter(
-            ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j).data,requires_grad=False)
-        if debug:
-            test_simplex_bound(self.temporal_memory_linkage, 1)
-            test_simplex_bound(self.temporal_memory_linkage.transpose(1, 2), 1)
-        return self.temporal_memory_linkage
+        # TODO We need to mathematically understand why this function will
+        # TODO maintain the simplex bound condition.
+        if self.first_t_flag:
+            return self.temporal_memory_linkage
+        else:
+            ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
+            ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
+            p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
+            batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(self.bs, -1, -1)
+            newtml = Parameter(
+                ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j).data,requires_grad=False)
+            is_cuda= ww_j.is_cuda
+            if is_cuda:
+                idx = torch.arange(0, 5, out=torch.cuda.LongTensor())
+            else:
+                idx = torch.arange(0, 5, out=torch.LongTensor())
+            newtml[:,idx,idx]=0
+            if debug:
+                try:
+                    test_simplex_bound(newtml, 1)
+                    test_simplex_bound(newtml.transpose(1, 2), 1)
+                except ValueError:
+                    traceback.print_exc()
+                    print("precedence close to one?", self.precedence_weighting.sum()>1)
+                    raise
+            self.temporal_memory_linkage=Parameter(newtml.data,requires_grad=False)
+            return self.temporal_memory_linkage
 
     def backward_weighting(self):
         '''
@@ -319,7 +510,6 @@ class Frankenstein(nn.Module):
         read_modes = read_modes.unsqueeze(3)
         # dimension (bs,N,R)
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1, 2)
-        self.last_read_weightings = Parameter(read_weightings.data,requires_grad=False)
         # last read weightings
         if debug:
             test_simplex_bound(self.last_read_weightings, 1)
@@ -352,143 +542,6 @@ class Frankenstein(nn.Module):
         term1 = self.memory.unsqueeze(0) * (1 - term1_2)
         term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
         self.memory =  Parameter(torch.mean(term1 + term2, dim=0).data,requires_grad=False)
-
-    def reset_parameters(self):
-        for module in self.RNN_list:
-            # this should iterate over RNN_Units only
-            module.reset_parameters()
-        stdv = 1.0 / math.sqrt(self.v_t)
-        self.W_y.data.uniform_(-stdv, stdv)
-        self.b_y.data.uniform_(-stdv, stdv)
-        stdv = 1.0 / math.sqrt(self.E_t)
-        self.W_E.data.uniform_(-stdv, stdv)
-        self.b_E.data.uniform_(-stdv, stdv)
-
-    def new_sequence_reset(self):
-        '''controller'''
-        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
-        for RNN in self.RNN_list:
-            RNN.new_sequence_reset()
-        self.W_y = Parameter(self.W_y.data)
-        self.b_y = Parameter(self.b_y.data)
-        self.W_E = Parameter(self.W_E.data)
-        self.b_E = Parameter(self.b_E.data)
-
-        '''memory'''
-        self.memory = Parameter(self.memory.data,requires_grad=False)
-        self.usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-        self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-        self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
-        self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).fill_(1.0 / self.N).cuda(),requires_grad=False)
-
-        '''computer'''
-        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
-        self.W_r = Parameter(self.W_r.data)
-
-    def forward(self, input):
-        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
-
-        '''Controller'''
-        hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
-        hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
-        for i in range(self.L):
-            hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
-                                             hidden_previous_layer)
-            hidden_this_timestep[:, i, :] = hidden_output
-            hidden_previous_layer = hidden_output
-
-        flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
-        output = torch.matmul(flat_hidden, self.W_y)
-        interface_input = torch.matmul(flat_hidden, self.W_E)
-        self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
-
-        '''interface'''
-        last_index = self.W * self.R
-
-        # Read keys, each W dimensions, [W*R] in total
-        # no processing needed
-        # this is the address keys, not the contents
-        read_keys = interface_input[:, 0:last_index].contiguous().view(self.bs, self.W, self.R)
-
-        # Read strengths, [R]
-        # 1 to infinity
-        # slightly different equation from the paper, should be okay
-        read_strengths = interface_input[:, last_index:last_index + self.R]
-        last_index = last_index + self.R
-        read_strengths = 1 - nn.functional.logsigmoid(read_strengths)
-
-        # Write key, [W]
-        write_key = interface_input[:, last_index:last_index + self.W]
-        last_index = last_index + self.W
-
-        # write strength beta, [1]
-        write_strength = interface_input[:, last_index:last_index + 1]
-        last_index = last_index + 1
-        write_strength = 1 - nn.functional.logsigmoid(write_strength)
-
-        # erase strength, [W]
-        erase_vector = interface_input[:, last_index:last_index + self.W]
-        last_index = last_index + self.W
-        erase_vector = nn.functional.sigmoid(erase_vector)
-
-        # write vector, [W]
-        write_vector = interface_input[:, last_index:last_index + self.W]
-        last_index = last_index + self.W
-
-        # R free gates? [R] TODO what is this?
-        free_gates = interface_input[:, last_index:last_index + self.R]
-
-        last_index = last_index + self.R
-        free_gates = nn.functional.sigmoid(free_gates)
-
-        # allocation gate [1]
-        allocation_gate = interface_input[:, last_index:last_index + 1]
-        last_index = last_index + 1
-        allocation_gate = nn.functional.sigmoid(allocation_gate)
-
-        # write gate [1]
-        write_gate = interface_input[:, last_index:last_index + 1]
-        last_index = last_index + 1
-        write_gate = nn.functional.sigmoid(write_gate)
-
-        # read modes [R,3]
-        read_modes = interface_input[:, last_index:last_index + self.R * 3]
-        read_modes = read_modes.contiguous().view(self.bs, self.R, 3)
-        read_modes = nn.functional.softmax(read_modes,dim=2)
-
-        '''memory'''
-        allocation_weighting = self.allocation_weighting()
-        write_weighting = self.write_weighting(write_key, write_strength,
-                                               allocation_gate, write_gate, allocation_weighting)
-        self.write_to_memory(write_weighting, erase_vector, write_vector)
-        # update some
-        memory_retention = self.memory_retention(free_gates)
-        self.update_usage_vector(write_weighting, memory_retention)
-        self.update_temporal_linkage_matrix(write_weighting)
-        self.update_precedence_weighting(write_weighting)
-
-        forward_weighting = self.forward_weighting()
-        backward_weighting = self.backward_weighting()
-
-        read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
-                                               read_modes)
-        # read from memory last, a new modification.
-        self.last_read_vector = Parameter(self.read_memory(read_weightings).data,requires_grad=False)
-
-        if debug:
-            if (self.last_read_vector != self.last_read_vector).any():
-                raise ValueError("Nan is found")
-
-        '''back to computer'''
-        output2 = output + torch.matmul(self.last_read_vector.view(self.bs, self.W * self.R), self.W_r)
-
-        # DEBUG NAN
-        if (self.last_read_vector != self.last_read_vector).any():
-            # this is a problem! TODO
-            raise ValueError("nan is found.")
-        if (output2 != output2).any():
-            raise ValueError("nan is found.")
-        return output2
 
 # the problem seems to be in the RNN Unit.
 # we exchange the RNN units and one has memory overflow, the other has convergence issues.
