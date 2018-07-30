@@ -63,51 +63,42 @@ class Frankenstein(nn.Module):
         self.RNN_list = nn.ModuleList()
         for _ in range(self.L):
             self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
-        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(), requires_grad=False)
+        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
         self.b_y = Parameter(torch.Tensor(self.v_t).cuda())
         self.b_E = Parameter(torch.Tensor(self.E_t).cuda())
 
-        stdv = 1.0 / math.sqrt(self.v_t)
-        self.W_y.data.uniform_(-stdv, stdv)
-        self.b_y.data.uniform_(-stdv, stdv)
-        stdv = 1.0 / math.sqrt(self.E_t)
-        self.W_E.data.uniform_(-stdv, stdv)
-        self.b_E.data.uniform_(-stdv, stdv)
-
         '''MEMORY'''
         # p, (N), should be simplex bound
-        self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+        self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
         # (N,N)
-        self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(), requires_grad=False)
+        self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).cuda(), requires_grad=False)
         # (N,W)
-        self.memory = Parameter(torch.Tensor(self.N, self.W).zero_().cuda(), requires_grad=False)
+        self.memory = Parameter(torch.Tensor(self.N, self.W).cuda(), requires_grad=False)
         # (N, R).
         self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).cuda(), requires_grad=False)
         # u_t, (N)
-        self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+        self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
         # store last write weightings for the calculation of usage vector
         self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(),requires_grad=False)
 
         self.first_t_flag=True
 
         '''COMPUTER'''
-        # see paper, paragraph 2 page 7
-        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(), requires_grad=False)
+        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).cuda(), requires_grad=False)
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
-
-        stdv = 1.0 / math.sqrt(self.v_t)
-        self.W_r.data.uniform_(-stdv, stdv)
 
         self.reset_parameters()
 
     def reset_parameters(self):
         # if debug:
         #     print("parameters are reset")
+        '''Controller'''
         for module in self.RNN_list:
             # this should iterate over RNN_Units only
             module.reset_parameters()
+        self.hidden_previous_timestep.zero_()
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_y.data.uniform_(-stdv, stdv)
         self.b_y.data.uniform_(-stdv, stdv)
@@ -115,13 +106,22 @@ class Frankenstein(nn.Module):
         self.W_E.data.uniform_(-stdv, stdv)
         self.b_E.data.uniform_(-stdv, stdv)
 
+        '''Memory'''
+        self.precedence_weighting.zero_()
+        self.last_usage_vector.zero_()
         self.last_read_weightings.zero_()
-        self.last_read_vector.zero_()
         self.last_write_weighting.zero_()
+        self.temporal_memory_linkage.zero_()
         # memory must be initialized like this, otherwise usage vector will be stuck at zero.
         stdv=1.0
         self.memory.data.uniform_(-stdv,stdv)
         self.first_t_flag=True
+
+        '''Computer'''
+        # see paper, paragraph 2 page 7
+        self.last_read_vector.zero_()
+        stdv = 1.0 / math.sqrt(self.v_t)
+        self.W_r.data.uniform_(-stdv, stdv)
 
     def new_sequence_reset(self):
         '''
@@ -142,11 +142,21 @@ class Frankenstein(nn.Module):
         self.b_E = Parameter(self.b_E.data)
 
         '''memory'''
-        # self.memory = Parameter(self.memory.data,requires_grad=False)
+        # we will reset the memory altogether.
+        # TODO The question is, should we reset the memory to a fixed state? There are good arguments for it.
+        stdv=1.0
+        # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
+        self.memory.data.uniform_(-stdv,stdv)
+        # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
+        self.last_usage_vector.zero_()
+        self.precedence_weighting.zero_()
+        self.temporal_memory_linkage.zero_()
+        self.last_read_weightings.zero_()
+        self.last_write_weighting.zero_()
         # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
         # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
         # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
-        # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
+        # # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
         # self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).zero_().cuda(),requires_grad=False)
         # self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
         self.first_t_flag=True
