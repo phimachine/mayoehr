@@ -1,3 +1,8 @@
+"""
+D2 is a modification oif the DNC model that resets the memory at every new story.
+This is how people usually implement DNC.
+"""
+
 import pandas as pd
 import torch
 import numpy as np
@@ -8,7 +13,7 @@ from os.path import abspath
 from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein import Frankenstein as DNC
+from death.DNC.frankenstein2 import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
@@ -25,31 +30,31 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-def save_model(net, optim, epoch, iteration):
+def save_model(net, optim, epoch, iteration,savestr):
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(epoch) +  "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNC"+savestr+"_" + str(epoch) +  "_" + str(iteration) + ".pkl")
     pickle_file = pickle_file.open('wb')
     torch.save((net,  optim, epoch, iteration), pickle_file)
     print('model saved at', pickle_file)
 
-def save_model_old(net, optim, epoch, iteration):
-    print("saving model")
-    epoch = int(epoch)
-    state_dict = net.state_dict()
-    for key in state_dict.keys():
-        state_dict[key] = state_dict[key].cpu()
-    task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(epoch) + "_" + str(iteration) + ".pkl")
-    fhand = pickle_file.open('wb')
-    try:
-        pickle.dump((state_dict,optim, epoch, iteration),fhand)
-        print('model saved at', pickle_file)
-    except:
-        fhand.close()
-        os.remove(pickle_file)
+# def save_model_old(net, optim, epoch, iteration):
+#     print("saving model")
+#     epoch = int(epoch)
+#     state_dict = net.state_dict()
+#     for key in state_dict.keys():
+#         state_dict[key] = state_dict[key].cpu()
+#     task_dir = os.path.dirname(abspath(__file__))
+#     pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(epoch) + "_" + str(iteration) + ".pkl")
+#     fhand = pickle_file.open('wb')
+#     try:
+#         pickle.dump((state_dict,optim, epoch, iteration),fhand)
+#         print('model saved at', pickle_file)
+#     except:
+#         fhand.close()
+#         os.remove(pickle_file)
 
-def load_model(computer, optim, starting_epoch, starting_iteration):
+def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     task_dir = os.path.dirname(abspath(__file__))
     save_dir = Path(task_dir) / "saves"
     highestepoch = 0
@@ -67,7 +72,7 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
     if highestepoch == 0 and highestiter == 0:
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNC"+savestr+"_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
     computer, optim, epoch, iteration = torch.load(pickle_file)
@@ -82,39 +87,39 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
     # print('Removed incomplete save file and all else.')
 
     return computer, optim, highestepoch, highestiter
-
-
-def load_model_old(computer):
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"
-    highestepoch = -1
-    highestiter = -1
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
-        iteration=int(iteration)
-        epoch = int(epoch)
-        # some files are open but not written to yet.
-        if epoch > highestepoch and iteration>highestiter and child.stat().st_size > 204800:
-            highestepoch = epoch
-            highestiter=iteration
-    if highestepoch == -1 and highestepoch==-1:
-        return computer, None, -1, -1
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
-    print("loading model at ", pickle_file)
-    pickle_file = pickle_file.open('rb')
-    modelsd, optim, epoch, iteration = torch.load(pickle_file)
-    computer.load_state_dict(modelsd)
-    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3].split('.')[0]
-        iteration = str(child).split("_")[4].split('.')[0]
-        if int(epoch) != highestepoch and int(iteration) != highestiter:
-            os.remove(child)
-    print('Removed incomplete save file and all else.')
-
-    return computer, optim, epoch, iteration
+#
+#
+# def load_model_old(computer):
+#     task_dir = os.path.dirname(abspath(__file__))
+#     save_dir = Path(task_dir) / "saves"
+#     highestepoch = -1
+#     highestiter = -1
+#     for child in save_dir.iterdir():
+#         epoch = str(child).split("_")[3]
+#         iteration = str(child).split("_")[4].split('.')[0]
+#         iteration=int(iteration)
+#         epoch = int(epoch)
+#         # some files are open but not written to yet.
+#         if epoch > highestepoch and iteration>highestiter and child.stat().st_size > 204800:
+#             highestepoch = epoch
+#             highestiter=iteration
+#     if highestepoch == -1 and highestepoch==-1:
+#         return computer, None, -1, -1
+#     pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
+#     print("loading model at ", pickle_file)
+#     pickle_file = pickle_file.open('rb')
+#     modelsd, optim, epoch, iteration = torch.load(pickle_file)
+#     computer.load_state_dict(modelsd)
+#     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
+#
+#     for child in save_dir.iterdir():
+#         epoch = str(child).split("_")[3].split('.')[0]
+#         iteration = str(child).split("_")[4].split('.')[0]
+#         if int(epoch) != highestepoch and int(iteration) != highestiter:
+#             os.remove(child)
+#     print('Removed incomplete save file and all else.')
+#
+#     return computer, optim, epoch, iteration
 
 
 def salvage():
@@ -141,10 +146,10 @@ def salvage():
         print("no file to salvage")
         return
     if secondhighestiter != -1:
-        pickle_file2 = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+        pickle_file2 = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
 
-    pickle_file1 = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file1 = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
@@ -227,7 +232,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
     global global_exception_counter
 
     print_interval=10
@@ -282,21 +287,21 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                           (i, printloss))
 
                 if i % save_interval == 0:
-                    save_model(computer, optimizer, epoch, i)
+                    save_model(computer, optimizer, epoch, i, savestr)
                     print("model saved for epoch", epoch, "input", i)
             else:
                 break
 
-def forevermain(load=False, lr=1e-3):
+def forevermain(load=False, lr=1e-3, savestr=""):
     print("Will run main() forever in a loop.")
     while True:
         try:
-            main(load, lr)
+            main(load, lr, savestr)
         except ValueError:
             traceback.print_exc()
 
 
-def main(load=False, lr=1e-3):
+def main(load=False, lr=1e-3,savestr=""):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = lr
@@ -335,7 +340,7 @@ def main(load=False, lr=1e-3):
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
+          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, savestr, logfile)
 
 
 if __name__ == "__main__":
