@@ -26,6 +26,7 @@ class dummy_context_mgr():
         return False
 
 def save_model(net, optim, epoch, iteration):
+    return
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
     pickle_file = Path(task_dir).joinpath("saves/DNCfull_" + str(epoch) +  "_" + str(iteration) + ".pkl")
@@ -155,9 +156,11 @@ def run_one_patient_one_step():
     pass
 
 global_exception_counter=0
+i=None
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
     global global_exception_counter
+    global i
     patient_loss=None
     try:
         optimizer.zero_grad()
@@ -209,7 +212,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
         if global_exception_counter>-1:
             global_exception_counter-=1
-    except ValueError:
+    except NotImplementedError: #ValueError:
         traceback.print_exc()
         print("Value Error reached")
         print(datetime.datetime.now().time())
@@ -218,6 +221,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
             save_model(computer,optimizer,epoch=0,iteration=np.random.randint(0,1000))
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
+            print("we are at",i)
             pass
 
     return patient_loss
@@ -225,6 +229,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+    global global_exception_counter
+
     print_interval=10
     val_interval=50
     save_interval=100
@@ -233,6 +239,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     running_loss_deque=deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
+    global i
 
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
@@ -290,10 +297,10 @@ def forevermain():
             pass
 
 
-def main(load=True):
+def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-3
+    lr = 1e-4
     optim = None
     starting_epoch = 0
     starting_iteration= 0
@@ -316,7 +323,8 @@ def main(load=True):
 
     computer = computer.cuda()
     if optim is None:
-        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+        print("Using Adam with lr", lr)
+        optimizer = torch.optim.Adam([i for i in computer.parameters() if i.requires_grad], lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
