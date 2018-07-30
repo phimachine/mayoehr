@@ -156,9 +156,11 @@ def run_one_patient_one_step():
     pass
 
 global_exception_counter=0
+i=None
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
     global global_exception_counter
+    global i
     patient_loss=None
     try:
         optimizer.zero_grad()
@@ -219,6 +221,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
             save_model(computer,optimizer,epoch=0,iteration=np.random.randint(0,1000))
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
+            print("we are at",i)
             pass
 
     return patient_loss
@@ -226,6 +229,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+    global global_exception_counter
+
     print_interval=10
     val_interval=50
     save_interval=100
@@ -234,6 +239,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     running_loss_deque=deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
+    global i
 
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
