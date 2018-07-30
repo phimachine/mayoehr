@@ -1,3 +1,8 @@
+"""
+D2 is a modification oif the DNC model that resets the memory at every new story.
+This is how people usually implement DNC.
+"""
+
 import pandas as pd
 import torch
 import numpy as np
@@ -8,7 +13,7 @@ from os.path import abspath
 from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein import Frankenstein as DNC
+from death.DNC.frankenstein2 import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
@@ -29,7 +34,7 @@ def save_model(net, optim, epoch, iteration):
     return
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(epoch) +  "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(epoch) +  "_" + str(iteration) + ".pkl")
     pickle_file = pickle_file.open('wb')
     torch.save((net,  optim, epoch, iteration), pickle_file)
     print('model saved at', pickle_file)
@@ -41,7 +46,7 @@ def save_model_old(net, optim, epoch, iteration):
     for key in state_dict.keys():
         state_dict[key] = state_dict[key].cpu()
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(epoch) + "_" + str(iteration) + ".pkl")
     fhand = pickle_file.open('wb')
     try:
         pickle.dump((state_dict,optim, epoch, iteration),fhand)
@@ -68,7 +73,7 @@ def load_model(computer, optim, starting_epoch, starting_iteration):
     if highestepoch == 0 and highestiter == 0:
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
     computer, optim, epoch, iteration = torch.load(pickle_file)
@@ -101,7 +106,7 @@ def load_model_old(computer):
             highestiter=iteration
     if highestepoch == -1 and highestepoch==-1:
         return computer, None, -1, -1
-    pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
     print("loading model at ", pickle_file)
     pickle_file = pickle_file.open('rb')
     modelsd, optim, epoch, iteration = torch.load(pickle_file)
@@ -142,10 +147,10 @@ def salvage():
         print("no file to salvage")
         return
     if secondhighestiter != -1:
-        pickle_file2 = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+        pickle_file2 = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
 
-    pickle_file1 = Path(task_dir).joinpath("saves/DNCcont_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file1 = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
