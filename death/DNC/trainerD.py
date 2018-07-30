@@ -300,7 +300,7 @@ def forevermain():
 def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-4
+    lr = 1e-3
     optim = None
     starting_epoch = 0
     starting_iteration= 0

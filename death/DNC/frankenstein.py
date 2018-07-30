@@ -14,7 +14,7 @@ import traceback
 
 debug = True
 
-def nnnn(var):
+def sv(var):
     return var.data.cpu().numpy()
 
 def test_simplex_bound(tensor, dim=1):
@@ -103,8 +103,8 @@ class Frankenstein(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if debug:
-            print("parameters are reset")
+        # if debug:
+        #     print("parameters are reset")
         for module in self.RNN_list:
             # this should iterate over RNN_Units only
             module.reset_parameters()
@@ -117,15 +117,21 @@ class Frankenstein(nn.Module):
 
         self.last_read_weightings.zero_()
         self.last_read_vector.zero_()
-        self.last_write_weighting
+        self.last_write_weighting.zero_()
         # memory must be initialized like this, otherwise usage vector will be stuck at zero.
         stdv=1.0
         self.memory.data.uniform_(-stdv,stdv)
         self.first_t_flag=True
 
     def new_sequence_reset(self):
-        if debug:
-            print('new sequence reset')
+        '''
+        The biggest question is whether to reset memory every time a new sequence is taken in.
+        My take is to not reset the memory, but this might not be the best strategy there is.
+        If memory is not reset at each new sequence, then we should not reset the memory at all?
+        :return:
+        '''
+        # if debug:
+        #     print('new sequence reset')
         '''controller'''
         self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
         for RNN in self.RNN_list:
@@ -136,13 +142,13 @@ class Frankenstein(nn.Module):
         self.b_E = Parameter(self.b_E.data)
 
         '''memory'''
-        # if usage vector is
-        self.memory = Parameter(self.memory.data,requires_grad=False)
-        self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
-        self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-        self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
-        self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).cuda(),requires_grad=False)
-        self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(),requires_grad=False)
+        # self.memory = Parameter(self.memory.data,requires_grad=False)
+        # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+        # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
+        # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
+        # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
+        # self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).zero_().cuda(),requires_grad=False)
+        # self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
         self.first_t_flag=True
 
         '''computer'''
@@ -255,9 +261,16 @@ class Frankenstein(nn.Module):
         self.last_read_vector=read_vector
         self.last_read_weightings = Parameter(read_weightings.data,requires_grad=False)
         self.last_write_weighting = Parameter(write_weighting.data,requires_grad=False)
+
+
         self.first_t_flag=False
-        if (output2 != output2).any():
-            raise ValueError("nan is found.")
+
+        if debug:
+            test_simplex_bound(self.last_read_weightings)
+            test_simplex_bound(self.last_write_weighting)
+            if (output2 != output2).any():
+                raise ValueError("nan is found.")
+
         return output2
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
@@ -445,9 +458,10 @@ class Frankenstein(nn.Module):
                 ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j).data,requires_grad=False)
             is_cuda= ww_j.is_cuda
             if is_cuda:
-                idx = torch.arange(0, 5, out=torch.cuda.LongTensor())
+                ### WHAT IS THIS?
+                idx = torch.arange(0, self.N, out=torch.cuda.LongTensor())
             else:
-                idx = torch.arange(0, 5, out=torch.LongTensor())
+                idx = torch.arange(0, self.N, out=torch.LongTensor())
             newtml[:,idx,idx]=0
             if debug:
                 try:
@@ -462,7 +476,6 @@ class Frankenstein(nn.Module):
 
     def backward_weighting(self):
         '''
-
         :return: backward_weighting: b^i_t, (N,R)
         '''
         ret = torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
@@ -512,6 +525,7 @@ class Frankenstein(nn.Module):
         read_weightings = torch.matmul(all_weightings, read_modes).squeeze(3).transpose(1, 2)
         # last read weightings
         if debug:
+            # if the second test passes, how come the first one does not?
             test_simplex_bound(self.last_read_weightings, 1)
             test_simplex_bound(read_weightings, 1)
             if (read_weightings != read_weightings).any():
