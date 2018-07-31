@@ -1,4 +1,3 @@
-import pandas as pd
 import torch
 import numpy as np
 from pathlib import Path
@@ -6,7 +5,7 @@ import os
 from os.path import abspath
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from death.DNC.trainerD import InputGenD, train_valid_split
+from death.DNC.trashcan.trainerD import InputGenD, train_valid_split
 
 def sensitivity(target, output):
     '''

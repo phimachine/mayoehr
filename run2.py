@@ -9,10 +9,10 @@ if __name__ == "__main__":
         print("Using the second CUDA device")
         print("Salvage mode, will attempt to save the most recent weights you have")
         try:
-            forevermain(False, 1e-4, savestr="1e4")
+            forevermain(False, 1e-3, savestr="pal",palette=True)
         except:
             traceback.print_exc()
             with open("error.log", 'a') as f:
                 f.write(str(datetime.datetime.now().time()))
                 traceback.print_exc(file=f)
-            salvage()
+            salvage("pal")
