@@ -7,7 +7,7 @@ import datetime
 if __name__ == "__main__":
     print("Salvage mode, will attempt to save the most recent weights you have")
     try:
-        forevermain(False, 1e-3, savestr="1e3")
+        forevermain(False, 1e-3, savestr="1e3", reset=True)
     except:
         traceback.print_exc()
         with open("error.log", 'a') as f:
