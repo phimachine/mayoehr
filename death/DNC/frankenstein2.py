@@ -42,9 +42,11 @@ class Frankenstein(nn.Module):
                  W=32,
                  R=16,
                  N=64,
-                 bs=1):
+                 bs=1,
+                 reset=True):
         super(Frankenstein, self).__init__()
 
+        self.reset=reset
         # debugging usages
         self.last_state_dict=None
 
@@ -148,11 +150,13 @@ class Frankenstein(nn.Module):
         # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
         self.memory.data.uniform_(-stdv,stdv)
         # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
-        self.last_usage_vector.zero_()
-        self.precedence_weighting.zero_()
-        self.temporal_memory_linkage.zero_()
-        self.last_read_weightings.zero_()
-        self.last_write_weighting.zero_()
+
+        if self.reset:
+            self.last_usage_vector.zero_()
+            self.precedence_weighting.zero_()
+            self.temporal_memory_linkage.zero_()
+            self.last_read_weightings.zero_()
+            self.last_write_weighting.zero_()
         # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
         # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
         # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
@@ -308,6 +312,9 @@ class Frankenstein(nn.Module):
         similarties = innerprod / normalizer.t().clamp(min=eps)
         similarties = similarties * key_strength.expand(-1, self.N)
         normalized = softmax(similarties, dim=1)
+        if debug:
+            if (normalized!=normalized).any():
+                raise ValueError("NA found in write content weighting")
         return normalized
 
     def read_content_weighting(self, read_keys, key_strengths, eps=1e-8):
@@ -408,6 +415,9 @@ class Frankenstein(nn.Module):
         allocation_weighting = sorted_inv * cum_prod
         # to shuffle back in place
         ret = torch.gather(allocation_weighting, 1, indices)
+        if debug:
+            if (ret!=ret).any():
+                raise ValueError("NA found in allocation weighting")
         return ret
 
     def write_weighting(self, write_key, write_strength, allocation_gate, write_gate, allocation_weighting):

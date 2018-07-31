@@ -1,6 +1,7 @@
 """
 D2 is a modification oif the DNC model that resets the memory at every new story.
 This is how people usually implement DNC.
+Use the parameter to control whether experience resets.
 """
 
 import pandas as pd
@@ -23,6 +24,7 @@ import datetime
 
 batch_size = 1
 
+
 class dummy_context_mgr():
     def __enter__(self):
         return None
@@ -30,13 +32,15 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-def save_model(net, optim, epoch, iteration,savestr):
+
+def save_model(net, optim, epoch, iteration, savestr):
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("saves/DNC"+savestr+"_" + str(epoch) +  "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNC" + savestr + "_" + str(epoch) + "_" + str(iteration) + ".pkl")
     pickle_file = pickle_file.open('wb')
-    torch.save((net,  optim, epoch, iteration), pickle_file)
+    torch.save((net, optim, epoch, iteration), pickle_file)
     print('model saved at', pickle_file)
+
 
 # def save_model_old(net, optim, epoch, iteration):
 #     print("saving model")
@@ -66,13 +70,14 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
         epoch = int(epoch)
         # some files are open but not written to yet.
         if child.stat().st_size > 20480:
-            if epoch > highestepoch or (iteration > highestiter and epoch==highestepoch):
+            if epoch > highestepoch or (iteration > highestiter and epoch == highestepoch):
                 highestepoch = epoch
                 highestiter = iteration
     if highestepoch == 0 and highestiter == 0:
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
-    pickle_file = Path(task_dir).joinpath("saves/DNC"+savestr+"_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file = Path(task_dir).joinpath(
+        "saves/DNC" + savestr + "_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
     computer, optim, epoch, iteration = torch.load(pickle_file)
@@ -87,6 +92,8 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     # print('Removed incomplete save file and all else.')
 
     return computer, optim, highestepoch, highestiter
+
+
 #
 #
 # def load_model_old(computer):
@@ -146,7 +153,8 @@ def salvage():
         print("no file to salvage")
         return
     if secondhighestiter != -1:
-        pickle_file2 = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+        pickle_file2 = Path(task_dir).joinpath(
+            "saves/DNCreset_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
 
     pickle_file1 = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
@@ -154,18 +162,22 @@ def salvage():
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
 
+
 def run_one_patient_one_step():
     # this is so python does garbage collection automatically.
     # we are debugging the
     pass
 
-global_exception_counter=0
-i=None
+
+global_exception_counter = 0
+i = None
+
+
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
     global global_exception_counter
     global i
-    patient_loss=None
+    patient_loss = None
     try:
         optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
@@ -208,24 +220,24 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
         #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
         #     patient_loss = toe_loss/100 + cod_loss
-        patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
+        patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
             patient_loss.backward()
             optimizer.step()
 
-        if global_exception_counter>-1:
-            global_exception_counter-=1
-    except NotImplementedError: #ValueError:
+        if global_exception_counter > -1:
+            global_exception_counter -= 1
+    except ValueError:
         traceback.print_exc()
         print("Value Error reached")
         print(datetime.datetime.now().time())
-        global_exception_counter+=1
-        if global_exception_counter==10:
-            save_model(computer,optimizer,epoch=0,iteration=np.random.randint(0,1000))
+        global_exception_counter += 1
+        if global_exception_counter == 10:
+            save_model(computer, optimizer, epoch=0, iteration=np.random.randint(0, 1000), savestr="NA")
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
-            print("we are at",i)
+            print("we are at", i)
             pass
 
     return patient_loss
@@ -235,48 +247,48 @@ def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
     global global_exception_counter
 
-    print_interval=10
-    val_interval=50
-    save_interval=100
-    target_dim=None
-    rldmax_len=50
-    running_loss_deque=deque(maxlen=rldmax_len)
+    print_interval = 10
+    val_interval = 50
+    save_interval = 100
+    target_dim = None
+    rldmax_len = 50
+    running_loss_deque = deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
     global i
 
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
-            i=starting_iter+i
+            i = starting_iter + i
             if target_dim is None:
-                target_dim=target.shape[2]
+                target_dim = target.shape[2]
 
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion)
                 if train_story_loss is not None:
-                    printloss=float(train_story_loss[0])
+                    printloss = float(train_story_loss[0])
                 else:
-                    printloss=10000
+                    printloss = 10000
                 computer.new_sequence_reset()
                 del input, target, loss_type
                 running_loss_deque.appendleft(printloss)
                 if i % print_interval == 0:
-                    running_loss=np.mean(running_loss_deque)
+                    running_loss = np.mean(running_loss_deque)
                     if logfile:
                         with open(logfile, 'a') as handle:
                             handle.write("learning.   count: %4d, training loss: %.10f \n" %
                                          (i, printloss))
                     print("learning.   count: %4d, training loss: %.10f" %
                           (i, printloss))
-                    if i!=0:
+                    if i != 0:
                         print("count: %4d, running loss: %.10f" % (i, running_loss))
 
                 if i % val_interval == 0:
                     # we should consider running validation multiple times and average. TODO
-                    (input,target,loss_type)=next(valid_iterator)
+                    (input, target, loss_type) = next(valid_iterator)
                     val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                   real_criterion, binary_criterion, validate=True)
+                                               real_criterion, binary_criterion, validate=True)
                     if val_loss is not None:
                         printloss = float(val_loss[0])
                     if logfile:
@@ -292,7 +304,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             else:
                 break
 
-def forevermain(load=False, lr=1e-3, savestr=""):
+
+def forevermain(load=False, lr=1e-3, savestr="", reset=True):
     print("Will run main() forever in a loop.")
     while True:
         try:
@@ -301,29 +314,30 @@ def forevermain(load=False, lr=1e-3, savestr=""):
             traceback.print_exc()
 
 
-def main(load=False, lr=1e-3,savestr=""):
+def main(load=False, lr=1e-3, savestr="", reset=True):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = lr
     optim = None
     starting_epoch = 0
-    starting_iteration= 0
+    starting_iteration = 0
     logfile = "log.txt"
 
-    num_workers = 4
+    num_workers = 3
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
-    trainds,validds=train_valid_split(ig,split_fold=10)
+    trainds, validds = train_valid_split(ig, split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
-    computer=DNC()
+    computer = DNC(reset=reset)
 
     # load model:
     if load:
         print("loading model")
-        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration)
+        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch,
+                                                                         starting_iteration, savestr)
 
     computer = computer.cuda()
     if optim is None:
@@ -340,7 +354,8 @@ def main(load=False, lr=1e-3,savestr=""):
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, savestr, logfile)
+          traindl, iter(validdl), int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
+          logfile)
 
 
 if __name__ == "__main__":
