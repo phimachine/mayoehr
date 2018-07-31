@@ -26,7 +26,6 @@ class dummy_context_mgr():
         return False
 
 def save_model(net, optim, epoch, iteration):
-    return
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
     pickle_file = Path(task_dir).joinpath("saves/DNCcont_" + str(epoch) +  "_" + str(iteration) + ".pkl")
@@ -288,19 +287,19 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             else:
                 break
 
-def forevermain(load=False):
+def forevermain(load=False, lr=1e-3):
     print("Will run main() forever in a loop.")
     while True:
         try:
-            main(load)
+            main(load, lr)
         except ValueError:
             traceback.print_exc()
 
 
-def main(load=False):
+def main(load=False, lr=1e-3):
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-3
+    lr = lr
     optim = None
     starting_epoch = 0
     starting_iteration= 0
