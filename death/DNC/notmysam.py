@@ -1,8 +1,9 @@
-"""
-D2 is a modification oif the DNC model that resets the memory at every new story.
-This is how people usually implement DNC.
-Use the parameter to control whether experience resets.
-"""
+from dnc import SDNC
+import torch
+
+'''I hope their SDNC is faster than DNC?'''
+
+
 
 import pandas as pd
 import torch
@@ -44,22 +45,6 @@ def save_model(net, optim, epoch, iteration, savestr):
     print('model saved at', pickle_file)
 
 
-# def save_model_old(net, optim, epoch, iteration):
-#     print("saving model")
-#     epoch = int(epoch)
-#     state_dict = net.state_dict()
-#     for key in state_dict.keys():
-#         state_dict[key] = state_dict[key].cpu()
-#     task_dir = os.path.dirname(abspath(__file__))
-#     pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(epoch) + "_" + str(iteration) + ".pkl")
-#     fhand = pickle_file.open('wb')
-#     try:
-#         pickle.dump((state_dict,optim, epoch, iteration),fhand)
-#         print('model saved at', pickle_file)
-#     except:
-#         fhand.close()
-#         os.remove(pickle_file)
-
 def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     task_dir = os.path.dirname(abspath(__file__))
     save_dir = Path(task_dir) / "saves"
@@ -84,51 +69,9 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     pickle_file = pickle_file.open('rb')
     computer, optim, epoch, iteration = torch.load(pickle_file)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-    #
-    # for child in save_dir.iterdir():
-    #     epoch = str(child).split("_")[3].split('.')[0]
-    #     iteration = str(child).split("_")[4].split('.')[0]
-    #     if int(epoch) != highestepoch and int(iteration) != highestiter:
-    #         # TODO might have a bug here.
-    #         os.remove(child)
-    # print('Removed incomplete save file and all else.')
 
     return computer, optim, highestepoch, highestiter
 
-
-#
-#
-# def load_model_old(computer):
-#     task_dir = os.path.dirname(abspath(__file__))
-#     save_dir = Path(task_dir) / "saves"
-#     highestepoch = -1
-#     highestiter = -1
-#     for child in save_dir.iterdir():
-#         epoch = str(child).split("_")[3]
-#         iteration = str(child).split("_")[4].split('.')[0]
-#         iteration=int(iteration)
-#         epoch = int(epoch)
-#         # some files are open but not written to yet.
-#         if epoch > highestepoch and iteration>highestiter and child.stat().st_size > 204800:
-#             highestepoch = epoch
-#             highestiter=iteration
-#     if highestepoch == -1 and highestepoch==-1:
-#         return computer, None, -1, -1
-#     pickle_file = Path(task_dir).joinpath("saves/DNCreset_" + str(highestepoch)+"_"+str(iteration) + ".pkl")
-#     print("loading model at ", pickle_file)
-#     pickle_file = pickle_file.open('rb')
-#     modelsd, optim, epoch, iteration = torch.load(pickle_file)
-#     computer.load_state_dict(modelsd)
-#     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-#
-#     for child in save_dir.iterdir():
-#         epoch = str(child).split("_")[3].split('.')[0]
-#         iteration = str(child).split("_")[4].split('.')[0]
-#         if int(epoch) != highestepoch and int(iteration) != highestiter:
-#             os.remove(child)
-#     print('Removed incomplete save file and all else.')
-#
-#     return computer, optim, epoch, iteration
 
 
 def salvage(savestr):
@@ -249,7 +192,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
     print_interval = 10
     val_interval = 50
-    save_interval = 300
+    save_interval = 100
     target_dim = None
     rldmax_len = 50
     running_loss_deque = deque(maxlen=rldmax_len)
@@ -323,6 +266,24 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_iteration = 0
     logfile = "log.txt"
 
+
+
+
+
+
+
+
+
+    (controller_hidden, memory, read_vectors) = (None, None, None)
+
+    output, (controller_hidden, memory, read_vectors) = \
+        computer(input_of_time_t, (controller_hidden, memory, read_vectors, True))
+
+
+
+
+
+
     num_workers = 3
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
@@ -331,7 +292,18 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
-    computer = DNC(reset=reset, palette=palette)
+    computer = SDNC(
+        input_size=47764,
+        hidden_size=128,
+        rnn_type='lstm',
+        num_layers=4,
+        nr_cells=100,
+        cell_size=32,
+        read_heads=4,
+        sparse_reads=8,
+        batch_first=True,
+        gpu_id=1
+    )
 
     # load model:
     if load:
