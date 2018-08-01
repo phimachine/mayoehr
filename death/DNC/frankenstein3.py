@@ -536,6 +536,12 @@ class Frankenstein(nn.Module):
 
     # TODO sparse update, skipped because it's for performance improvement.
 
+    def sparse_write_weighting(self,write_weighting,k):
+        sorted,indices=torch.sort(write_weighting)
+        write_weighting[indices[k:]]=0
+        
+
+
     def read_weightings(self, forward_weighting, backward_weighting, read_keys,
                         read_strengths, read_modes):
         '''
