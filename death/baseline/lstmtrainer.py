@@ -211,48 +211,47 @@ class lstmwrapper(nn.Module):
         return self.output(output)
 
 def main():
-    with torch.cuda.device(1):
-        total_epochs = 10
-        iter_per_epoch = 100000
-        lr = 1e-2
-        optim = None
-        starting_epoch = 0
-        starting_iteration= 0
-        logfile = "log.txt"
+    total_epochs = 10
+    iter_per_epoch = 100000
+    lr = 1e-2
+    optim = None
+    starting_epoch = 0
+    starting_iteration= 0
+    logfile = "log.txt"
 
-        num_workers = 24
-        ig = InputGenD()
-        # multiprocessing disabled, because socket request seems unstable.
-        # performance should not be too bad?
-        trainds,validds=train_valid_split(ig,split_fold=10)
-        traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
-        validdl = DataLoader(dataset=validds, batch_size=1)
-        print("Using", num_workers, "workers for training set")
-        # testing whether this LSTM works is basically a question whether
-        lstm=lstmwrapper(input_size=47764,hidden_size=512,num_layers=128,batch_first=True,
-                         dropout=True)
+    num_workers = 16
+    ig = InputGenD()
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
+    trainds,validds=train_valid_split(ig,split_fold=10)
+    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
+    validdl = DataLoader(dataset=validds, batch_size=1)
+    print("Using", num_workers, "workers for training set")
+    # testing whether this LSTM works is basically a question whether
+    lstm=lstmwrapper(input_size=47764,hidden_size=512,num_layers=128,batch_first=True,
+                     dropout=True)
 
-        # load model:
-        load=False
-        if load:
-            print("loading model")
-            lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
+    # load model:
+    load=True
+    if load:
+        print("loading model")
+        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
 
-        lstm = lstm.cuda()
-        if optim is None:
-            optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
-        else:
-            # print('use Adadelta optimizer with learning rate ', lr)
-            # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
-            optimizer = optim
+    lstm = lstm.cuda()
+    if optim is None:
+        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
+    else:
+        # print('use Adadelta optimizer with learning rate ', lr)
+        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+        optimizer = optim
 
-        real_criterion = nn.SmoothL1Loss()
-        binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
+    real_criterion = nn.SmoothL1Loss()
+    binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
 
-        # starting with the epoch after the loaded one
+    # starting with the epoch after the loaded one
 
-        train(lstm, optimizer, real_criterion, binary_criterion,
-              traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
+    train(lstm, optimizer, real_criterion, binary_criterion,
+          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 
 if __name__ == "__main__":

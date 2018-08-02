@@ -1,7 +1,5 @@
 """
-D2 is a modification oif the DNC model that resets the memory at every new story.
-This is how people usually implement DNC.
-Use the parameter to control whether experience resets.
+With adjusted loss function.
 """
 
 import pandas as pd
@@ -150,6 +148,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         cause_of_death_output = patient_output[:, :, 1:]
         time_to_event_target = target[:, :, 0]
         cause_of_death_target = target[:, :, 1:]
+
+        total_labels = cause_of_death_target.sum(2)[0,0]
 
         # this block will not work for batch input,
         # you should modify it so that the loss evaluation is not determined by logic but function.
@@ -304,7 +304,8 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         optimizer = optim
 
     real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
+    # time-wise sum, label-wise average.
+    binary_criterion = nn.BCEWithLogitsLoss()
 
     # starting with the epoch after the loaded one
 
