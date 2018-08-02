@@ -186,6 +186,8 @@ class Frankenstein(nn.Module):
         self.W_r = Parameter(self.W_r.data)
 
     def forward(self, input):
+        if (input!=input).any():
+            raise ValueError("We have NAN in inputs")
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
 
         '''Controller'''
