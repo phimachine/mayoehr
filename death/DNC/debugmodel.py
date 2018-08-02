@@ -37,7 +37,7 @@ def save_model(net, optim, epoch, iteration):
 
 def load_model(computer, optim, starting_epoch, starting_iteration):
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("DNCcrash.pkl")
+    pickle_file = Path(task_dir).joinpath("saves/DNCNA_0_235.pkl")
     print("loading model at", pickle_file)
     pickle_file = pickle_file.open('rb')
     computer, optim, epoch, iteration = torch.load(pickle_file)

@@ -5,6 +5,7 @@ Use the parameter to control whether experience resets.
 """
 
 import pandas as pd
+from dnc import SDNC
 import torch
 import numpy as np
 import pdb
@@ -25,7 +26,8 @@ import datetime
 batch_size = 1
 global_exception_counter = 0
 i = None
-debug=True
+debug = True
+
 
 class dummy_context_mgr():
     def __enter__(self):
@@ -38,8 +40,8 @@ class dummy_context_mgr():
 def save_model(net, optim, epoch, iteration, savestr):
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    if not os.path.isdir(Path(task_dir)/"saves"/savestr):
-        os.mkdir(Path(task_dir)/"saves"/savestr)
+    if not os.path.isdir(Path(task_dir) / "saves" / savestr):
+        os.mkdir(Path(task_dir) / "saves" / savestr)
     pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/DNC_" + str(epoch) + "_" + str(iteration) + ".pkl")
     with pickle_file.open('wb') as fhand:
         torch.save((net, optim, epoch, iteration), fhand)
@@ -69,13 +71,12 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
         return computer, optim, starting_epoch, starting_iteration
     pickle_file = Path(task_dir).joinpath(
         "saves/" + savestr + "/DNC_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-    print("loading model at",pickle_file)
+    print("loading model at", pickle_file)
     with pickle_file.open('rb') as pickle_file:
         computer, optim, epoch, iteration = torch.load(pickle_file)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
 
     return computer, optim, highestepoch, highestiter
-
 
 
 def salvage(savestr):
@@ -85,7 +86,7 @@ def salvage(savestr):
     # The loss of data is likely.
 
     task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves"/savestr
+    save_dir = Path(task_dir) / "saves" / savestr
     highestepoch = -1
     secondhighestiter = -1
     highestiter = -1
@@ -107,10 +108,11 @@ def salvage(savestr):
         return
     if secondhighestiter != -1:
         pickle_file2 = Path(task_dir).joinpath(
-            "saves/DNC"+savestr+"_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+            "saves/DNC" + savestr + "_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/salvage2.pkl")
 
-    pickle_file1 = Path(task_dir).joinpath("saves/DNC"+savestr+"_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file1 = Path(task_dir).joinpath(
+        "saves/DNC" + savestr + "_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
@@ -122,11 +124,12 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
     global i
     patient_loss = None
     if debug:
-        if (input!=input).any():
+        if (input != input).any():
             raise ValueError("NA in input")
-        if (target!=target).any():
+        if (target != target).any():
             raise ValueError("NA in target")
     try:
+        (controller_hidden, memory, read_vectors, reset_experience) = (None, None, None, True)
         optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
@@ -138,12 +141,21 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         time_length = input.size()[1]
         # with torch.no_grad if validate else dummy_context_mgr():
         patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
-        for timestep in range(time_length):
-            # first colon is always size 1
-            feeding = input[:, timestep, :]
-            output = computer(feeding)
-            assert not (output != output).any()
-            patient_output[0, timestep, :] = output
+        output, (controller_hidden, memory, read_vectors) = \
+            computer(input, (controller_hidden, memory, read_vectors, reset_experience))
+        assert not (output != output).any()
+
+        # for timestep in range(time_length):
+        #     # first colon is always size 1
+        #     feeding = input[:, timestep, :]
+        #
+        #     output, (controller_hidden, memory, read_vectors), debug_memory = \
+        #         computer(feeding, (controller_hidden, memory, read_vectors, reset_experience))
+        #     reset_experience = False
+        #
+        #     # output = computer(feeding)
+        #     assert not (output != output).any()
+        #     patient_output[0, timestep, :] = output
 
         # patient_output: (batch_size 1, time_length, output_dim ~4000)
         time_to_event_output = patient_output[:, :, 0]
@@ -186,7 +198,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
             task_dir = os.path.dirname(abspath(__file__))
             save_dir = Path(task_dir) / "saves" / "probleminput.pkl"
             with save_dir.open('wb') as fhand:
-                pickle.dump(input,fhand)
+                pickle.dump(input, fhand)
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
             print("we are at", i)
@@ -204,7 +216,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     save_interval = 300
     target_dim = None
     rldmax_len = 50
-    val_batch=10
+    val_batch = 10
     running_loss_deque = deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
@@ -223,7 +235,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     printloss = float(train_story_loss[0])
                 else:
                     printloss = 10000
-                computer.new_sequence_reset()
                 del input, target, loss_type
                 running_loss_deque.appendleft(printloss)
                 if i % print_interval == 0:
@@ -245,7 +256,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                                                    real_criterion, binary_criterion, validate=True)
                         if val_loss is not None:
                             printloss += float(val_loss[0])
-                    printloss=printloss/val_batch
+                    printloss = printloss / val_batch
                     if logfile:
                         with open(logfile, 'a') as handle:
                             handle.write("validation. count: %4d, val loss     : %.10f \n" %
@@ -269,6 +280,68 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
             traceback.print_exc()
 
 
+class NotMySam(SDNC):
+    def __init__(
+            self,
+            input_size,
+            hidden_size,
+            last_output_size,
+            rnn_type='lstm',
+            num_layers=1,
+            num_hidden_layers=2,
+            bias=True,
+            batch_first=True,
+            dropout=0,
+            bidirectional=False,
+            nr_cells=5000,
+            sparse_reads=4,
+            temporal_reads=4,
+            read_heads=4,
+            cell_size=10,
+            nonlinearity='tanh',
+            gpu_id=-1,
+            independent_linears=False,
+            share_memory=True,
+            debug=False,
+            clip=20):
+        super(NotMySam, self).__init__(input_size,
+                                       hidden_size,
+                                       rnn_type=rnn_type,
+                                       num_layers=num_layers,
+                                       num_hidden_layers=num_hidden_layers,
+                                       bias=bias,
+                                       batch_first=batch_first,
+                                       dropout=dropout,
+                                       bidirectional=bidirectional,
+                                       nr_cells=nr_cells,
+                                       sparse_reads=sparse_reads,
+                                       temporal_reads=temporal_reads,
+                                       read_heads=read_heads,
+                                       cell_size=cell_size,
+                                       nonlinearity=nonlinearity,
+                                       gpu_id=gpu_id,
+                                       independent_linears=independent_linears,
+                                       share_memory=share_memory,
+                                       debug=debug,
+                                       clip=clip)
+
+        self.last_output_size=last_output_size
+        self.last_output = nn.Linear(self.input_size, self.last_output_size)
+    
+    def forward(self, input, hx=(None, None, None), reset_experience=False, pass_through_memory=True):
+        if self.debug:
+            outputs, (controller_hidden, mem_hidden, read_vectors), viz=\
+                super(NotMySam, self).forward(input, hx=(None, None, None), reset_experience=False, pass_through_memory=True)
+            outputs = self.last_output(outputs)
+
+            return outputs, (controller_hidden,mem_hidden,read_vectors), viz
+        else:
+            outputs, (controller_hidden, mem_hidden, read_vectors)=\
+                super(NotMySam, self).forward(input, hx=(None, None, None), reset_experience=False, pass_through_memory=True)
+            outputs = self.last_output(outputs)
+
+            return outputs, (controller_hidden,mem_hidden,read_vectors)
+
 def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     total_epochs = 10
     iter_per_epoch = 100000
@@ -280,14 +353,23 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
 
     num_workers = 3
     ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
-    computer = DNC(reset=reset, palette=palette)
-
+    computer = NotMySam(
+        input_size=47764,
+        hidden_size=128,
+        last_output_size=3620,
+        rnn_type='lstm',
+        num_layers=4,
+        nr_cells=100,
+        cell_size=32,
+        read_heads=4,
+        sparse_reads=4,
+        batch_first=True,
+        gpu_id=0
+    )
     # load model:
     if load:
         print("loading model")

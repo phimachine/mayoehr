@@ -211,17 +211,18 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
         if global_exception_counter>-1:
             global_exception_counter-=1
-    except NotImplementedError: #ValueError:
+    except ValueError:
         traceback.print_exc()
         print("Value Error reached")
-        print(datetime.datetime.now().time())
-        global_exception_counter+=1
-        if global_exception_counter==10:
-            save_model(computer,optimizer,epoch=0,iteration=np.random.randint(0,1000))
-            raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
-        else:
-            print("we are at",i)
-            pass
+        save_model(computer, optimizer, epoch=0, iteration=123)
+        # print(datetime.datetime.now().time())
+        # global_exception_counter+=1
+        # if global_exception_counter==10:
+        #     save_model(computer,optimizer,epoch=0,iteration=np.random.randint(0,1000))
+        #     raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
+        # else:
+        #     print("we are at",i)
+        #     pass
 
     return patient_loss
 
@@ -305,10 +306,8 @@ def main(load=False, lr=1e-3):
     starting_iteration= 0
     logfile = "log.txt"
 
-    num_workers = 4
+    num_workers = 3
     ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
     trainds,validds=train_valid_split(ig,split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
