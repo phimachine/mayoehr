@@ -1,10 +1,13 @@
+"""
+D is different from C because it rebalances the dataset to have more death records, so that the optimal
+prediction strategy is not to output zero for all.
+"""
+
+
 from death.post.inputgen_planC import *
 
-
 # we can only assume that all deaths are recorded
-
 # torch integration reference: https://github.com/utkuozbulak/pytorch-custom-dataset-examples
-
 # This is the plan C.
 
 def get_timestep_location(earliest, dates):
@@ -48,8 +51,6 @@ class InputGenD(InputGen):
         # TODO there is a critical bug that shows that my post processing might need to be updated.
         # TODO somehow a value that is in rep_person_id+death is not appearing in earla, which means
         # TODO it does not have a record in our db.
-        # index=28119
-        # id=99102
         id = self.all_indices[index]
         return self.get_by_id(id, debug)
         # return torch.Tensor(i),torch.Tensor(o)
@@ -71,16 +72,17 @@ class GenHelper(Dataset):
         return self.length
 
 
-def train_valid_split(ds, split_fold=10, random_seed=None):
+def train_valid_split(ds, split_fold=10, random_seed=12345):
     """
     This is a pytorch generic function that takes a data.Dataset object and splits it to validation and training
     efficiently.
     This is just a factory method, nothing special. Can't believe no one ever did this for PyTorch.
 
+    You need to fix the seed so that when this object is reinitiated, no valid leaks into train.
+
     :return:
     """
 
-    
     if random_seed is None:
         np.random.seed(random_seed)
 
