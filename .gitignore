@@ -1,0 +1,12 @@
+.RData
+*/.Rdata
+.RDataTmp
+*/.RdataTmp
+.*
+!/.gitignore
+.Rhistory
+*.txt
+*.csv
+death/data/*
+death/DNC/babi/data/*
+*.pkl

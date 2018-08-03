@@ -1,0 +1,141 @@
+
+unt: 2450, running loss: 6387.9239941406
+validation. count: 2450, training loss: 13424.8642578125
+learning.   count: 2460, training loss: 2785.9531250000
+count: 2460, running loss: 5547.5936871338
+learning.   count: 2470, training loss: 179.0093078613
+count: 2470, running loss: 5872.5639245605
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:48.862631
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:49.022952
+learning.   count: 2480, training loss: 9830.8701171875
+count: 2480, running loss: 6944.3312799072
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.count: 2450, running loss: 6387.9239941406
+validation. count: 2450, training loss: 13424.8642578125
+learning.   count: 2460, training loss: 2785.9531250000
+count: 2460, running loss: 5547.5936871338
+learning.   count: 2470, training loss: 179.0093078613
+count: 2470, running loss: 5872.5639245605
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:48.862631
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:49.022952
+learning.   count: 2480, training loss: 9830.8701171875
+count: 2480, running loss: 6944.3312799072
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is fasdfasdfound.
+fasdfe-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+
+Value Error reached
+23:15:49.047898
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:49.081346
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:49.127648
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:49.178581
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:51.209776
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:52.135594
+Traceback (most recent call last):
+  File "/local2/tmp/pycharm_project_292/death/DNC/trainerD.py", line 177, in run_one_patient
+    output = computer(feeding)
+  File "/home/m193194/.conda/envs/jason2/lib/python3.6/site-packages/torch/nn/modules/module.py", line 357, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/local2/tmp/pycharm_project_292/death/DNC/frankenstein.py", line 485, in forward
+    raise ValueError("nan is found.")
+ValueError: nan is found.
+Value Error reached
+23:15:52.166290
+
