@@ -20,20 +20,37 @@ Splitter object is not a Dataset, because we do not define a __len__() method on
 '''
 from death.post.inputgen_planD import *
 
+
 class BatchInputGenE():
     '''
     This is the channel based object that produces time-indexed values.
     This is built to be an iterator.
     '''
-    def __init__(self, batch_size, death_proportion=0.9,
-                 load_pickle=True, verbose=False, debug=False):
-        # this is our parallelized worker pool that supplies sequences
-        self.InputGenD=InputGenD(death_proportion=0.9, load_pickle=True, verbose=False, debug=False)
-        # initialize all channels of batches
+    def __init__(self, batch_size, dataloader,time_variant_index=[True],tensor_time_dim=0):
+        """
+        :param batch_size:
+        :param dataloader:
+        :param time_seq_dim: the dimension of the tensor
+        """
         for i in range(batch_size):
+            # initialize all channels of batches
+            # all the sequences for the next yield value.
             self.__setattr__("ch"+str(i),None)
+            # next value to yield, a tensor
+            self.nextyield=None
+            # all timestep values for the current yield values.
+            # index pointer for all sequences
+            self.__setattr__("idx"+str(i),0)
+            # length of current sequence
+            set.__setattr__("len"+str(i),-1)
+        # load first sequences
 
-    def __get__(se
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return
+
 
 #
 # from death.post.inputgen_planC import *
@@ -103,31 +120,31 @@ class BatchInputGenE():
 #     def __len__(self):
 #         return self.length
 #
-#
-# def train_valid_split(ds, split_fold=10, random_seed=12345):
-#     """
-#     This is a pytorch generic function that takes a data. Dataset object and splits it to validation and training
-#     efficiently.
-#     This is just a factory method, nothing special. Can't believe no one ever did this for PyTorch.
-#
-#     You need to fix the seed so that when this object is reinitiated, no valid leaks into train.
-#
-#     :return:
-#     """
-#
-#     if random_seed is None:
-#         np.random.seed(random_seed)
-#
-#     dslen = len(ds)
-#     indices = list(range(dslen))
-#     valid_size = dslen // split_fold
-#     np.random.shuffle(indices)
-#     train_mapping = indices[valid_size:]
-#     valid_mapping = indices[:valid_size]
-#     train = GenHelper(ds, dslen - valid_size, train_mapping)
-#     valid = GenHelper(ds, valid_size, valid_mapping)
-#
-#     return train, valid
+
+def train_valid_split(ds, split_fold=10, random_seed=12345):
+    """
+    This is a pytorch generic function that takes a data. Dataset object and splits it to validation and training
+    efficiently.
+    This is just a factory method, nothing special. Can't believe no one ever did this for PyTorch.
+
+    You need to fix the seed so that when this object is reinitiated, no valid leaks into train.
+
+    :return:
+    """
+
+    if random_seed is None:
+        np.random.seed(random_seed)
+
+    dslen = len(ds)
+    indices = list(range(dslen))
+    valid_size = dslen // split_fold
+    np.random.shuffle(indices)
+    train_mapping = indices[valid_size:]
+    valid_mapping = indices[:valid_size]
+    train = GenHelper(ds, dslen - valid_size, train_mapping)
+    valid = GenHelper(ds, valid_size, valid_mapping)
+
+    return train, valid
 #
 #
 # def oldmain():
