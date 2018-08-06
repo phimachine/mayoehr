@@ -1,3 +1,4 @@
+<<<<<<< HEAD:death/DNC/frankenstein3.py
 """
 I would like to eliminate the numerical instability here.
 I will use a stock LSTM here.
@@ -5,6 +6,12 @@ I will use a stock LSTM here.
 Also, I'm very skeptical about the use of requires.grad=False flag.
 It certainly does not train the parameter, but does it prevent gradient from flowing through?
 """
+=======
+'''
+Takes a state given from calling function scope
+Big change.
+'''
+>>>>>>> batchsolution:death/DNC/PaletteDNC.py
 
 import torch
 from torch import nn
@@ -42,7 +49,7 @@ def test_simplex_bound(tensor, dim=1):
     return True
 
 
-class Frankenstein(nn.Module):
+class PaletteDNC(nn.Module):
     def __init__(self,
                  x=47764,
                  h=128,
@@ -52,9 +59,8 @@ class Frankenstein(nn.Module):
                  R=8,
                  N=512,
                  bs=1,
-                 reset=True,
-                 palette=False):
-        super(Frankenstein, self).__init__()
+                 reset=True):
+        super(PaletteDNC, self).__init__()
 
         self.reset=reset
         # debugging usages
@@ -72,12 +78,19 @@ class Frankenstein(nn.Module):
         self.E_t = W * R + 3 * W + 5 * R + 3
 
         '''CONTROLLER'''
+<<<<<<< HEAD:death/DNC/frankenstein3.py
         self.ctrl=Controller(x, R, W, h, L)
         self.state_tuple=None
         # self.RNN_list = nn.ModuleList()
         # for _ in range(self.L):
         #     self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
         # self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
+=======
+        self.RNN_list = nn.ModuleList()
+        for _ in range(self.L):
+            self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
+        #self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
+>>>>>>> batchsolution:death/DNC/PaletteDNC.py
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
         self.b_y = Parameter(torch.Tensor(self.v_t).cuda())
@@ -96,13 +109,6 @@ class Frankenstein(nn.Module):
         self.last_usage_vector = Variable(torch.Tensor(self.bs, self.N).cuda())
         # store last write weightings for the calculation of usage vector
         self.last_write_weighting = Variable(torch.Tensor(self.bs, self.N)).cuda()
-
-        self.palette=None
-        if palette:
-            stdv=1.0
-            self.memory.data.uniform_(-stdv,stdv)
-            self.palette=palette
-            self.initialz=self.memory.data
 
         self.first_t_flag=True
 
@@ -195,10 +201,36 @@ class Frankenstein(nn.Module):
         self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).zero_().cuda())
         self.W_r = Parameter(self.W_r.data)
 
+<<<<<<< HEAD:death/DNC/frankenstein3.py
     def forward(self, input):
         if (input!=input).any():
             raise ValueError("We have NAN in inputs")
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1).unsqueeze(1)), dim=2)
+=======
+    def forward(self, input, state_tuple):
+        # unpack state_tuple
+        state_tuple
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        if (input!=input).any():
+            raise ValueError("We have NAN in inputs")
+        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
+>>>>>>> batchsolution:death/DNC/PaletteDNC.py
 
         '''Controller'''
         _, st=self.ctrl(input_x_t, self.state_tuple)
