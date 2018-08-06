@@ -15,5 +15,5 @@ if __name__ == "__main__":
     #         traceback.print_exc(file=f)
     #     salvage("1e3")
 
-
-    main()
+    with torch.cuda.device(1):
+        main(True)
