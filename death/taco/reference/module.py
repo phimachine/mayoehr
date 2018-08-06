@@ -8,10 +8,19 @@ import hyperparams as hp
 
 use_cuda = torch.cuda.is_available()
 
+'''
+My Annotations when reading this code.
+'''
 class SeqLinear(nn.Module):
     """
     Linear layer for sequences
     """
+
+    '''
+    This is a Linear unit that applies to all input_channels on all time and batches.
+    This does not have ReLU? It really should. Let's see the network code.
+    Oh nevermind, look at PreNet.
+    '''
     def __init__(self, input_size, output_size, time_dim=2):
         """
         :param input_size: dimension of input
@@ -47,6 +56,16 @@ class Prenet(nn.Module):
     """
     Prenet before passing through the network
     """
+
+    '''
+    Prenet transforms raw input dimension to a output (hidden) dimension. This means we can use this to control
+    the network input dimension size should necessary.
+    I am also thinking about the possibility to pass a prenet not on input dimension, but on the time dimension,
+    so all sequences can be normalized to a same length. This problem was encountered in image recognition? Cropping.
+    Instead of cropping, we might want to run a seq-2-seq with fixed length. We need to look at the attention mechanism
+    to make sure that the attention is dictated by a distribution and has no sequential prior.
+    We will see.
+    '''
     def __init__(self, input_size, hidden_size, output_size):
         """
 
@@ -56,8 +75,8 @@ class Prenet(nn.Module):
         """
         super(Prenet, self).__init__()
         self.input_size = input_size
-        self.output_size = output_size
         self.hidden_size = hidden_size
+        self.output_size = output_size
         self.layer = nn.Sequential(OrderedDict([
              ('fc1', SeqLinear(self.input_size, self.hidden_size)),
              ('relu1', nn.ReLU()),
@@ -77,6 +96,11 @@ class CBHG(nn.Module):
     """
     CBHG Module
     """
+    '''
+    CBHG is a multi-window time-wise convolution.
+    Residual connection with fixed width convolution. What is a fixed width? Time wise or channel wise?
+    They used batch normalization. How do they deal with sequences with different lengths?
+    '''
     def __init__(self, hidden_size, K=16, projection_size = 128, num_gru_layers=2, max_pool_kernel_size=2, is_post=False):
         """
 
@@ -223,6 +247,12 @@ class AttentionDecoder(nn.Module):
     """
     Decoder with attention mechanism (Vinyals et al.)
     """
+    '''
+    Our decoder will be very different. It depends.
+    If we run this model directly to an output, then there is no alignment between input and output, and therefore
+    attention is not a good idea.
+    
+    '''
     def __init__(self, num_units):
         """
 

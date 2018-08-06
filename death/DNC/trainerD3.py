@@ -12,7 +12,7 @@ from os.path import abspath
 from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein2 import Frankenstein as DNC
+from death.DNC.frankenstein3 import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
@@ -138,7 +138,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
         for timestep in range(time_length):
             # first colon is always size 1
-            feeding = input[:, timestep, :]
+            feeding = input[:, timestep, :].unsqueeze(1)
             output = computer(feeding)
             assert not (output != output).any()
             patient_output[0, timestep, :] = output
@@ -278,7 +278,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_iteration = 0
     logfile = "log.txt"
 
-    num_workers = 3
+    num_workers = 8
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
@@ -313,6 +313,6 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
           traindl, iter(validdl), int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
-
+sdd
 if __name__ == "__main__":
     main()

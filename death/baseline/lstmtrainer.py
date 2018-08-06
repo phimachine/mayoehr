@@ -210,7 +210,7 @@ class lstmwrapper(nn.Module):
         output,statetuple=self.lstm(input,hx)
         return self.output(output)
 
-def main():
+def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = 1e-2
@@ -219,7 +219,7 @@ def main():
     starting_iteration= 0
     logfile = "log.txt"
 
-    num_workers = 16
+    num_workers = 32
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
@@ -232,7 +232,6 @@ def main():
                      dropout=True)
 
     # load model:
-    load=True
     if load:
         print("loading model")
         lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
@@ -246,7 +245,7 @@ def main():
         optimizer = optim
 
     real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
+    binary_criterion = nn.BCEWithLogitsLoss()
 
     # starting with the epoch after the loaded one
 
