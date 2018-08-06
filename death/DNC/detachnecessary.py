@@ -5,7 +5,6 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 
 
-
 class LSTM_Unit(nn.Module):
     """
     A single layer unit of LSTM
@@ -116,6 +115,7 @@ lstm=LayeredLSTM()
 optim=torch.optim.Adam(lstm.parameters())
 lstm.cuda()
 states=None
+
 
 for _ in range(1000):
     print(_)
