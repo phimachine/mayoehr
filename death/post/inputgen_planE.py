@@ -20,106 +20,82 @@ Splitter object is not a Dataset, because we do not define a __len__() method on
 '''
 from death.post.inputgen_planD import *
 
-
+debug=True
 class BatchInputGenE():
     '''
     This is the channel based object that produces time-indexed values.
     This is built to be an iterator.
     '''
-    def __init__(self, batch_size, dataloader,time_variant_index=[True],tensor_time_dim=0):
+    def __init__(self, batch_size, dataloader, dldims=(0,1), tensor_time_dim=(1,1)):
         """
         :param batch_size:
         :param dataloader:
+        :param dldims: list of dataloader yield values that need to be processed.
+                       e.g. if yield is (input, target, loss_type), then dldims=(0,1)
         :param time_seq_dim: the dimension of the tensor
         """
-        for i in range(batch_size):
-            # initialize all channels of batches
-            # all the sequences for the next yield value.
-            self.__setattr__("ch"+str(i),None)
-            # next value to yield, a tensor
-            self.nextyield=None
-            # all timestep values for the current yield values.
-            # index pointer for all sequences
-            self.__setattr__("idx"+str(i),0)
-            # length of current sequence
-            set.__setattr__("len"+str(i),-1)
-        # load first sequences
+
+
+        self.batch_size=batch_size
+        self.dataloader=dataloader
+        self.dliter=iter(self.dataloader)
+        self.dldims=dldims
+        self.tensor_time_dim=tensor_time_dim
+
+        # initialize all
+        # all the sequences for the next yield value.
+        self.channels=[next(self.dliter) for _ in range(self.batch_size)]
+        # all timestep values for the current yield values.
+        # index pointer for all sequences, we assume all dataloader tensors have same timesteps.
+        self.timesteps= [0] * batch_size
+        # length of current sequence
+        self.len=[]
+        for ch in self.channels:
+            self.len+=[ch[self.dldims[0]].shape[tensor_time_dim[0]]]
+            if debug:
+                for ti,ttd in zip(self.dldims,self.tensor_time_dim):
+                    tensor=ch[ti]
+                    assert self.len[-1]==tensor.shape[ttd]
+
+        self.dltuplelen=len(self.channels[0])
+
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        return
+        try:
+            # careful with this line
+            ## old: ret=[torch.index_select(channel,self.tensor_time_dim,dx) for channel, dx in zip(self.channels,self.idx)]
+            ## ret=[torch.cat([channel[im].index_select(channel,self.tensor_time_dim,dx) for im in self.dldims])
+            ##      for channel, dx in zip(self.channels,self.idx)]
 
+            # we should not use tensor here. There is too much logic.
+            ret=[]
+            for i in range(self.dltuplelen):
+                if i in self.dldims:
+                    ret.append([])
+                else:
+                    ret.append(torch.stack([ch[i] for ch in self.channels]))
+            for channel, timestep in zip(self.channels, self.timesteps):
+                for i,dldim in enumerate(self.dldims):
+                    ret[dldim]+=[channel[dldim].index_select(self.tensor_time_dim[i],torch.LongTensor([timestep]))]
+            for i in self.dldims:
+                ret[i]=torch.cat(ret[i],dim=0)
+            for i in range(self.batch_size):
+                self.timesteps[i]= self.timesteps[i] + 1
+                if self.timesteps[i]==self.len[i]:
+                    # require a new sequence on channel i
+                    ch=next(self.dliter)
+                    self.channels[i]=ch
+                    self.len[i]=ch[self.dldims[0]].shape[self.tensor_time_dim[0]]
+                    self.timesteps[i]=0
 
-#
-# from death.post.inputgen_planC import *
-#
-# # we can only assume that all deaths are recorded
-# # torch integration reference: https://github.com/utkuozbulak/pytorch-custom-dataset-examples
-# # This is the plan C.
-#
-# def get_timestep_location(earliest, dates):
-#     """
-#     Uses numpy instead of panda.
-#     dates must be month based, otherwise errors will arise.
-#
-#     :param earliest: pandas.Timestamp
-#     :param dates: ndarray of datetime64
-#     :return: cc: int numpy array, the index location of the corresponding records
-#     """
-#     dates = dates.apply(lambda x: x.replace(day=1))
-#     earliest = earliest.to_datetime64()
-#     # if not isinstance(time,pd.Timestamp):
-#     # # if it's a series as it should be
-#     #     time=time.values
-#     # else:
-#     #     time=time.to_datetime64()
-#     dates = dates.values
-#     cc = (dates - earliest).astype('timedelta64[M]')
-#     return cc.astype("int")
-#
-#
-# class InputGenD(InputGen):
-#     # inherit this class mainly so that I can reuse the code and maintain faster
-#     def __init__(self, death_proportion=0.9, load_pickle=True, verbose=False, debug=False):
-#         super(InputGenD, self).__init__(load_pickle=load_pickle, verbose=verbose, debug=debug)
-#         # This is sorted
-#         death_rep_person_id = self.death.index.get_level_values(0).unique().values
-#         no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]
-#         self.death_proportion = death_proportion
-#         leng = int(len(death_rep_person_id) / death_proportion)
-#         no_death_rep_person_id = np.random.choice(no_death_rep_person_id, size=leng - len(death_rep_person_id),
-#                                                   replace=False)
-#         self.all_indices = np.concatenate((death_rep_person_id, no_death_rep_person_id))
-#         np.random.shuffle(self.all_indices)
-#         self.len = len(self.all_indices)
-#         print("Using InputGen Plan D, with death proportion", self.death_proportion)
-#
-#     def __getitem__(self, index, debug=False):
-#         # TODO there is a critical bug that shows that my post processing might need to be updated.
-#         # TODO somehow a value that is in rep_person_id+death is not appearing in earla, which means
-#         # TODO it does not have a record in our db.
-#         id = self.all_indices[index]
-#         return self.get_by_id(id, debug)
-#         # return torch.Tensor(i),torch.Tensor(o)
-#     def __len__(self):
-#         return self.len
-#
-#
-# class GenHelper(Dataset):
-#     def __init__(self, mother, length, mapping):
-#         # here is a mapping from this index to the mother ds index
-#         self.mapping = mapping
-#         self.length = length
-#         self.mother = mother
-#
-#     def __getitem__(self, index):
-#         return self.mother[self.mapping[index]]
-#
-#     def __len__(self):
-#         return self.length
-#
+            return ret
+
+        except StopIteration: # this exception will be raised when calling next(self.dliter)
+            # StopIteration will occur for the shortest channel. Discarding rest of the channels.
+            raise StopIteration()
 
 def train_valid_split(ds, split_fold=10, random_seed=12345):
     """
@@ -195,3 +171,16 @@ def train_valid_split(ds, split_fold=10, random_seed=12345):
 #         if x == 100:
 #             break
 #         print(y[2])
+
+
+def main():
+    ig=InputGenD(load_pickle=True, verbose=False)
+    train, valid= train_valid_split(ig)
+    traindl= DataLoader(dataset=train,batch_size=1)
+    bige=BatchInputGenE(16,traindl)
+    print(next(bige))
+    print("whwhw")
+
+
+if __name__=="__main__":
+    main()
