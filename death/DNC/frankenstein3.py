@@ -74,6 +74,7 @@ class Frankenstein(nn.Module):
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
 
+
         '''MEMORY'''
         # p, (N), should be simplex bound
         self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
