@@ -42,7 +42,7 @@ class Test_Memory_Necessary(unittest.TestCase):
     def test_update_temporal_linkage_matrix(self):
         memory=self.overwrite_memory()
         write_weighting = torch.Tensor(param.bs, param.N)
-        val = memory.update_temporal_linkage_matrix(write_weighting)
+        val = memory.temporal_linkage_matrix(write_weighting)
         self.assertTrue(val.size()==(param.bs, param.N, param.N))
 
     def test_write_content_weighting(self):
@@ -120,7 +120,7 @@ class Test_Memory_Necessary(unittest.TestCase):
                                   write_gate,allocation_weighting)
         write_vector=torch.Tensor(param.bs,param.W).normal_()
         erase_vector=torch.Tensor(param.bs,param.W).normal_()
-        memory.write_to_memory(write_weighting,erase_vector,write_vector)
+        memory.new_memory(write_weighting, erase_vector, write_vector)
         self.assertTrue(memory.memory.size()==(param.N,param.W))
 
     def test_read_memory(self):

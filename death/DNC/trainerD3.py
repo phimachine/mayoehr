@@ -313,6 +313,6 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
           traindl, iter(validdl), int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
-sdd
+
 if __name__ == "__main__":
     main()
