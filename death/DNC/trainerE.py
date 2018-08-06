@@ -125,19 +125,6 @@ def salvage(savestr):
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
 
 
-def reset_state_tuple():
-    self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
-    # (N,N)
-    self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).cuda(), requires_grad=False)
-    # (N,W)
-    self.memory = Parameter(torch.Tensor(self.N, self.W).cuda(), requires_grad=False)
-    # (N, R).
-    self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).cuda(), requires_grad=False)
-    # u_t, (N)
-    self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
-    # store last write weightings for the calculation of usage vector
-    self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
-    return (0, 1, 2, 3)
 
 
 def run_one_patient(computer, input, target, reset_flag, state_tuple, target_dim, optimizer, loss_type, real_criterion,

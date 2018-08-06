@@ -1,18 +1,7 @@
-<<<<<<< HEAD:death/DNC/frankenstein3.py
-"""
-I would like to eliminate the numerical instability here.
-I will use a stock LSTM here.
-
-Also, I'm very skeptical about the use of requires.grad=False flag.
-It certainly does not train the parameter, but does it prevent gradient from flowing through?
-"""
-=======
-'''
-Takes a state given from calling function scope
-Big change.
-'''
->>>>>>> batchsolution:death/DNC/PaletteDNC.py
-
+# the goal of monster is to make sure that no graphs branch.
+# this is so that our autograd works
+# I have 80% confidence that this is a problem with 0.3.1
+# I implemented it on 0.4 and I have never dealt with this atrocity.
 import torch
 from torch import nn
 import pdb
@@ -26,7 +15,6 @@ import os
 from os.path import abspath
 from pathlib import Path
 import pickle
-from torch.nn import LSTM
 
 debug = True
 
@@ -49,7 +37,7 @@ def test_simplex_bound(tensor, dim=1):
     return True
 
 
-class PaletteDNC(nn.Module):
+class ResetDNC(nn.Module):
     def __init__(self,
                  x=47764,
                  h=128,
@@ -58,11 +46,9 @@ class PaletteDNC(nn.Module):
                  W=32,
                  R=8,
                  N=512,
-                 bs=1,
-                 reset=True):
-        super(PaletteDNC, self).__init__()
+                 bs=1):
+        super(ResetDNC, self).__init__()
 
-        self.reset=reset
         # debugging usages
         self.last_state_dict=None
 
@@ -78,19 +64,10 @@ class PaletteDNC(nn.Module):
         self.E_t = W * R + 3 * W + 5 * R + 3
 
         '''CONTROLLER'''
-<<<<<<< HEAD:death/DNC/frankenstein3.py
-        self.ctrl=Controller(x, R, W, h, L)
-        self.state_tuple=None
-        # self.RNN_list = nn.ModuleList()
-        # for _ in range(self.L):
-        #     self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
-        # self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
-=======
         self.RNN_list = nn.ModuleList()
         for _ in range(self.L):
-            self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
-        #self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
->>>>>>> batchsolution:death/DNC/PaletteDNC.py
+            self.RNN_list.append(LSTM_Unit(self.x, self.R, self.W, self.h, self.bs))
+        self.hidden_previous_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
         self.b_y = Parameter(torch.Tensor(self.v_t).cuda())
@@ -100,17 +77,17 @@ class PaletteDNC(nn.Module):
         # p, (N), should be simplex bound
         self.precedence_weighting = Variable(torch.Tensor(self.bs, self.N).cuda())
         # (N,N)
-        self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N)).cuda()
+        self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N).cuda())
         # (N,W)
-        self.memory = Variable(torch.Tensor(self.N, self.W).cuda())
+        self.memory = Variable(torch.Tensor(self.bs, self.N, self.W).cuda())
         # (N, R).
         self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).cuda())
         # u_t, (N)
         self.last_usage_vector = Variable(torch.Tensor(self.bs, self.N).cuda())
         # store last write weightings for the calculation of usage vector
-        self.last_write_weighting = Variable(torch.Tensor(self.bs, self.N)).cuda()
+        self.last_write_weighting = Variable(torch.Tensor(self.bs, self.N).cuda())
 
-        self.first_t_flag=True
+        self.not_first_t_flag = Variable(torch.Tensor(self.bs).cuda()).zero_()
 
         '''COMPUTER'''
         self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).cuda())
@@ -122,12 +99,11 @@ class PaletteDNC(nn.Module):
         # if debug:
         #     print("parameters are reset")
         '''Controller'''
-        self.ctrl.reset_parameters()
-        # for module in self.RNN_list:
-        #     # this should iterate over RNN_Units only
-        #     module.reset_parameters()
-        # self.hidden_previous_timestep.zero_()
-        self.state_tuple=None
+        for module in self.RNN_list:
+            # this should iterate over RNN_Units only
+            module.reset_parameters()
+        self.hidden_previous_timestep.zero_()
+        # this breaks graph, only allowed on initializationf
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_y.data.uniform_(-stdv, stdv)
         self.b_y.data.uniform_(-stdv, stdv)
@@ -142,9 +118,9 @@ class PaletteDNC(nn.Module):
         self.last_write_weighting.zero_()
         self.temporal_memory_linkage.zero_()
         # memory must be initialized like this, otherwise usage vector will be stuck at zero.
-        stdv=1.0
-        self.memory.data.uniform_(-stdv,stdv)
-        self.first_t_flag=True
+        stdv=1.0 /math.sqrt(self.W)
+        self.memory.uniform_(-stdv,stdv)
+        self.not_first_t_flag.zero_()
 
         '''Computer'''
         # see paper, paragraph 2 page 7
@@ -159,12 +135,13 @@ class PaletteDNC(nn.Module):
         If memory is not reset at each new sequence, then we should not reset the memory at all?
         :return:
         '''
+        raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
         # if debug:
         #     print('new sequence reset')
         '''controller'''
-        self.state_tuple=None
-        # for RNN in self.RNN_list:
-        #     RNN.new_sequence_reset()
+        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
+        for RNN in self.RNN_list:
+            RNN.new_sequence_reset()
         self.W_y = Parameter(self.W_y.data)
         self.b_y = Parameter(self.b_y.data)
         self.W_E = Parameter(self.W_E.data)
@@ -174,89 +151,57 @@ class PaletteDNC(nn.Module):
 
         if self.reset:
             if self.palette:
-                self.memory= Variable(initialz)
+                self.memory.data=self.initialz
             else:
                 # we will reset the memory altogether.
                 # TODO The question is, should we reset the memory to a fixed state? There are good arguments for it.
                 stdv = 1.0
                 # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
-                self.memory = Variable(torch.Tensor(self.N, self.W).cuda().uniform_(-stdv, stdv))
+                self.memory.data.uniform_(-stdv, stdv)
                 # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
-            #
-            # self.last_usage_vector.zero_()
-            # self.precedence_weighting.zero_()
-            # self.temporal_memory_linkage.zero_()
-            # self.last_read_weightings.zero_()
-            # self.last_write_weighting.zero_()
 
-            self.last_usage_vector = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
-            self.precedence_weighting = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
-            self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N).zero_().cuda())
-            self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).zero_().cuda())
-            self.last_write_weighting = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
-
+            self.last_usage_vector.zero_()
+            self.precedence_weighting.zero_()
+            self.temporal_memory_linkage.zero_()
+            self.last_read_weightings.zero_()
+            self.last_write_weighting.zero_()
+        # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+        # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
+        # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
+        # # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
+        # self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).zero_().cuda(),requires_grad=False)
+        # self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
         self.first_t_flag=True
 
         '''computer'''
-        self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).zero_().cuda())
+        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
         self.W_r = Parameter(self.W_r.data)
 
-<<<<<<< HEAD:death/DNC/frankenstein3.py
-    def forward(self, input):
-        if (input!=input).any():
-            raise ValueError("We have NAN in inputs")
-        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1).unsqueeze(1)), dim=2)
-=======
-    def forward(self, input, state_tuple):
-        # unpack state_tuple
-        state_tuple
+    def reset_batch_channel(self,list_of_channels):
+        raise NotImplementedError()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    def forward(self, input, not_first_t_flag):
+        self.reset_states(not_first_t_flag)
 
         if (input!=input).any():
             raise ValueError("We have NAN in inputs")
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
->>>>>>> batchsolution:death/DNC/PaletteDNC.py
 
         '''Controller'''
-        _, st=self.ctrl(input_x_t, self.state_tuple)
+        hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+        hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
+        for i in range(self.L):
+            hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
+                                             hidden_previous_layer)
+            if (hidden_output!=hidden_output).any():
+                raise ValueError("We have NAN in controller output.")
+            hidden_this_timestep[:, i, :] = hidden_output
+            hidden_previous_layer = hidden_output
 
-        h, c = st
-        # permute to (batch, num_layers \* num_directions, hidden_size)
-        flat_hidden=h.permute(1, 0, 2)
-        flat_hidden=flat_hidden.view(self.bs, -1)
-        output=torch.matmul(flat_hidden, self.W_y)
+        flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
+        output = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
-        self.hidden_previous_timestep = h
-        self.state_previous_timestep = c
-        # hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
-        # hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
-        # for i in range(self.L):
-        #     hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
-        #                                      hidden_previous_layer)
-        #     if (hidden_output!=hidden_output).any():
-        #         raise ValueError("We have NAN in controller output.")
-        #     hidden_this_timestep[:, i, :] = hidden_output
-        #     hidden_previous_layer = hidden_output
-        #
-        # flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
-        # output = torch.matmul(flat_hidden, self.W_y)
-        # interface_input = torch.matmul(flat_hidden, self.W_E)
-        # self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
+        self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
 
         '''interface'''
         last_index = self.W * self.R
@@ -332,24 +277,19 @@ class PaletteDNC(nn.Module):
         read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
                                                read_modes)
         # read from memory last, a new modification.
-        read_vector = self.read_memory(read_weightings)
+        read_vector = Parameter(self.read_memory(read_weightings).data,requires_grad=False)
         # DEBUG NAN
         if (read_vector != read_vector).any():
             # this is a problem! TODO
             raise ValueError("nan is found.")
-
-
 
         '''back to computer'''
         output2 = output + torch.matmul(read_vector.view(self.bs, self.W * self.R), self.W_r)
 
         # update the last weightings
         self.last_read_vector=read_vector
-        self.last_read_weightings = read_weightings
-        self.last_write_weighting = write_weighting
-
-
-        self.first_t_flag=False
+        self.last_read_weightings = Parameter(read_weightings.data,requires_grad=False)
+        self.last_write_weighting = Parameter(write_weighting.data,requires_grad=False)
 
         if debug:
             test_simplex_bound(self.last_read_weightings)
@@ -454,16 +394,16 @@ class PaletteDNC(nn.Module):
         if self.first_t_flag:
             ret = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
             return ret
-        ret = (self.last_usage_vector + self.last_write_weighting - self.last_usage_vector * self.last_write_weighting) \
-              * memory_retention
 
-        # Here we should use .data instead? Like:
-        # self.usage_vector.data=ret.data
-        # Usage vector contain all computation history,
-        # which is not necessary? I'm not sure, maybe the write weighting should be back_propped here?
-        # We reset usage vector for every seq, but should we for every timestep?
-        self.last_usage_vector = ret
-        return ret
+        usage_vector = (self.last_usage_vector + self.last_write_weighting - self.last_usage_vector * self.last_write_weighting) \
+              * memory_retention
+        # if first_t, then usage_vector is asserted to be zero
+        if (usage_vector != usage_vector).any():
+            raise ValueError("NA found in usage vector, not first t flag reset behavior not certain")
+        expandf = self.not_first_t_flag.expand(self.bs, self.N)
+        usage_vector = usage_vector * expandf
+        self.last_usage_vector=usage_vector
+        return usage_vector
 
     def allocation_weighting(self):
         '''
@@ -525,7 +465,9 @@ class PaletteDNC(nn.Module):
         # Took me 3 hours.
         # sum_ww=sum(write_weighting,1)
         sum_ww = torch.sum(write_weighting, dim=1)
-        self.precedence_weighting = (1 - sum_ww).unsqueeze(1) * self.precedence_weighting + write_weighting
+        self.precedence_weighting = Parameter(
+            ((1 - sum_ww).unsqueeze(1) * self.precedence_weighting + write_weighting).data,
+            requires_grad=False)
         if debug:
             test_simplex_bound(self.precedence_weighting, 1)
         return self.precedence_weighting
@@ -538,33 +480,31 @@ class PaletteDNC(nn.Module):
         :return: updated_temporal_linkage_matrix
         '''
 
-        # TODO We need to mathematically understand why this function will
-        # TODO maintain the simplex bound condition.
-        if self.first_t_flag:
-            return self.temporal_memory_linkage
+        ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
+        ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
+        p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
+        raise NotImplementedError("What the heck is this line?")
+        batch_temporal_memory_linkage = lasttml.expand(-1, -1)
+        newtml = (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
+        is_cuda = ww_j.is_cuda
+        if is_cuda:
+            idx = torch.arange(0, self.N, out=torch.cuda.LongTensor())
         else:
-            ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
-            ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
-            p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
-            batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(self.bs, -1, -1)
-            newtml = (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
-            is_cuda= ww_j.is_cuda
-            if is_cuda:
-                ### WHAT IS THIS?
-                idx = torch.arange(0, self.N, out=torch.cuda.LongTensor())
-            else:
-                idx = torch.arange(0, self.N, out=torch.LongTensor())
-            newtml[:,idx,idx]=0
-            if debug:
-                try:
-                    test_simplex_bound(newtml, 1)
-                    test_simplex_bound(newtml.transpose(1, 2), 1)
-                except ValueError:
-                    traceback.print_exc()
-                    print("precedence close to one?", self.precedence_weighting.sum()>1)
-                    raise
-            self.temporal_memory_linkage=newtml
-            return self.temporal_memory_linkage
+            idx = torch.arange(0, self.N, out=torch.LongTensor())
+        newtml[:, idx, idx] = 0
+        if debug:
+            try:
+                test_simplex_bound(newtml, 1)
+                test_simplex_bound(newtml.transpose(1, 2), 1)
+            except ValueError:
+                traceback.print_exc()
+                print("precedence close to one?", precedence_weighting.sum() > 1)
+                raise
+
+        expandf = self.not_first_t_flag.expand(self, bs, self.N, self.N)
+        # force to be zero
+        newtml = newtml * expandf
+        self.temporal_memory_linkage=newtml
 
     def backward_weighting(self):
         '''
@@ -647,94 +587,67 @@ class PaletteDNC(nn.Module):
         # term1=self.memory.unsqueeze(0)*Variable(torch.ones((self.bs,self.N,self.W)).cuda()-term1_2.data)
         term1 = self.memory.unsqueeze(0) * (1 - term1_2)
         term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
-        self.memory = torch.mean(term1 + term2, dim=0)
+        self.memory = Parameter(torch.mean(term1 + term2, dim=0).data,requires_grad=False)
 
-class Controller(nn.Module):
-    def __init__(self, x, R, W, h, L):
-        super(Controller, self).__init__()
+# the problem seems to be in the RNN Unit.
+# we exchange the RNN units and one has memory overflow, the other has convergence issues.
+
+class LSTM_Unit(nn.Module):
+    """
+    A single layer unit of LSTM
+    """
+
+    def __init__(self, x, R, W, h, bs):
+        super(LSTM_Unit, self).__init__()
 
         self.x = x
         self.R = R
         self.W = W
         self.h = h
-        self.L = L
+        self.bs = bs
 
-        self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
-                       dropout=True)
+        self.W_input = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_forget = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+        self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
 
-    def forward(self, input_x, state_tuple):
-        """
-
-        :param input_x: input and memory values
-        :param state_tuple: hidden and state
-        :return:
-        """
-        if state_tuple is None:
-            return self.LSTM(input_x)
-        else:
-            return self.LSTM(input_x, state_tuple)
+        self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
 
     def reset_parameters(self):
-        self.LSTM.reset_parameters()
+        for module in self.children():
+            module.reset_parameters()
+
+    def forward(self, input_x, previous_time, previous_layer):
+        # a hidden unit outputs a hidden output new_hidden.
+        # state also changes, but it's hidden inside a hidden unit.
+
+        semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
+
+        # 5 equations
+        input_gate = torch.sigmoid(self.W_input(semicolon_input))
+        forget_gate = torch.sigmoid(self.W_forget(semicolon_input))
+        new_state = forget_gate * self.old_state + input_gate * \
+                    torch.tanh(self.W_state(semicolon_input))
+        output_gate = torch.sigmoid(self.W_output(semicolon_input))
+        new_hidden = output_gate * torch.tanh(new_state)
+        self.old_state = Parameter(new_state.data,requires_grad=False)
+
+        return new_hidden
+
+
+    def reset_batch_channel(self,list_of_channels):
+        raise NotImplementedError()
 
     def new_sequence_reset(self):
-        for p in self.LSTM.parameters():
-            p=p.detach()
-#
-# # the problem seems to be in the RNN Unit.
-# # we exchange the RNN units and one has memory overflow, the other has convergence issues.
-#
-# class RNN_Unit(nn.Module):
-#     """
-#     A single unit of deep RNN
-#     """
-#
-#     def __init__(self, x, R, W, h, L):
-#         super(RNN_Unit, self).__init__()
-#
-#         self.x = x
-#         self.R = R
-#         self.W = W
-#         self.h = h
-#         self.bs = bs
-#
-#         self.W_input = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#         self.W_forget = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#         self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#         self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#
-#         self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
-#
-#     def reset_parameters(self):
-#         for module in self.children():
-#             module.reset_parameters()
-#
-#     def forward(self, input_x, previous_time, previous_layer):
-#         # a hidden unit outputs a hidden output new_hidden.
-#         # state also changes, but it's hidden inside a hidden unit.
-#
-#         semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
-#
-#         # 5 equations
-#         input_gate = torch.sigmoid(self.W_input(semicolon_input))
-#         forget_gate = torch.sigmoid(self.W_forget(semicolon_input))
-#         new_state = forget_gate * self.old_state + input_gate * \
-#                     torch.tanh(self.W_state(semicolon_input))
-#         output_gate = torch.sigmoid(self.W_output(semicolon_input))
-#         new_hidden = output_gate * torch.tanh(new_state)
-#         self.old_state = Parameter(new_state.data,requires_grad=False)
-#
-#         return new_hidden
-#
-#     def new_sequence_reset(self):
-#         # is detach in place?
-#         self.W_input.weight.detach()
-#         self.W_input.bias.detach()
-#         self.W_output.weight.detach()
-#         self.W_output.bias.detach()
-#         self.W_forget.weight.detach()
-#         self.W_forget.bias.detach()
-#         self.W_state.weight.detach()
-#         self.W_state.bias.detach()
-#
-#         self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+        raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
+
+        self.W_input.weight.detach()
+        self.W_input.bias.detach()
+        self.W_output.weight.detach()
+        self.W_output.bias.detach()
+        self.W_forget.weight.detach()
+        self.W_forget.bias.detach()
+        self.W_state.weight.detach()
+        self.W_state.bias.detach()
+
+        self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
