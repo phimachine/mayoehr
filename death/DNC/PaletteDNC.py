@@ -1,7 +1,8 @@
-# the goal of monster is to make sure that no graphs branch.
-# this is so that our autograd works
-# I have 80% confidence that this is a problem with 0.3.1
-# I implemented it on 0.4 and I have never dealt with this atrocity.
+'''
+Takes a state given from calling function scope
+Big change.
+'''
+
 import torch
 from torch import nn
 import pdb
@@ -37,7 +38,7 @@ def test_simplex_bound(tensor, dim=1):
     return True
 
 
-class Frankenstein(nn.Module):
+class PaletteDNC(nn.Module):
     def __init__(self,
                  x=47764,
                  h=128,
@@ -47,9 +48,8 @@ class Frankenstein(nn.Module):
                  R=8,
                  N=512,
                  bs=1,
-                 reset=True,
-                 palette=False):
-        super(Frankenstein, self).__init__()
+                 reset=True):
+        super(PaletteDNC, self).__init__()
 
         self.reset=reset
         # debugging usages
@@ -70,7 +70,7 @@ class Frankenstein(nn.Module):
         self.RNN_list = nn.ModuleList()
         for _ in range(self.L):
             self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
-        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
+        #self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
         self.b_y = Parameter(torch.Tensor(self.v_t).cuda())
@@ -89,13 +89,6 @@ class Frankenstein(nn.Module):
         self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
         # store last write weightings for the calculation of usage vector
         self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(),requires_grad=False)
-
-        self.palette=None
-        if palette:
-            stdv=1.0
-            self.memory.data.uniform_(-stdv,stdv)
-            self.palette=palette
-            self.initialz=self.memory.data
 
         self.first_t_flag=True
 
@@ -185,7 +178,28 @@ class Frankenstein(nn.Module):
         self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
         self.W_r = Parameter(self.W_r.data)
 
-    def forward(self, input):
+    def forward(self, input, state_tuple):
+        # unpack state_tuple
+        state_tuple
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        if (input!=input).any():
+            raise ValueError("We have NAN in inputs")
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
 
         '''Controller'''
@@ -535,12 +549,6 @@ class Frankenstein(nn.Module):
         return ret
 
     # TODO sparse update, skipped because it's for performance improvement.
-
-    def sparse_write_weighting(self,write_weighting,k):
-        sorted,indices=torch.sort(write_weighting)
-        write_weighting[indices[k:]]=0
-        
-
 
     def read_weightings(self, forward_weighting, backward_weighting, read_keys,
                         read_strengths, read_modes):

@@ -6,6 +6,8 @@ E is different in the sense that it outputs a timepoint, instead of a series.
 Note that the model will take not just the input but also the hidden and state for LSTM,
 all memory configuration for DNC. These inputs are not supplied by the training loop, instead of the
 DataLoader. This should work.
+
+Note that this inputgen only works for the palette plan, which resets experience for each new sequence.
 """
 
 '''
@@ -16,11 +18,10 @@ A Splitter takes all the sequences and open batch_num channels of outputs. It ca
 concatenate them to whichever channel that runs out of patient records. This object that does deal
 with model states. Model states are cached in the function scope.
 Splitter object is not a Dataset, because we do not define a __len__() method on Splitter.
-
 '''
 from death.post.inputgen_planD import *
 
-debug=True
+
 class BatchInputGenE():
     '''
     This is the channel based object that produces time-indexed values.
@@ -64,6 +65,10 @@ class BatchInputGenE():
         return self
 
     def __next__(self):
+        """
+
+        :return: batch for those that need batches. the last one is a list of reset signals.
+        """
         try:
             # careful with this line
             ## old: ret=[torch.index_select(channel,self.tensor_time_dim,dx) for channel, dx in zip(self.channels,self.idx)]
@@ -91,6 +96,8 @@ class BatchInputGenE():
                     self.len[i]=ch[self.dldims[0]].shape[self.tensor_time_dim[0]]
                     self.timesteps[i]=0
 
+            reset_state=[i==0 for i in self.timesteps]
+            ret.append(reset_state)
             return ret
 
         except StopIteration: # this exception will be raised when calling next(self.dliter)
