@@ -1,19 +1,15 @@
-import pandas as pd
 import torch
-import numpy as np
-import pdb
 from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein import Frankenstein as DNC
+from death.DNC.trashcan.frankenstein import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
 import traceback
-from collections import deque
 
 batch_size = 1
 

@@ -1,14 +1,11 @@
-import pandas as pd
 import torch
-import numpy
-import pdb
 from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planC import InputGen
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein import Frankenstein as DNC
+from death.DNC.trashcan.frankenstein import Frankenstein as DNC
 from torch.autograd import Variable
 import gc
 import pickle

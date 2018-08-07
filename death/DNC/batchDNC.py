@@ -1,7 +1,6 @@
-# the goal of monster is to make sure that no graphs branch.
-# this is so that our autograd works
-# I have 80% confidence that this is a problem with 0.3.1
-# I implemented it on 0.4 and I have never dealt with this atrocity.
+"""
+This is a batch processing DNC with experience reset at each new seuqence at each channel.
+"""
 import torch
 from torch import nn
 import pdb
@@ -15,7 +14,8 @@ import os
 from os.path import abspath
 from pathlib import Path
 import pickle
-
+from death.DNC.channel import *
+from torch.nn import LSTM
 debug = True
 
 def sv(var):
@@ -37,7 +37,7 @@ def test_simplex_bound(tensor, dim=1):
     return True
 
 
-class ResetDNC(nn.Module):
+class BatchDNC(nn.Module):
     def __init__(self,
                  x=47764,
                  h=128,
@@ -47,7 +47,7 @@ class ResetDNC(nn.Module):
                  R=8,
                  N=512,
                  bs=1):
-        super(ResetDNC, self).__init__()
+        super(BatchDNC, self).__init__()
 
         # debugging usages
         self.last_state_dict=None
@@ -127,55 +127,55 @@ class ResetDNC(nn.Module):
         self.last_read_vector.zero_()
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_r.data.uniform_(-stdv, stdv)
-
-    def new_sequence_reset(self):
-        '''
-        The biggest question is whether to reset memory every time a new sequence is taken in.
-        My take is to not reset the memory, but this might not be the best strategy there is.
-        If memory is not reset at each new sequence, then we should not reset the memory at all?
-        :return:
-        '''
-        raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
-        # if debug:
-        #     print('new sequence reset')
-        '''controller'''
-        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
-        for RNN in self.RNN_list:
-            RNN.new_sequence_reset()
-        self.W_y = Parameter(self.W_y.data)
-        self.b_y = Parameter(self.b_y.data)
-        self.W_E = Parameter(self.W_E.data)
-        self.b_E = Parameter(self.b_E.data)
-
-        '''memory'''
-
-        if self.reset:
-            if self.palette:
-                self.memory.data=self.initialz
-            else:
-                # we will reset the memory altogether.
-                # TODO The question is, should we reset the memory to a fixed state? There are good arguments for it.
-                stdv = 1.0
-                # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
-                self.memory.data.uniform_(-stdv, stdv)
-                # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
-
-            self.last_usage_vector.zero_()
-            self.precedence_weighting.zero_()
-            self.temporal_memory_linkage.zero_()
-            self.last_read_weightings.zero_()
-            self.last_write_weighting.zero_()
-        # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
-        # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-        # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
-        # # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
-        # self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).zero_().cuda(),requires_grad=False)
-        # self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-        self.first_t_flag=True
-
-        '''computer'''
-        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
-        self.W_r = Parameter(self.W_r.data)
+    #
+    # def new_sequence_reset(self):
+    #     '''
+    #     The biggest question is whether to reset memory every time a new sequence is taken in.
+    #     My take is to not reset the memory, but this might not be the best strategy there is.
+    #     If memory is not reset at each new sequence, then we should not reset the memory at all?
+    #     :return:
+    #     '''
+    #     raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
+    #     # if debug:
+    #     #     print('new sequence reset')
+    #     '''controller'''
+    #     self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
+    #     for RNN in self.RNN_list:
+    #         RNN.new_sequence_reset()
+    #     self.W_y = Parameter(self.W_y.data)
+    #     self.b_y = Parameter(self.b_y.data)
+    #     self.W_E = Parameter(self.W_E.data)
+    #     self.b_E = Parameter(self.b_E.data)
+    #
+    #     '''memory'''
+    #
+    #     if self.reset:
+    #         if self.palette:
+    #             self.memory.data=self.initialz
+    #         else:
+    #             # we will reset the memory altogether.
+    #             # TODO The question is, should we reset the memory to a fixed state? There are good arguments for it.
+    #             stdv = 1.0
+    #             # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
+    #             self.memory.data.uniform_(-stdv, stdv)
+    #             # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
+    #
+    #         self.last_usage_vector.zero_()
+    #         self.precedence_weighting.zero_()
+    #         self.temporal_memory_linkage.zero_()
+    #         self.last_read_weightings.zero_()
+    #         self.last_write_weighting.zero_()
+    #     # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+    #     # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
+    #     # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
+    #     # # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
+    #     # self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).zero_().cuda(),requires_grad=False)
+    #     # self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
+    #     self.first_t_flag=True
+    #
+    #     '''computer'''
+    #     self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
+    #     self.W_r = Parameter(self.W_r.data)
 
     def reset_batch_channel(self,list_of_channels):
         raise NotImplementedError()
@@ -589,6 +589,39 @@ class ResetDNC(nn.Module):
         term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
         self.memory = Parameter(torch.mean(term1 + term2, dim=0).data,requires_grad=False)
 
+
+class Stock_LSTM(nn.Module):
+    """
+    I prefer using this Stock LSTM for numerical stability. The performance, however, is inferior.
+    """
+    def __init__(self, x, R, W, h, L, v_t):
+        super(Controller, self).__init__()
+
+        self.x = x
+        self.R = R
+        self.W = W
+        self.h = h
+        self.L = L
+
+        self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
+                       dropout=True)
+        self.last=nn.Linear(self.h, self.v_t)
+
+    def forward(self, input_x, state_tuple):
+        """
+        :param input_x: input and memory values
+        :param state_tuple: hidden and state
+        :return:
+        """
+        assert state_tuple is not None
+        o, st = self.LSTM(input_x, state_tuple)
+        return self.last(o), st
+
+    def reset_parameters(self):
+        self.LSTM.reset_parameters()
+        self.last.reset_parameters()
+
+
 # the problem seems to be in the RNN Unit.
 # we exchange the RNN units and one has memory overflow, the other has convergence issues.
 
@@ -637,17 +670,17 @@ class LSTM_Unit(nn.Module):
 
     def reset_batch_channel(self,list_of_channels):
         raise NotImplementedError()
-
-    def new_sequence_reset(self):
-        raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
-
-        self.W_input.weight.detach()
-        self.W_input.bias.detach()
-        self.W_output.weight.detach()
-        self.W_output.bias.detach()
-        self.W_forget.weight.detach()
-        self.W_forget.bias.detach()
-        self.W_state.weight.detach()
-        self.W_state.bias.detach()
-
-        self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+    #
+    # def new_sequence_reset(self):
+    #     raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
+    #
+    #     self.W_input.weight.detach()
+    #     self.W_input.bias.detach()
+    #     self.W_output.weight.detach()
+    #     self.W_output.bias.detach()
+    #     self.W_forget.weight.detach()
+    #     self.W_forget.bias.detach()
+    #     self.W_state.weight.detach()
+    #     self.W_state.bias.detach()
+    #
+    #     self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
