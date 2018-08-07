@@ -1,7 +1,9 @@
-# the goal of monster is to make sure that no graphs branch.
-# this is so that our autograd works
-# I have 80% confidence that this is a problem with 0.3.1
-# I implemented it on 0.4 and I have never dealt with this atrocity.
+"""
+The last state should connect to the current state. Detach should happen at the beginning of each sequence.
+I detach parameters for every forward. This should not be done. The last state influence the next state, and the
+computational graph should be retained until the sequence is reset.
+This will result in problems where the variables are freed after the first backprop.
+"""
 import torch
 from torch import nn
 import pdb
@@ -41,7 +43,7 @@ class Frankenstein(nn.Module):
     def __init__(self,
                  x=47764,
                  h=128,
-                 L=16,
+                 L=8,
                  v_t=3620,
                  W=32,
                  R=8,
@@ -70,24 +72,24 @@ class Frankenstein(nn.Module):
         self.RNN_list = nn.ModuleList()
         for _ in range(self.L):
             self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
-        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
+        self.hidden_previous_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
 
 
         '''MEMORY'''
-        # p, (N), should be simplex bound
-        self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
+        self.precedence_weighting = Variable(torch.Tensor(self.N).cuda())
         # (N,N)
-        self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).cuda(), requires_grad=False)
+        self.temporal_memory_linkage = Variable(torch.Tensor(self.N, self.N)).cuda()
         # (N,W)
-        self.memory = Parameter(torch.Tensor(self.N, self.W).cuda(), requires_grad=False)
+        # TODO NEEDS TO CHANGE ANY LOGIC THAT PROCESSES MEMORY
+        self.memory = Variable(torch.Tensor(self.N, self.W).cuda())
         # (N, R).
-        self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).cuda(), requires_grad=False)
+        self.last_read_weightings = Variable(torch.Tensor(self.N, self.R).cuda())
         # u_t, (N)
-        self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).cuda(), requires_grad=False)
+        self.last_usage_vector = Variable(torch.Tensor(self.N).cuda())
         # store last write weightings for the calculation of usage vector
-        self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).cuda(),requires_grad=False)
+        self.last_write_weighting = Variable(torch.Tensor(self.N)).cuda()
 
         self.palette=None
         if palette:
@@ -99,7 +101,7 @@ class Frankenstein(nn.Module):
         self.first_t_flag=True
 
         '''COMPUTER'''
-        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).cuda(), requires_grad=False)
+        self.last_read_vector = Variable(torch.Tensor(self.W, self.R).cuda())
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
 
         self.reset_parameters()
@@ -114,10 +116,8 @@ class Frankenstein(nn.Module):
         self.hidden_previous_timestep.zero_()
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_y.data.uniform_(-stdv, stdv)
-        self.b_y.data.uniform_(-stdv, stdv)
         stdv = 1.0 / math.sqrt(self.E_t)
         self.W_E.data.uniform_(-stdv, stdv)
-        self.b_E.data.uniform_(-stdv, stdv)
 
         '''Memory'''
         self.precedence_weighting.zero_()
@@ -146,7 +146,7 @@ class Frankenstein(nn.Module):
         # if debug:
         #     print('new sequence reset')
         '''controller'''
-        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
+        self.hidden_previous_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).zero_())
         for RNN in self.RNN_list:
             RNN.new_sequence_reset()
         self.W_y = Parameter(self.W_y.data)
@@ -156,32 +156,23 @@ class Frankenstein(nn.Module):
 
         '''memory'''
 
-        if self.reset:
-            if self.palette:
-                self.memory.data=self.initialz
-            else:
-                # we will reset the memory altogether.
-                # TODO The question is, should we reset the memory to a fixed state? There are good arguments for it.
-                stdv = 1.0
-                # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
-                self.memory.data.uniform_(-stdv, stdv)
-                # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
+        self.precedence_weighting = Variable(torch.Tensor(self.N).cuda()).zero_()
+        # (N,N)
+        self.temporal_memory_linkage = Variable(torch.Tensor(self.N, self.N)).cuda().zero_()
+        # (N,W)
+        stdv=1.0
+        self.memory = Variable(torch.Tensor(self.N, self.W).cuda().uniform_(-stdv, stdv))
+        # (N, R).
+        self.last_read_weightings = Variable(torch.Tensor(self.N, self.R).cuda()).zero_()
+        # u_t, (N)
+        self.last_usage_vector = Variable(torch.Tensor(self.N).cuda()).zero_()
+        # store last write weightings for the calculation of usage vector
+        self.last_write_weighting = Variable(torch.Tensor(self.N)).cuda().zero_()
 
-            self.last_usage_vector.zero_()
-            self.precedence_weighting.zero_()
-            self.temporal_memory_linkage.zero_()
-            self.last_read_weightings.zero_()
-            self.last_write_weighting.zero_()
-        # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
-        # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-        # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
-        # # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
-        # self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).zero_().cuda(),requires_grad=False)
-        # self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
         self.first_t_flag=True
 
         '''computer'''
-        self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
+        self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).zero_().cuda())
         self.W_r = Parameter(self.W_r.data)
 
     def forward(self, input):
@@ -203,7 +194,7 @@ class Frankenstein(nn.Module):
         flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
         output = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
-        self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
+        self.hidden_previous_timestep = hidden_this_timestep
 
         '''interface'''
         last_index = self.W * self.R
@@ -279,7 +270,7 @@ class Frankenstein(nn.Module):
         read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
                                                read_modes)
         # read from memory last, a new modification.
-        read_vector = Parameter(self.read_memory(read_weightings).data,requires_grad=False)
+        read_vector = self.read_memory(read_weightings)
         # DEBUG NAN
         if (read_vector != read_vector).any():
             # this is a problem! TODO
@@ -292,8 +283,8 @@ class Frankenstein(nn.Module):
 
         # update the last weightings
         self.last_read_vector=read_vector
-        self.last_read_weightings = Parameter(read_weightings.data,requires_grad=False)
-        self.last_write_weighting = Parameter(write_weighting.data,requires_grad=False)
+        self.last_read_weightings = read_weightings
+        self.last_write_weighting = write_weighting
 
 
         self.first_t_flag=False
@@ -399,7 +390,7 @@ class Frankenstein(nn.Module):
         :return: u_t, (N), [0,1], the next usage
         '''
         if self.first_t_flag:
-            ret = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
+            ret = torch.Tensor(self.bs, self.N).zero_().cuda()
             return ret
         ret = (self.last_usage_vector + self.last_write_weighting - self.last_usage_vector * self.last_write_weighting) \
               * memory_retention
@@ -409,7 +400,7 @@ class Frankenstein(nn.Module):
         # Usage vector contain all computation history,
         # which is not necessary? I'm not sure, maybe the write weighting should be back_propped here?
         # We reset usage vector for every seq, but should we for every timestep?
-        self.last_usage_vector = Parameter(ret.data, requires_grad=False)
+        self.last_usage_vector = ret
         return ret
 
     def allocation_weighting(self):
@@ -472,9 +463,7 @@ class Frankenstein(nn.Module):
         # Took me 3 hours.
         # sum_ww=sum(write_weighting,1)
         sum_ww = torch.sum(write_weighting, dim=1)
-        self.precedence_weighting = Parameter(
-            ((1 - sum_ww).unsqueeze(1) * self.precedence_weighting + write_weighting).data,
-            requires_grad=False)
+        self.precedence_weighting = (1 - sum_ww).unsqueeze(1) * self.precedence_weighting + write_weighting
         if debug:
             test_simplex_bound(self.precedence_weighting, 1)
         return self.precedence_weighting
@@ -496,8 +485,7 @@ class Frankenstein(nn.Module):
             ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
             p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
             batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(self.bs, -1, -1)
-            newtml = Parameter(
-                ((1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j).data,requires_grad=False)
+            newtml = (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
             is_cuda= ww_j.is_cuda
             if is_cuda:
                 ### WHAT IS THIS?
@@ -513,7 +501,7 @@ class Frankenstein(nn.Module):
                     traceback.print_exc()
                     print("precedence close to one?", self.precedence_weighting.sum()>1)
                     raise
-            self.temporal_memory_linkage=Parameter(newtml.data,requires_grad=False)
+            self.temporal_memory_linkage=newtml
             return self.temporal_memory_linkage
 
     def backward_weighting(self):
@@ -597,7 +585,7 @@ class Frankenstein(nn.Module):
         # term1=self.memory.unsqueeze(0)*Variable(torch.ones((self.bs,self.N,self.W)).cuda()-term1_2.data)
         term1 = self.memory.unsqueeze(0) * (1 - term1_2)
         term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
-        self.memory = Parameter(torch.mean(term1 + term2, dim=0).data,requires_grad=False)
+        self.memory = torch.mean(term1 + term2, dim=0)
 
 # the problem seems to be in the RNN Unit.
 # we exchange the RNN units and one has memory overflow, the other has convergence issues.
@@ -621,7 +609,7 @@ class RNN_Unit(nn.Module):
         self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
         self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
 
-        self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+        self.old_state = torch.Tensor(self.bs, self.h).zero_().cuda()
 
     def reset_parameters(self):
         for module in self.children():
@@ -640,8 +628,8 @@ class RNN_Unit(nn.Module):
                     torch.tanh(self.W_state(semicolon_input))
         output_gate = torch.sigmoid(self.W_output(semicolon_input))
         new_hidden = output_gate * torch.tanh(new_state)
-        self.old_state = Parameter(new_state.data,requires_grad=False)
-
+        # self.old_state = Parameter(new_state.data,requires_grad=False)
+        self.old_state=new_state
         return new_hidden
 
     def new_sequence_reset(self):
@@ -654,4 +642,4 @@ class RNN_Unit(nn.Module):
         self.W_state.weight.detach()
         self.W_state.bias.detach()
 
-        self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+        self.old_state = torch.Tensor(self.bs, self.h).zero_().cuda()

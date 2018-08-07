@@ -204,6 +204,7 @@ class Frankenstein(nn.Module):
         flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
         output = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
+        # this detaches hidden from previous hidden.
         self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
 
         '''interface'''
@@ -641,6 +642,8 @@ class RNN_Unit(nn.Module):
                     torch.tanh(self.W_state(semicolon_input))
         output_gate = torch.sigmoid(self.W_output(semicolon_input))
         new_hidden = output_gate * torch.tanh(new_state)
+        # this detaches the new state from the old state.
+        # TODO overall, no previous state tuple of the RNN influences the current timestep.
         self.old_state = Parameter(new_state.data,requires_grad=False)
 
         return new_hidden
