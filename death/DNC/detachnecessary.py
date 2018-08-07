@@ -110,6 +110,7 @@ def main0():
     c0 = Variable(torch.rand(8, 2, 128)).cuda()
     states = (h0, c0)
     savedetach = [states]
+
     sd(savedetach)
 
     for m in range(1000):
@@ -126,6 +127,7 @@ def main0():
             loss = criterion(output, target)
             loss.backward()
             optim.step()
+
         for i in range(len(savedetach)):
             del savedetach[0]
         h0 = Variable(torch.rand(8, 128, 128)).cuda()
