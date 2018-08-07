@@ -74,14 +74,21 @@ class LayeredLSTM(nn.Module):
                  W=32,
                  R=8,
                  N=512,
-                 bs=1,
-                 reset=True,
-                 palette=False):
+                 bs=1):
         super(LayeredLSTM, self).__init__()
 
-        self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
-        self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
+        self.x=x
+        self.R=R
+        self.W=W
+        self.L=L
+        self.h=h
+        self.v_t=v_t
+        self.bs=bs
 
+        self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
+        self.hidden_previous_timestep = torch.Tensor(self.bs, self.L, self.h).cuda()
+
+        self.RNN_list=nn.ModuleList()
         for _ in range(self.L):
             self.RNN_list.append(LSTM_Unit(self.x, self.R, self.W, self.h, self.bs))
 
@@ -102,11 +109,12 @@ class LayeredLSTM(nn.Module):
         flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
         output = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
-        self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
+        self.hidden_previous_timestep = hidden_this_timestep
         return output
 
 
-lstm=LayeredLSTM()
+# lstm=LayeredLSTM()
+lstm=LSTM(47764, 128)
 
 # this has no new sequence reset
 # I wonder if gradient information will increase indefinitely
@@ -115,15 +123,18 @@ lstm=LayeredLSTM()
 optim=torch.optim.Adam(lstm.parameters())
 lstm.cuda()
 states=None
+input=None
+target=None
+output=None
 
 
 for _ in range(1000):
     print(_)
     optim.zero_grad()
     input=Variable(torch.rand(128,1,47764)).cuda()
-    target=Variable(torch.rand(128,1,47764)).cuda()
+    target=Variable(torch.rand(128,1,128)).cuda()
     output, states=lstm(input, states)
     criterion=torch.nn.SmoothL1Loss()
     loss=criterion(output,target)
-    loss.backward(retain_graph=True)
+    loss.backward()
     optim.step()
