@@ -163,10 +163,10 @@ def main():
         optim.step()
 
         if i % 3 == 0:
-            cm[0].new_sequence()
+            cm[0].new_sequence_reset()
 
         if i % 5 ==0:
-            cm[1].new_sequence()
+            cm[1].new_sequence_reset()
 
 
 if __name__ ==  "__main__":
