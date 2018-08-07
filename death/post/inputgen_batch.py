@@ -20,9 +20,88 @@ with model states. Model states are cached in the function scope.
 Splitter object is not a Dataset, because we do not define a __len__() method on Splitter.
 '''
 from death.post.inputgen_planD import *
+from death.DNC.channel import *
+
+debug=True
 
 
-class BatchInputGenE():
+class Channel():
+    def __init__(self):
+        super(Channel, self).__init__()
+        self.saved_states = []
+
+    def new_sequence(self):
+        for i in range(len(self.saved_states)):
+            del self.saved_states[0]
+        self.init_states()
+
+    def init_states(self):
+        h0 = Variable(torch.rand(8, 1, 512)).cuda()
+        c0 = Variable(torch.rand(8, 1, 512)).cuda()
+        states = (h0, c0)
+        self.saved_states = [states]
+
+    def get_input(self):
+        return Variable(torch.rand(1, 1, 47764)).cuda()
+
+    def get_states(self):
+        return self.saved_states[-1]
+
+    def push_states(self,states):
+        self.saved_states.append(states)
+        for s in self.saved_states[-1]:
+            s.detach_()
+            s.requires_grad=True
+
+
+class ChannelManager():
+    def __init__(self,dataloader, batch_size):
+        super(ChannelManager, self).__init__()
+        self.channels = []
+        self.bs=batch_size
+        self.dataloader=dataloader
+
+    def add_channels(self, num):
+        for i in range(num):
+            self.channels.append(Channel())
+
+    def cat_call(self, func_name, dim=0):
+        # the return can be (Tensor, Tensor)
+
+        res = []
+        noret=False
+        for ch in self.channels:
+            func = getattr(ch, func_name)
+            ret=func()
+            if ret is None:
+                noret=True
+            else:
+                res.append(ret)
+        if noret:
+            return
+        else:
+            if isinstance(res[0],torch.Tensor) or isinstance(res[0], torch.autograd.Variable):
+                return torch.cat(res,dim)
+            else:
+                unzipped=list(zip(*res))
+                return tuple(torch.cat(m, dim) for m in unzipped)
+
+    def distribute_call(self,func_name,arg):
+        try:
+            for i in range(self.bs):
+                func=getattr(self.channels[i],func_name)
+                func(arg.index_select(0,i))
+        except AttributeError:
+            for i in range(self.bs):
+                call_tuple=[tensor.index_select(0,i) for tensor in arg]
+                func = getattr(self.channels[i], func_name)
+                func(call_tuple)
+
+    def __getitem__(self, item):
+        return self.channels[item]
+
+
+class InputGenBatch():
     '''
     This is the channel based object that produces time-indexed values.
     This is built to be an iterator.
@@ -35,7 +114,6 @@ class BatchInputGenE():
                        e.g. if yield is (input, target, loss_type), then dldims=(0,1)
         :param time_seq_dim: the dimension of the tensor
         """
-
 
         self.batch_size=batch_size
         self.dataloader=dataloader
@@ -60,7 +138,6 @@ class BatchInputGenE():
 
         self.dltuplelen=len(self.channels[0])
 
-
     def __iter__(self):
         return self
 
@@ -70,11 +147,6 @@ class BatchInputGenE():
         :return: batch for those that need batches. the last one is a list of reset signals.
         """
         try:
-            # careful with this line
-            ## old: ret=[torch.index_select(channel,self.tensor_time_dim,dx) for channel, dx in zip(self.channels,self.idx)]
-            ## ret=[torch.cat([channel[im].index_select(channel,self.tensor_time_dim,dx) for im in self.dldims])
-            ##      for channel, dx in zip(self.channels,self.idx)]
-
             # we should not use tensor here. There is too much logic.
             ret=[]
             for i in range(self.dltuplelen):
@@ -128,66 +200,13 @@ def train_valid_split(ds, split_fold=10, random_seed=12345):
     valid = GenHelper(ds, valid_size, valid_mapping)
 
     return train, valid
-#
-#
-# def oldmain():
-#     ig = InputGen(load_pickle=True, verbose=False)
-#     ig.performance_probe()
-#
-#     # go get one of the values and see if you can trace it all the way back to raw data
-#     # this is a MUST DO TODO
-#     print('parallelize')
-#     dl = DataLoader(dataset=ig, batch_size=1, shuffle=False, num_workers=16)
-#
-#     start = time.time()
-#     n = 0
-#     for i, t, l, in dl:
-#         print(i, t, l)
-#         # if you take a look at the shape you will know that dl expanded a batch dim
-#         n += 1
-#         if n == 100:
-#             break
-#         if (i != i).any() or (t != t).any():
-#             raise ValueError("NA found")
-#     end = time.time()
-#     print("100 rounds, including initiation:", end - start)
-#     # batch data loading seems to be a problem since patients have different lenghts of data.
-#     # it's advisable to load one at a time.
-#     # we need to think about how to make batch processing possible.
-#     # or maybe not, if the input dimension is so high.
-#     # well, if we don't have batch, then we don't have batch normalization.
-#     print("script finished")
-#
-#
-# if __name__ == "__main__":
-#     ig = InputGenD(load_pickle=True, verbose=False)
-#     train, valid = train_valid_split(ig)
-#     traindl = DataLoader(dataset=train, batch_size=1)
-#     validdl = DataLoader(dataset=valid, batch_size=1)
-#     print(train[1])
-#     for x, y in enumerate(traindl):
-#         if x == 2:
-#             break
-#         print(y)
-#     for x, y in enumerate(validdl):
-#         if x == 2:
-#             break
-#         print(y)
-#
-#     for x, y in enumerate(traindl):
-#         if x == 100:
-#             break
-#         print(y[2])
-
 
 def main():
     ig=InputGenD(load_pickle=True, verbose=False)
     train, valid= train_valid_split(ig)
     traindl= DataLoader(dataset=train,batch_size=1)
-    bige=BatchInputGenE(16,traindl)
+    bige=InputGenBatch(16,traindl)
     print(next(bige))
-    print("whwhw")
-
 
 if __name__=="__main__":
     main()

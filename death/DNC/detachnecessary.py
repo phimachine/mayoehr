@@ -32,8 +32,8 @@ class Channel():
         self.init_states()
 
     def init_states(self):
-        h0 = Variable(torch.rand(8, 1, 128)).cuda()
-        c0 = Variable(torch.rand(8, 1, 128)).cuda()
+        h0 = Variable(torch.rand(8, 1, 512)).cuda()
+        c0 = Variable(torch.rand(8, 1, 512)).cuda()
         states = (h0, c0)
         self.saved_states = [states]
 
@@ -54,7 +54,7 @@ class ChannelManager():
     def __init__(self):
         super(ChannelManager, self).__init__()
         self.channels = []
-        self.bs=0
+        self.bs=2
 
     def add_channels(self, num):
         for i in range(num):
@@ -81,14 +81,15 @@ class ChannelManager():
                 unzipped=list(zip(*res))
                 return tuple(torch.cat(m, dim) for m in unzipped)
 
-    def distribute_call(self,func_name,arg):
+    def distribute_call(self,func_name,arg,dim=0):
         try:
             for i in range(self.bs):
                 func=getattr(self.channels[i],func_name)
-                func(arg.index_select(0,i))
+                func(arg.index_select(dim,i))
         except AttributeError:
             for i in range(self.bs):
-                call_tuple=[tensor.index_select(0,i) for tensor in arg]
+                var = Variable(torch.cuda.LongTensor([i]))
+                call_tuple=[tensor.index_select(dim,var) for tensor in arg]
                 func = getattr(self.channels[i], func_name)
                 func(call_tuple)
 
@@ -137,7 +138,7 @@ def main0():
 
 def main():
     # lstm=LayeredLSTM()
-    lstm = LSTM(input_size=47764, hidden_size=128, num_layers=8, batch_first=True)
+    lstm = LSTM(input_size=47764, hidden_size=512, num_layers=8, batch_first=True)
 
     # this has no new sequence reset
     # I wonder if gradient information will increase indefinitely
@@ -151,18 +152,21 @@ def main():
     cm.add_channels(2)
     cm.cat_call("init_states")
 
-    for i in range(1000):
+    for i in range(2000):
         print(i)
         optim.zero_grad()
-        target = Variable(torch.rand(2,1,128)).cuda()
+        target = Variable(torch.rand(2,1,512)).cuda()
         output, states= lstm(cm.cat_call("get_input"), cm.cat_call("get_states", 1))
-        cm.distribute_call("push_states",states)
+        cm.distribute_call("push_states",states,dim=1)
         loss = criterion(output, target)
         loss.backward()
         optim.step()
 
         if i % 3 == 0:
             cm[0].new_sequence()
+
+        if i % 5 ==0:
+            cm[1].new_sequence()
 
 
 if __name__ ==  "__main__":

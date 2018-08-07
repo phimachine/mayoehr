@@ -1,5 +1,5 @@
 """
-With batch inputs of a single timestep, saving states in each scope.
+Trainer E incorporates Channel(). It's a trainer for batch inputs.
 """
 
 import pandas as pd
@@ -9,7 +9,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planE import InputGenD, BatchInputGenE, train_valid_split
+from death.post.inputgen_batch import InputGenD, BatchInputGenE, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein2 import Frankenstein as DNC
@@ -19,6 +19,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
+from death.DNC.channel import *
 
 batch_size = 1
 global_exception_counter = 0
@@ -123,9 +124,6 @@ def salvage(savestr):
     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
-
-
-
 
 def run_one_patient(computer, input, target, reset_flag, state_tuple, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
@@ -272,6 +270,9 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_iteration = 0
     logfile = "log.txt"
     batch_size = 16
+
+    cm=ChannelManager()
+    cm.add_channels(batch_size)
 
     num_workers = 3
     ig = InputGenD(load_pickle=True, verbose=False)
