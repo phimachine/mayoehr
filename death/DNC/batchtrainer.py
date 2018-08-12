@@ -9,7 +9,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_batch import InputGenD, BatchInputGenE, train_valid_split
+from death.post.batchchannel import InputGenD, BatchInputGenE, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein2 import Frankenstein as DNC
