@@ -1,27 +1,66 @@
-"""
-D is different from C because it rebalances the dataset to have more death records, so that the optimal
-prediction strategy is not to output zero for all.
 
-BatchChannel does not modify the input generation plan from D. It takes a dataloader object, maybe Plan D, then
-opens several channels and allows you to access the channels step by step. Most importantly, you can pass your graph
-states back to this BatchChannel object to feed it on the next timestep, and all channels will handle memory constraints
-independently. It will guarantee that backprop will always have all needed states. It will also guarantee that memory
-will be freed once no previous states will be needed (at the end of the sequence for a channel).
-"""
-
-'''
-Design plan:
-A parallelized worker pool supplies sequences of patient health records with shuffled order and 
-death proportion adjusted.
-A Splitter takes all the sequences and open batch_num channels of outputs. It caches sequences and 
-concatenate them to whichever channel that runs out of patient records. This object that does deal
-with model states. Model states are cached in the function scope.
-Splitter object is not a Dataset, because we do not define a __len__() method on Splitter.
-'''
 from death.post.inputgen_planD import *
-from death.DNC.channel import *
-
+from torch.autograd import Variable
 debug=True
+
+
+class Channel():
+
+    def __init__(self, model):
+        # you need to call set_next_sequences
+        # a channel itself does not have any sequence specific property
+        super(Channel, self).__init__()
+        self.saved_states = []
+        self.current_sequences = None
+        self.current_seq_len = None
+        self.current_step = None
+        self.static_feed = None
+        self.model=model
+
+    def set_next_sequences(self, next_sequences, static_feed):
+        self.current_sequences = next_sequences
+        # assume that time dimension is 1
+        self.current_seq_len = self.current_sequences[0].shape[1]
+        self.current_step = 0
+        self.static_feed = static_feed
+
+    def reset_states(self):
+        # this function is called when a new sequence is about to be used.
+        # you can set the next sequence early, but you cannot clean up before the loss.backward() has been called.
+        for i in range(len(self.saved_states)):
+            del self.saved_states[0]
+        # since the reinitialization of states depend on the model you are using, this function calls a model function.
+        self.saved_states=[self.model.init_states_each_channel()]
+
+    def step(self):
+        # this is the main function you should call.
+        # this function will return all the correct inputs and communicate with the channel manager to request new
+        # data.
+
+        new_sequence_request = False
+        # we call clean up before the next input is used, after the last loss.backward() has been called
+        if self.current_step == 0:
+            self.reset_states()
+
+        # assume time dimension is 1
+        timestep_feed = list(torch.index_select(seq, 1, torch.LongTensor([self.current_step]))
+                         for seq in self.current_sequences)
+        self.current_step += 1
+
+        # assert that there is no sequence of length 0
+        if self.current_step == self.current_seq_len:
+            new_sequence_request = True
+        return timestep_feed, self.static_feed, new_sequence_request
+
+    def get_states(self):
+        return self.saved_states[-1]
+
+    def set_states(self, states):
+        self.saved_states.append(states)
+        for s in self.saved_states[-1]:
+            s.detach_()
+            s.requires_grad = True
+
 
 
 class BatchChannel():
@@ -29,7 +68,7 @@ class BatchChannel():
     The channel manager keeps track of all sequences' remaining length.
     """
 
-    def __init__(self, dataloader, batch_size, seqdims=(0, 1), staticdims=(2,)):
+    def __init__(self, dataloader, batch_size, model=None, seqdims=(0, 1), staticdims=(2,)):
         super(BatchChannel, self).__init__()
         self.channels = []
         self.bs = batch_size
@@ -46,10 +85,11 @@ class BatchChannel():
             if debug:
                 for tensor in new_sequences:
                     assert ch.current_seq_len == tensor.shape[1]
+        self.model=model
 
     def _add_channels(self, num):
         for i in range(num):
-            self.channels.append(Channel())
+            self.channels.append(Channel(self.model))
 
     def get_new_sequences(self):
         newdata = next(self.dliter)
@@ -72,10 +112,26 @@ class BatchChannel():
             # assume input, target both have batch to be the first dimension
             batch_seq_feed=list(zip(*batch_seq_feed))
             batch_static_feed=list(zip(*batch_static_feed))
-            return [torch.cat(seq,0) for seq in batch_seq_feed], \
-                   [torch.cat(static,0) for static in batch_static_feed]
+            seq=[torch.cat(seq,0) for seq in batch_seq_feed]
+            static=[torch.cat(static,0) for static in batch_static_feed]
+            # restore the original order
+            retval=[]
+            retlen=len(self.seqdims)+len(self.staticdims)
+            for retidx in range(retlen):
+                for i, seqidx in self.seqdims:
+                    if retidx==seqidx:
+                        retval.append(seq[i])
+                for i, staticidx in self.staticdims:
+                    if retidx==staticidx:
+                        retval.append(static[i])
+
+            return tuple(retval)
         except StopIteration:
             raise StopIteration()
+
+    def push_states(self, states_tuple):
+        for i, ch in enumerate(self.channels):
+            ch.set_states((state.index_select(0,i) for state in states_tuple))
 
     def cat_call(self, func_name, dim=0):
         # the return can be (Tensor, Tensor)
