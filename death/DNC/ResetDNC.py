@@ -108,7 +108,7 @@ class ResetDNC(nn.Module):
             # this should iterate over RNN_Units only
             module.reset_parameters()
         # self.hidden_previous_timestep.zero_()
-        # self.controller_state_tuple=None
+        # self.controller_states_tuple=None
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_y.data.uniform_(-stdv, stdv)
         self.b_y.data.uniform_(-stdv, stdv)
@@ -133,7 +133,7 @@ class ResetDNC(nn.Module):
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_r.data.uniform_(-stdv, stdv)
 
-    def new_state_tuple(self):
+    def new_states_tuple(self):
         """
         These variables will be stored in the calling function scope, for batch processing purposes
         When a new sequence starts in a channel, the variable on the corresponding dimension should be reinitialize
@@ -214,11 +214,11 @@ class ResetDNC(nn.Module):
         # self.last_read_vector = Variable(torch.Tensor(self.W, self.R).zero_().cuda())
         self.W_r = Parameter(self.W_r.data)
 
-    def forward(self, input, state_tuple):
-        # unpack state_tuple
+    def forward(self, input, states_tuple):
+        # unpack states_tuple
         last_precedence_weighting, temporal_memory_linkage, last_memory, last_read_weightings, last_usage_vector, \
         last_write_weighting, not_first_t_flag, last_read_vector, controller_hidden, controller_state \
-            = state_tuple
+            = states_tuple
 
         if (input != input).any():
             raise ValueError("We have NAN in inputs")

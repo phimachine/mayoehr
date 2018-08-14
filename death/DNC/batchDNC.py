@@ -1,6 +1,9 @@
 """
-This is a batch processing DNC with experience reset at each new seuqence at each channel.
+8/12/2018
+Batch DNC is the model with externally stored states and batch processing timesteps on forward()
+This architecture uses the stock LSTM.
 """
+
 import torch
 from torch import nn
 import pdb
@@ -14,7 +17,6 @@ import os
 from os.path import abspath
 from pathlib import Path
 import pickle
-from death.DNC.channel import *
 from torch.nn import LSTM
 debug = True
 
@@ -27,8 +29,7 @@ def test_simplex_bound(tensor, dim=1):
     # so that for every x, y is simplex bound
 
     if dim != 1:
-        raise DeprecationWarning("no longer accepts dim other othan one")
-        raise NotImplementedError
+        raise NotImplementedError("no longer accepts dim other othan one")
     t = tensor.contiguous()
     if (t.sum(1) - 1 > 1e-6).any() or (t.sum(1) < -1e-6).any() or (t < 0).any() or (t > 1).any():
         raise ValueError("test simplex bound failed")
@@ -64,144 +65,139 @@ class BatchDNC(nn.Module):
         self.E_t = W * R + 3 * W + 5 * R + 3
 
         '''CONTROLLER'''
-        self.RNN_list = nn.ModuleList()
-        for _ in range(self.L):
-            self.RNN_list.append(LSTM_Unit(self.x, self.R, self.W, self.h, self.bs))
-        self.hidden_previous_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
+        # self.RNN_list = nn.ModuleList()
+        # for _ in range(self.L):
+        #     self.RNN_list.append(LSTM_Unit(self.x, self.R, self.W, self.h, self.bs))
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
-        self.b_y = Parameter(torch.Tensor(self.v_t).cuda())
-        self.b_E = Parameter(torch.Tensor(self.E_t).cuda())
-
-        '''MEMORY'''
-        # p, (N), should be simplex bound
-        self.precedence_weighting = Variable(torch.Tensor(self.bs, self.N).cuda())
-        # (N,N)
-        self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N).cuda())
-        # (N,W)
-        self.memory = Variable(torch.Tensor(self.bs, self.N, self.W).cuda())
-        # (N, R).
-        self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).cuda())
-        # u_t, (N)
-        self.last_usage_vector = Variable(torch.Tensor(self.bs, self.N).cuda())
-        # store last write weightings for the calculation of usage vector
-        self.last_write_weighting = Variable(torch.Tensor(self.bs, self.N).cuda())
-
-        self.not_first_t_flag = Variable(torch.Tensor(self.bs).cuda()).zero_()
+        self.controller=Stock_LSTM(self.x, self.R, self.W, self.h, self.L, self.v_t)
 
         '''COMPUTER'''
-        self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).cuda())
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
 
         self.reset_parameters()
+
+        '''States'''
+        self.hidden_previous_timestep=None
+        self.precedence_weighting=None
+        self.temporal_memory_linkage=None
+        self.memory=None
+        self.last_read_weightings=None
+        self.last_usage_vector=None
+        self.last_write_weighting=None
+        self.last_read_vector=None
+        self.not_first_t_flag=None
+
+    def init_states_each_channel(self):
+
+        '''CONTROLLER'''
+
+        '''MEMORY'''
+        # p, (N), should be simplex bound
+        precedence_weighting = Variable(torch.Tensor(1, self.N).cuda()).zero_()
+        # (N,N)
+        temporal_memory_linkage = Variable(torch.Tensor(1, self.N, self.N).cuda()).zero_()
+        # (N,W)
+        stdv = 1.0 / math.sqrt(self.W)
+        memory = Variable(torch.Tensor(1, self.N, self.W).cuda().uniform_(-stdv,stdv))
+        # (N, R).
+        last_read_weightings = Variable(torch.Tensor(1, self.N, self.R).cuda()).zero_()
+        # u_t, (N)
+        last_usage_vector = Variable(torch.Tensor(1, self.N).cuda()).zero_()
+        # store last write weightings for the calculation of usage vector
+        last_write_weighting = Variable(torch.Tensor(1, self.N).cuda()).zero_()
+
+        '''COMPUTER'''
+        # does not need to be initiated
+        last_read_vector = Variable(torch.Tensor(self.W, self.R).cuda())
+
+        '''Second pass initiaion purpose'''
+        not_first_t_flag = Variable(torch.Tensor(1).cuda()).zero_().zero_()
+
+        '''LSTM states'''
+        # for lstm in self.RNN_list:
+        #     states_list+=lstm.init_states_each_channel()
+        h=Variable(torch.Tensor(self.L,self.bs,self.h)).zero_().cuda()
+        c=Variable(torch.Tensor(self.L,self.bs,self.h)).zero_().cuda()
+
+        states_tuple=(precedence_weighting, temporal_memory_linkage, memory,
+                     last_read_weightings, last_usage_vector,last_write_weighting,
+                     last_read_vector, not_first_t_flag, h, c)
+
+        return states_tuple
 
     def reset_parameters(self):
         # if debug:
         #     print("parameters are reset")
         '''Controller'''
-        for module in self.RNN_list:
-            # this should iterate over RNN_Units only
-            module.reset_parameters()
-        self.hidden_previous_timestep.zero_()
-        # this breaks graph, only allowed on initializationf
+        # for module in self.RNN_list:
+        #     # this should iterate over RNN_Units only
+        #     module.reset_parameters()
+        # self.hidden_previous_timestep.zero_()
+        # # this breaks graph, only allowed on initializationf
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_y.data.uniform_(-stdv, stdv)
-        self.b_y.data.uniform_(-stdv, stdv)
         stdv = 1.0 / math.sqrt(self.E_t)
         self.W_E.data.uniform_(-stdv, stdv)
-        self.b_E.data.uniform_(-stdv, stdv)
-
-        '''Memory'''
-        self.precedence_weighting.zero_()
-        self.last_usage_vector.zero_()
-        self.last_read_weightings.zero_()
-        self.last_write_weighting.zero_()
-        self.temporal_memory_linkage.zero_()
-        # memory must be initialized like this, otherwise usage vector will be stuck at zero.
-        stdv=1.0 /math.sqrt(self.W)
-        self.memory.uniform_(-stdv,stdv)
-        self.not_first_t_flag.zero_()
+        self.controller.reset_parameters()
 
         '''Computer'''
-        # see paper, paragraph 2 page 7
-        self.last_read_vector.zero_()
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_r.data.uniform_(-stdv, stdv)
-    #
-    # def new_sequence_reset(self):
-    #     '''
-    #     The biggest question is whether to reset memory every time a new sequence is taken in.
-    #     My take is to not reset the memory, but this might not be the best strategy there is.
-    #     If memory is not reset at each new sequence, then we should not reset the memory at all?
-    #     :return:
-    #     '''
-    #     raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
-    #     # if debug:
-    #     #     print('new sequence reset')
-    #     '''controller'''
-    #     self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).zero_().cuda(),requires_grad=False)
-    #     for RNN in self.RNN_list:
-    #         RNN.new_sequence_reset()
-    #     self.W_y = Parameter(self.W_y.data)
-    #     self.b_y = Parameter(self.b_y.data)
-    #     self.W_E = Parameter(self.W_E.data)
-    #     self.b_E = Parameter(self.b_E.data)
-    #
-    #     '''memory'''
-    #
-    #     if self.reset:
-    #         if self.palette:
-    #             self.memory.data=self.initialz
-    #         else:
-    #             # we will reset the memory altogether.
-    #             # TODO The question is, should we reset the memory to a fixed state? There are good arguments for it.
-    #             stdv = 1.0
-    #             # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
-    #             self.memory.data.uniform_(-stdv, stdv)
-    #             # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
-    #
-    #         self.last_usage_vector.zero_()
-    #         self.precedence_weighting.zero_()
-    #         self.temporal_memory_linkage.zero_()
-    #         self.last_read_weightings.zero_()
-    #         self.last_write_weighting.zero_()
-    #     # self.last_usage_vector = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
-    #     # self.precedence_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-    #     # self.temporal_memory_linkage = Parameter(torch.Tensor(self.bs, self.N, self.N).zero_().cuda(),requires_grad=False)
-    #     # # with a new sequence, the calculation of forward weighting, for example, still requires the last_read_weighting
-    #     # self.last_read_weightings = Parameter(torch.Tensor(self.bs, self.N, self.R).zero_().cuda(),requires_grad=False)
-    #     # self.last_write_weighting = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(),requires_grad=False)
-    #     self.first_t_flag=True
-    #
-    #     '''computer'''
-    #     self.last_read_vector = Parameter(torch.Tensor(self.bs, self.W, self.R).zero_().cuda(),requires_grad=False)
-    #     self.W_r = Parameter(self.W_r.data)
 
-    def reset_batch_channel(self,list_of_channels):
-        raise NotImplementedError()
+    def assign_states_tuple(self,states_tuple):
+        '''
+        This function needs to be called at the beginning of every forward()
 
-    def forward(self, input, not_first_t_flag):
-        self.reset_states(not_first_t_flag)
+        :param states_tuple: packed state tuple
+        :return:
+        '''
+        # at this point, all the state tuples must be concatenated on batch dimension
+        # pass to self so that we don't need to modify other functions.
+
+        self.last_precedence_weighting, self.temporal_memory_linkage, self.last_memory, \
+        self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
+        self.last_read_vector, self.not_first_t_flag\
+            = states_tuple[:8]
+        # 9 is h 10 is c
+        # each is (num_layers * num_directions, batch, hidden_size)
+        self.controller.assign_states_tuple(states_tuple[8:10])
+        # for i in range(self.L):
+        #     i.assign_states_tuple(states_tuple[9+2*i:11+2*i])
+
+
+    def forward(self, input, states_tuple):
+        self.assign_states_tuple(states_tuple)
 
         if (input!=input).any():
             raise ValueError("We have NAN in inputs")
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
 
         '''Controller'''
-        hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
-        hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
-        for i in range(self.L):
-            hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
-                                             hidden_previous_layer)
-            if (hidden_output!=hidden_output).any():
-                raise ValueError("We have NAN in controller output.")
-            hidden_this_timestep[:, i, :] = hidden_output
-            hidden_previous_layer = hidden_output
 
-        flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
-        output = torch.matmul(flat_hidden, self.W_y)
+        # hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
+        # hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
+        # for i in range(self.L):
+        #     hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
+        #                                      hidden_previous_layer)
+        #     if (hidden_output!=hidden_output).any():
+        #         raise ValueError("We have NAN in controller output.")
+        #     hidden_this_timestep[:, i, :] = hidden_output
+        #     hidden_previous_layer = hidden_output
+        #
+        # flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
+        # output = torch.matmul(flat_hidden, self.W_y)
+        # interface_input = torch.matmul(flat_hidden, self.W_E)
+        # self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
+
+        _, st=self.controller(input_x_t)
+        h, c= st
+        # was (num_layers, batch, hidden_size)
+        h=h.permute(1,0,2)
+        flat_hidden = h.view((self.bs, self.L * self.h))
+        vt = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
-        self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
+        # self.hidden_previous_timestep = h
 
         '''interface'''
         last_index = self.W * self.R
@@ -284,7 +280,7 @@ class BatchDNC(nn.Module):
             raise ValueError("nan is found.")
 
         '''back to computer'''
-        output2 = output + torch.matmul(read_vector.view(self.bs, self.W * self.R), self.W_r)
+        yt = vt + torch.matmul(read_vector.view(self.bs, self.W * self.R), self.W_r)
 
         # update the last weightings
         self.last_read_vector=read_vector
@@ -294,10 +290,14 @@ class BatchDNC(nn.Module):
         if debug:
             test_simplex_bound(self.last_read_weightings)
             test_simplex_bound(self.last_write_weighting)
-            if (output2 != output2).any():
+            if (yt != yt).any():
                 raise ValueError("nan is found.")
 
-        return output2
+        states_tuple=(self.last_precedence_weighting, self.temporal_memory_linkage, \
+                      self.last_memory, self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
+                      self.last_read_vector, self.not_first_t_flag, h, c)
+
+        return yt, states_tuple
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
         '''
@@ -595,7 +595,7 @@ class Stock_LSTM(nn.Module):
     I prefer using this Stock LSTM for numerical stability. The performance, however, is inferior.
     """
     def __init__(self, x, R, W, h, L, v_t):
-        super(Controller, self).__init__()
+        super(Stock_LSTM, self).__init__()
 
         self.x = x
         self.R = R
@@ -606,81 +606,83 @@ class Stock_LSTM(nn.Module):
         self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
                        dropout=True)
         self.last=nn.Linear(self.h, self.v_t)
+        self.st=None
 
-    def forward(self, input_x, state_tuple):
+    def forward(self, input_x):
         """
         :param input_x: input and memory values
-        :param state_tuple: hidden and state
         :return:
         """
-        assert state_tuple is not None
-        o, st = self.LSTM(input_x, state_tuple)
+        assert self.st is not None
+        o, st = self.LSTM(input_x, self.st)
         return self.last(o), st
 
     def reset_parameters(self):
         self.LSTM.reset_parameters()
         self.last.reset_parameters()
 
+    def assign_states_tuple(self, states_tuple):
+        self.st=states_tuple
 
 # the problem seems to be in the RNN Unit.
 # we exchange the RNN units and one has memory overflow, the other has convergence issues.
-
-class LSTM_Unit(nn.Module):
-    """
-    A single layer unit of LSTM
-    """
-
-    def __init__(self, x, R, W, h, bs):
-        super(LSTM_Unit, self).__init__()
-
-        self.x = x
-        self.R = R
-        self.W = W
-        self.h = h
-        self.bs = bs
-
-        self.W_input = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-        self.W_forget = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-        self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-        self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-
-        self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
-
-    def reset_parameters(self):
-        for module in self.children():
-            module.reset_parameters()
-
-    def forward(self, input_x, previous_time, previous_layer):
-        # a hidden unit outputs a hidden output new_hidden.
-        # state also changes, but it's hidden inside a hidden unit.
-
-        semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
-
-        # 5 equations
-        input_gate = torch.sigmoid(self.W_input(semicolon_input))
-        forget_gate = torch.sigmoid(self.W_forget(semicolon_input))
-        new_state = forget_gate * self.old_state + input_gate * \
-                    torch.tanh(self.W_state(semicolon_input))
-        output_gate = torch.sigmoid(self.W_output(semicolon_input))
-        new_hidden = output_gate * torch.tanh(new_state)
-        self.old_state = Parameter(new_state.data,requires_grad=False)
-
-        return new_hidden
-
-
-    def reset_batch_channel(self,list_of_channels):
-        raise NotImplementedError()
-    #
-    # def new_sequence_reset(self):
-    #     raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
-    #
-    #     self.W_input.weight.detach()
-    #     self.W_input.bias.detach()
-    #     self.W_output.weight.detach()
-    #     self.W_output.bias.detach()
-    #     self.W_forget.weight.detach()
-    #     self.W_forget.bias.detach()
-    #     self.W_state.weight.detach()
-    #     self.W_state.bias.detach()
-    #
-    #     self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+#
+# class LSTM_Unit(nn.Module):
+#     """
+#     A single layer unit of LSTM
+#     """
+#
+#     def __init__(self, x, R, W, h, bs):
+#         super(LSTM_Unit, self).__init__()
+#
+#         self.x = x
+#         self.R = R
+#         self.W = W
+#         self.h = h
+#         self.bs = bs
+#
+#         self.W_input = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+#         self.W_forget = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+#         self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+#         self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
+#
+#         self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+#
+#     def reset_parameters(self):
+#         for module in self.children():
+#             module.reset_parameters()
+#
+#     def forward(self, input_x, previous_time, previous_layer):
+#         # a hidden unit outputs a hidden output new_hidden.
+#         # state also changes, but it's hidden inside a hidden unit.
+#
+#         semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
+#
+#         # 5 equations
+#         input_gate = torch.sigmoid(self.W_input(semicolon_input))
+#         forget_gate = torch.sigmoid(self.W_forget(semicolon_input))
+#         new_state = forget_gate * self.old_state + input_gate * \
+#                     torch.tanh(self.W_state(semicolon_input))
+#         output_gate = torch.sigmoid(self.W_output(semicolon_input))
+#         new_hidden = output_gate * torch.tanh(new_state)
+#         self.old_state = Parameter(new_state.data,requires_grad=False)
+#
+#         return new_hidden
+#
+#
+#     def reset_batch_channel(self,list_of_channels):
+#         raise NotImplementedError()
+#     #
+#     # def new_sequence_reset(self):
+#     #     raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
+#     #
+#     #     self.W_input.weight.detach()
+#     #     self.W_input.bias.detach()
+#     #     self.W_output.weight.detach()
+#     #     self.W_output.bias.detach()
+#     #     self.W_forget.weight.detach()
+#     #     self.W_forget.bias.detach()
+#     #     self.W_state.weight.detach()
+#     #     self.W_state.bias.detach()
+#     #
+#     #     self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)

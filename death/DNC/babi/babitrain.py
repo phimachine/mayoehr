@@ -1,26 +1,13 @@
 # I decide to run my model on babi again to see if the convergen ce problem is with my model or dataset
 
-from death.DNC.monster import MonsterDNC as DNC
+from death.DNC.trashcan.monster import MonsterDNC as DNC
 import torch
 import numpy
-import death.DNC.archi.param as param
 import pdb
 from pathlib import Path
-import os
-from os.path import abspath
-import gc
-import time
-from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
 import pickle
-import numpy as np
-from shutil import rmtree
 import os
-from os import listdir, mkdir
-from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
-import subprocess
-import death.DNC.archi.param as param
-from threading import Thread
-import time
+from os.path import join, abspath
 from death.DNC.babi.babigen import PreGenData
 from torch.autograd import Variable
 

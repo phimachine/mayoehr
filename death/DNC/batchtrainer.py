@@ -9,7 +9,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.batchchannel import InputGenD, BatchInputGenE, train_valid_split
+from death.post.batchchannel import InputGenD, BatchChannel, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.frankenstein2 import Frankenstein as DNC
@@ -19,7 +19,6 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
-from death.DNC.channel import *
 
 batch_size = 1
 global_exception_counter = 0
@@ -124,62 +123,81 @@ def salvage(savestr):
     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
+#
+# def run_one_patient(computer, input, target, reset_flag, states_tuple, target_dim, optimizer, loss_type, real_criterion,
+#                     binary_criterion, validate=False):
+#     global global_exception_counter
+#     global i
+#     patient_loss = None
+#     if debug:
+#         if (input != input).any():
+#             raise ValueError("NA in input")
+#         if (target != target).any():
+#             raise ValueError("NA in target")
+#     try:
+#         optimizer.zero_grad()
+#         input = Variable(input.cuda())
+#         target = Variable(target.cuda())
+#
+#         # process the state tuples and reset if needed TODO
+#
+#         output = computer(input, states_tuple)
+#         time_to_event_output = output[:, :, 0]
+#         cause_of_death_output = output[:, :, 1:]
+#         time_to_event_target = target[:, :, 0]
+#         cause_of_death_target = target[:, :, 1:]
+#
+#         if debug:
+#             assert not (output != output).any()
+#         patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+#
+#         if not validate:
+#             patient_loss.backward()
+#             optimizer.step()
+#
+#         if global_exception_counter > -1:
+#             global_exception_counter -= 1
+#
+#     except ValueError:
+#         traceback.print_exc()
+#         print("Value Error reached")
+#         print(datetime.datetime.now().time())
+#         global_exception_counter += 1
+#         if global_exception_counter == 10:
+#             save_model(computer, optimizer, epoch=0, iteration=np.random.randint(0, 1000), savestr="NA")
+#             task_dir = os.path.dirname(abspath(__file__))
+#             save_dir = Path(task_dir) / "saves" / "probleminput.pkl"
+#             with save_dir.open('wb') as fhand:
+#                 pickle.dump(input, fhand)
+#             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
+#         else:
+#             print("we are at", i)
+#             pass
+#
+#     return patient_loss, states_tuple
 
-def run_one_patient(computer, input, target, reset_flag, state_tuple, target_dim, optimizer, loss_type, real_criterion,
-                    binary_criterion, validate=False):
-    global global_exception_counter
-    global i
-    patient_loss = None
-    if debug:
-        if (input != input).any():
-            raise ValueError("NA in input")
-        if (target != target).any():
-            raise ValueError("NA in target")
-    try:
-        optimizer.zero_grad()
-        input = Variable(input.cuda())
-        target = Variable(target.cuda())
-
-        # process the state tuples and reset if needed TODO
-
-        output = computer(input, state_tuple)
-        time_to_event_output = output[:, :, 0]
-        cause_of_death_output = output[:, :, 1:]
-        time_to_event_target = target[:, :, 0]
-        cause_of_death_target = target[:, :, 1:]
-
-        if debug:
-            assert not (output != output).any()
-        patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-
-        if not validate:
-            patient_loss.backward()
-            optimizer.step()
-
-        if global_exception_counter > -1:
-            global_exception_counter -= 1
-
-    except ValueError:
-        traceback.print_exc()
-        print("Value Error reached")
-        print(datetime.datetime.now().time())
-        global_exception_counter += 1
-        if global_exception_counter == 10:
-            save_model(computer, optimizer, epoch=0, iteration=np.random.randint(0, 1000), savestr="NA")
-            task_dir = os.path.dirname(abspath(__file__))
-            save_dir = Path(task_dir) / "saves" / "probleminput.pkl"
-            with save_dir.open('wb') as fhand:
-                pickle.dump(input, fhand)
-            raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
-        else:
-            print("we are at", i)
-            pass
-
-    return patient_loss, state_tuple
+def run_one_step(computer):
+    pass
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
+          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
+    """
+
+    :param computer:
+    :param optimizer:
+    :param real_criterion:
+    :param binary_criterion:
+    :param train: this is the BatchChannel class. It has a __next__ method defined.
+    :param valid: ditto
+    :param starting_epoch:
+    :param total_epochs:
+    :param starting_iter:
+    :param iter_per_epoch:
+    :param savestr: a custom string that identifies this training run
+    :param logfile:
+    :return:
+    """
     global global_exception_counter
     print_interval = 10
     val_interval = 50
@@ -195,9 +213,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     global i
 
     for epoch in range(starting_epoch, total_epochs):
-        train_state_tuple = reset_state_tuple(batch_size)
-        valid_state_tuple = reset_state_tuple(batch_size)
-
         # all these are batches
         for i, (input, target, loss_type, reset_flag) in enumerate(train):
             i = starting_iter + i
@@ -205,8 +220,12 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 target_dim = target.shape[2]
 
             if i < iter_per_epoch:
-                train_story_loss, train_state_tuple = run_one_patient(computer, input, target, reset_flag,
-                                                                      train_state_tuple,
+                next(train)
+                train_story_loss, computer()
+
+
+                train_story_loss, train_states_tuple = run_one_step(computer, input, target, reset_flag,
+                                                                      train_states_tuple,
                                                                       target_dim, optimizer, loss_type,
                                                                       real_criterion, binary_criterion)
                 if train_story_loss is not None:
@@ -232,7 +251,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                         printloss = 0
                         (input, target, loss_type) = next(valid_iterator)
                         val_loss, valid_loss_tuple = run_one_patient(computer, input, target, reset_flag,
-                                                                     valid_state_tuple,
+                                                                     valid_states_tuple,
                                                                      target_dim, optimizer, loss_type,
                                                                      real_criterion, binary_criterion, validate=True)
                         if val_loss is not None:
@@ -271,18 +290,6 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     logfile = "log.txt"
     batch_size = 16
 
-    cm=ChannelManager()
-    cm.add_channels(batch_size)
-
-    num_workers = 3
-    ig = InputGenD(load_pickle=True, verbose=False)
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
-    validdl = DataLoader(dataset=validds, batch_size=1)
-    traindl = BatchInputGenE(batch_size, traindl)
-    validdl = BatchInputGenE(batch_size, validdl)
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
@@ -294,6 +301,19 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
                    N=param_N,
                    bs=param_bs,
                    reset=param_reset)
+
+    cm=ChannelManager()
+    cm.add_channels(batch_size)
+
+    num_workers = 3
+    ig = InputGenD(load_pickle=True, verbose=False)
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
+    trainds, validds = train_valid_split(ig, split_fold=10)
+    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
+    validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
+    traindl = BatchChannel(traindl, batch_size, model=computer)
+    validdl = BatchChannel(validdl, batch_size, model=computer)
 
     # load model:
     if load:
@@ -317,7 +337,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
+          traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
 
