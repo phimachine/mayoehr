@@ -26,13 +26,13 @@ i = None
 debug = True
 
 param_x = 47764
-param_h = 128
-param_L = 16
+param_h = 512
+param_L = 32
 param_v_t = 3620
 param_W = 32
 param_R = 8
 param_N = 512
-param_bs = 4
+param_bs = 16
 param_reset = True
 
 
