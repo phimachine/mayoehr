@@ -109,16 +109,16 @@ class BatchDNC(nn.Module):
 
         '''COMPUTER'''
         # does not need to be initiated
-        last_read_vector = Variable(torch.Tensor(self.W, self.R).cuda())
+        last_read_vector = Variable(torch.Tensor(1, self.W, self.R).cuda())
 
         '''Second pass initiaion purpose'''
-        not_first_t_flag = Variable(torch.Tensor(1).cuda()).zero_().zero_()
+        not_first_t_flag = Variable(torch.Tensor(1, 1).cuda()).zero_().zero_()
 
         '''LSTM states'''
         # for lstm in self.RNN_list:
         #     states_list+=lstm.init_states_each_channel()
-        h=Variable(torch.Tensor(self.L,self.bs,self.h)).zero_().cuda()
-        c=Variable(torch.Tensor(self.L,self.bs,self.h)).zero_().cuda()
+        h=Variable(torch.Tensor(self.L, 1, self.h)).zero_().cuda()
+        c=Variable(torch.Tensor(self.L, 1, self.h)).zero_().cuda()
 
         states_tuple=(precedence_weighting, temporal_memory_linkage, memory,
                      last_read_weightings, last_usage_vector,last_write_weighting,
@@ -147,7 +147,7 @@ class BatchDNC(nn.Module):
 
     def assign_states_tuple(self,states_tuple):
         '''
-        This function needs to be called at the beginning of every forward()
+        This function needs to be called before every forward()
 
         :param states_tuple: packed state tuple
         :return:
@@ -155,7 +155,7 @@ class BatchDNC(nn.Module):
         # at this point, all the state tuples must be concatenated on batch dimension
         # pass to self so that we don't need to modify other functions.
 
-        self.last_precedence_weighting, self.temporal_memory_linkage, self.last_memory, \
+        self.last_precedence_weighting, self.temporal_memory_linkage, self.memory, \
         self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
         self.last_read_vector, self.not_first_t_flag\
             = states_tuple[:8]
@@ -166,12 +166,11 @@ class BatchDNC(nn.Module):
         #     i.assign_states_tuple(states_tuple[9+2*i:11+2*i])
 
 
-    def forward(self, input, states_tuple):
-        self.assign_states_tuple(states_tuple)
-
+    def forward(self, input):
         if (input!=input).any():
             raise ValueError("We have NAN in inputs")
-        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1)), dim=1)
+        # TODO there is a change of dimension it seems.
+        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
 
         '''Controller'''
 
@@ -194,7 +193,7 @@ class BatchDNC(nn.Module):
         h, c= st
         # was (num_layers, batch, hidden_size)
         h=h.permute(1,0,2)
-        flat_hidden = h.view((self.bs, self.L * self.h))
+        flat_hidden = h.contiguous().view((self.bs, self.L * self.h))
         vt = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
         # self.hidden_previous_timestep = h
@@ -314,9 +313,9 @@ class BatchDNC(nn.Module):
         # I expect a return of (N,bs), which marks the similiarity of each W with each mem loc
 
         # (self.bs, self.N)
-        innerprod = torch.matmul(write_key, self.memory.t())
+        innerprod = torch.matmul(write_key, self.memory.transpose(1,2))
         # (parm.N)
-        memnorm = torch.norm(self.memory, 2, 1)
+        memnorm = torch.norm(self.memory, 2, 2)
         # (self.bs)
         writenorm = torch.norm(write_key, 2, 1)
         # (self.N, self.bs)
@@ -391,10 +390,6 @@ class BatchDNC(nn.Module):
         :param memory_retention: \psi_t, (N), simplex bound
         :return: u_t, (N), [0,1], the next usage
         '''
-        if self.first_t_flag:
-            ret = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
-            return ret
-
         usage_vector = (self.last_usage_vector + self.last_write_weighting - self.last_usage_vector * self.last_write_weighting) \
               * memory_retention
         # if first_t, then usage_vector is asserted to be zero
@@ -602,6 +597,7 @@ class Stock_LSTM(nn.Module):
         self.W = W
         self.h = h
         self.L = L
+        self.v_t= v_t
 
         self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
                        dropout=True)

@@ -9,10 +9,10 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.batchchannel import InputGenD, BatchChannel, train_valid_split
+from death.post.channelmanager import InputGenD, ChannelManager, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein2 import Frankenstein as DNC
+from death.DNC.batchDNC import BatchDNC as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
@@ -32,7 +32,7 @@ param_v_t = 3620
 param_W = 32
 param_R = 8
 param_N = 512
-param_bs = 1
+param_bs = 4
 param_reset = True
 
 
@@ -176,8 +176,19 @@ def salvage(savestr):
 #
 #     return patient_loss, states_tuple
 
-def run_one_step(computer):
-    pass
+def run_one_step(computer, channelmanager, optimizer, binary_criterion):
+    optimizer.zero_grad()
+    input, target, loss_type, states_tuple = next(channelmanager)
+    input=Variable(input).cuda()
+    target=Variable(target).cuda()
+    loss_type=Variable(loss_type).cuda()
+    computer.assign_states_tuple(states_tuple)
+    output, states_tuple = computer(input)
+    bc.push_states(states_tuple)
+    loss=binary_criterion(cause_of_death_output, cause_of_death_target)
+    loss.backward()
+    optimizer.step()
+    return loss
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
@@ -188,7 +199,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     :param optimizer:
     :param real_criterion:
     :param binary_criterion:
-    :param train: this is the BatchChannel class. It has a __next__ method defined.
+    :param train: this is the ChannelManager class. It has a __next__ method defined.
     :param valid: ditto
     :param starting_epoch:
     :param total_epochs:
@@ -214,61 +225,46 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
     for epoch in range(starting_epoch, total_epochs):
         # all these are batches
-        for i, (input, target, loss_type, reset_flag) in enumerate(train):
-            i = starting_iter + i
-            if target_dim is None:
-                target_dim = target.shape[2]
-
-            if i < iter_per_epoch:
-                next(train)
-                train_story_loss, computer()
-
-
-                train_story_loss, train_states_tuple = run_one_step(computer, input, target, reset_flag,
-                                                                      train_states_tuple,
-                                                                      target_dim, optimizer, loss_type,
-                                                                      real_criterion, binary_criterion)
-                if train_story_loss is not None:
-                    printloss = float(train_story_loss[0])
-                else:
-                    printloss = 10000
-                # computer.new_sequence_reset()
-                del input, target, loss_type
-                running_loss_deque.appendleft(printloss)
-                if i % print_interval == 0:
-                    running_loss = np.mean(running_loss_deque)
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("learning.   count: %4d, training loss: %.10f \n" %
-                                         (i, printloss))
-                    print("learning.   count: %4d, training loss: %.10f" %
-                          (i, printloss))
-                    if i != 0:
-                        print("count: %4d, running loss: %.10f" % (i, running_loss))
-
-                if i % val_interval == 0:
-                    for _ in range(val_batch):
-                        printloss = 0
-                        (input, target, loss_type) = next(valid_iterator)
-                        val_loss, valid_loss_tuple = run_one_patient(computer, input, target, reset_flag,
-                                                                     valid_states_tuple,
-                                                                     target_dim, optimizer, loss_type,
-                                                                     real_criterion, binary_criterion, validate=True)
-                        if val_loss is not None:
-                            printloss += float(val_loss[0])
-                    printloss = printloss / val_batch
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("validation. count: %4d, val loss     : %.10f \n" %
-                                         (i, printloss))
-                    print("validation. count: %4d, training loss: %.10f" %
-                          (i, printloss))
-
-                if i % save_interval == 0:
-                    save_model(computer, optimizer, epoch, i, savestr)
-                    print("model saved for epoch", epoch, "input", i)
+        for i in range(starting_iter,iter_per_epoch):
+            train_story_loss = run_one_step(computer, train, optimizer, binary_criterion)
+            if train_story_loss is not None:
+                printloss = float(train_story_loss[0])
             else:
-                break
+                printloss = 10000
+            # computer.new_sequence_reset()
+            running_loss_deque.appendleft(printloss)
+            if i % print_interval == 0:
+                running_loss = np.mean(running_loss_deque)
+                if logfile:
+                    with open(logfile, 'a') as handle:
+                        handle.write("learning.   count: %4d, training loss: %.10f \n" %
+                                     (i, printloss))
+                print("learning.   count: %4d, training loss: %.10f" %
+                      (i, printloss))
+                if i != 0:
+                    print("count: %4d, running loss: %.10f" % (i, running_loss))
+            #
+            # if i % val_interval == 0:
+            #     for _ in range(val_batch):
+            #         printloss = 0
+            #         (input, target, loss_type) = next(valid_iterator)
+            #         val_loss, valid_loss_tuple = run_one_patient(computer, input, target, reset_flag,
+            #                                                      valid_states_tuple,
+            #                                                      target_dim, optimizer, loss_type,
+            #                                                      real_criterion, binary_criterion, validate=True)
+            #         if val_loss is not None:
+            #             printloss += float(val_loss[0])
+            #     printloss = printloss / val_batch
+            #     if logfile:
+            #         with open(logfile, 'a') as handle:
+            #             handle.write("validation. count: %4d, val loss     : %.10f \n" %
+            #                          (i, printloss))
+            #     print("validation. count: %4d, training loss: %.10f" %
+            #           (i, printloss))
+
+            if i % save_interval == 0:
+                save_model(computer, optimizer, epoch, i, savestr)
+                print("model saved for epoch", epoch, "input", i)
 
 
 def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
@@ -288,8 +284,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log.txt"
-    batch_size = 16
-
+    num_workers=8
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
@@ -299,21 +294,16 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
                    W=param_W,
                    R=param_R,
                    N=param_N,
-                   bs=param_bs,
-                   reset=param_reset)
+                   bs=param_bs)
 
-    cm=ChannelManager()
-    cm.add_channels(batch_size)
-
-    num_workers = 3
     ig = InputGenD(load_pickle=True, verbose=False)
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
-    traindl = BatchChannel(traindl, batch_size, model=computer)
-    validdl = BatchChannel(validdl, batch_size, model=computer)
+    traindl = ChannelManager(traindl, param_bs, model=computer)
+    validdl = ChannelManager(validdl, param_bs, model=computer)
 
     # load model:
     if load:

@@ -447,7 +447,6 @@ class ResetDNC(nn.Module):
             raise ValueError("NA found in usage vector, not first t flag reset behavior not certain")
         expandf = not_first_t_flag.expand(self.bs, self.N)
         usage_vector = usage_vector * not_first_t_flag
-        raise NotImplementedError("You need to set the usage_vector to output")
         return usage_vector
 
     def allocation_weighting(self, usage_vector):

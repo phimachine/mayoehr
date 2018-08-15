@@ -43,6 +43,7 @@ class Channel():
             self.reset_states()
 
         # assume time dimension is 1
+        # the time dimension will be squeezed out
         timestep_feed = list(torch.index_select(seq, 1, torch.LongTensor([self.current_step]))
                          for seq in self.current_sequences)
         self.current_step += 1
@@ -55,7 +56,7 @@ class Channel():
     def get_states(self):
         return self.saved_states[-1]
 
-    def set_states(self, states):
+    def push_states(self, states):
         self.saved_states.append(states)
         for s in self.saved_states[-1]:
             s.detach_()
@@ -63,13 +64,13 @@ class Channel():
 
 
 
-class BatchChannel():
+class ChannelManager():
     """
     The channel manager keeps track of all sequences' remaining length.
     """
 
     def __init__(self, dataloader, batch_size, model=None, seqdims=(0, 1), staticdims=(2,)):
-        super(BatchChannel, self).__init__()
+        super(ChannelManager, self).__init__()
         self.channels = []
         self.bs = batch_size
         self.dataloader = dataloader
@@ -77,15 +78,16 @@ class BatchChannel():
         # the dimensions of dataloader yield that will need to made batch
         self.seqdims=seqdims
         self.staticdims=staticdims
+        self.model=model
 
         self._add_channels(self.bs)
+
         for ch in self.channels:
             new_sequences, static_feed=self.get_new_sequences()
             ch.set_next_sequences(new_sequences, static_feed)
             if debug:
                 for tensor in new_sequences:
                     assert ch.current_seq_len == tensor.shape[1]
-        self.model=model
 
     def _add_channels(self, num):
         for i in range(num):
@@ -96,6 +98,9 @@ class BatchChannel():
         new_sequences = list(newdata[i] for i in self.seqdims)
         static_feed = list(newdata[i] for i in self.staticdims)
         return new_sequences, static_feed
+
+    def __iter__(self):
+        return self
 
     def __next__(self):
         try:
@@ -118,27 +123,36 @@ class BatchChannel():
             retval=[]
             retlen=len(self.seqdims)+len(self.staticdims)
             for retidx in range(retlen):
-                for i, seqidx in self.seqdims:
+                for i, seqidx in enumerate(self.seqdims):
                     if retidx==seqidx:
                         retval.append(seq[i])
-                for i, staticidx in self.staticdims:
+                for i, staticidx in enumerate(self.staticdims):
                     if retidx==staticidx:
                         retval.append(static[i])
-
-            return tuple(retval)
+            return (*retval, self.get_states())
         except StopIteration:
             raise StopIteration()
 
     def push_states(self, states_tuple):
         for i, ch in enumerate(self.channels):
-            ch.set_states((state.index_select(0,i) for state in states_tuple))
+            slice_states_tuple=((state.index_select(0,i) for state in states_tuple))
+            ch.push_states(slice_states_tuple)
+
+    def get_states(self):
+        batch_states=[]
+        for i, ch in enumerate(self.channels):
+            batch_states.append(ch.get_states())
+        batch_states=tuple(zip(*batch_states))
+
+        # the last two are h and c. Stock LSTM has its own esoteric standards
+        rettup=tuple(torch.cat(st, dim=0) for st in batch_states[:-2])+ \
+               tuple(torch.cat(st, dim=1) for st in batch_states[-2:])
+
+        return rettup
 
     def cat_call(self, func_name, dim=0):
         # the return can be (Tensor, Tensor)
-
         res = []
-        noret = False
-
         for ch in self.channels:
             func = getattr(ch, func_name)
             ret = func()
@@ -267,7 +281,7 @@ def main():
     ig=InputGenD(load_pickle=True, verbose=False)
     train, valid= train_valid_split(ig)
     traindl= DataLoader(num_workers=8,dataset=train,batch_size=1)
-    igb=BatchChannel(traindl, 16)
+    igb=ChannelManager(traindl, 16)
     for _ in range(1000):
         a=next(igb)
 
