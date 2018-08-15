@@ -108,8 +108,8 @@ class BatchDNC(nn.Module):
         last_write_weighting = Variable(torch.Tensor(1, self.N).cuda()).zero_()
 
         '''COMPUTER'''
-        # does not need to be initiated
-        last_read_vector = Variable(torch.Tensor(1, self.W, self.R).cuda())
+        # needs to be initialized, otherwise throw NAN on first forward pass
+        last_read_vector = Variable(torch.Tensor(1, self.W, self.R).cuda()).zero_()
 
         '''Second pass initiaion purpose'''
         not_first_t_flag = Variable(torch.Tensor(1, 1).cuda()).zero_().zero_()
@@ -312,14 +312,15 @@ class BatchDNC(nn.Module):
         # write_key will be (bs, W)
         # I expect a return of (N,bs), which marks the similiarity of each W with each mem loc
 
+        write_key=write_key.unsqueeze(1)
         # (self.bs, self.N)
-        innerprod = torch.matmul(write_key, self.memory.transpose(1,2))
-        # (parm.N)
+        innerprod = torch.matmul(write_key, self.memory.transpose(1,2)).squeeze(1)
+        # (self.bs, parm.N)
         memnorm = torch.norm(self.memory, 2, 2)
-        # (self.bs)
-        writenorm = torch.norm(write_key, 2, 1)
-        # (self.N, self.bs)
-        normalizer = torch.ger(memnorm, writenorm)
+        # (self.bs, 1)
+        writenorm = torch.norm(write_key, 2, 2)
+        # (self.bs, self.N)
+        normalizer = memnorm*writenorm
         similarties = innerprod / normalizer.t().clamp(min=eps)
         similarties = similarties * key_strength.expand(-1, self.N)
         normalized = softmax(similarties, dim=1)
