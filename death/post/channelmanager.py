@@ -145,6 +145,8 @@ class ChannelManager():
                                    tuple((state.index_select(1,Variable(torch.LongTensor([i]))) for state in states_tuple[-2:]))
                 ch.push_states(slice_states_tuple)
 
+        return
+
     def get_states(self):
         batch_states=[]
         for i, ch in enumerate(self.channels):
