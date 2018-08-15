@@ -155,7 +155,7 @@ class BatchDNC(nn.Module):
         # at this point, all the state tuples must be concatenated on batch dimension
         # pass to self so that we don't need to modify other functions.
 
-        self.last_precedence_weighting, self.temporal_memory_linkage, self.memory, \
+        self.precedence_weighting, self.temporal_memory_linkage, self.memory, \
         self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
         self.last_read_vector, self.not_first_t_flag\
             = states_tuple[:8]
@@ -192,8 +192,8 @@ class BatchDNC(nn.Module):
         _, st=self.controller(input_x_t)
         h, c= st
         # was (num_layers, batch, hidden_size)
-        h=h.permute(1,0,2)
-        flat_hidden = h.contiguous().view((self.bs, self.L * self.h))
+        hidden=h.permute(1,0,2)
+        flat_hidden = hidden.contiguous().view((self.bs, self.L * self.h))
         vt = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
         # self.hidden_previous_timestep = h
@@ -272,7 +272,7 @@ class BatchDNC(nn.Module):
         read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
                                                read_modes)
         # read from memory last, a new modification.
-        read_vector = Parameter(self.read_memory(read_weightings).data,requires_grad=False)
+        read_vector = self.read_memory(read_weightings)
         # DEBUG NAN
         if (read_vector != read_vector).any():
             # this is a problem! TODO
@@ -283,8 +283,8 @@ class BatchDNC(nn.Module):
 
         # update the last weightings
         self.last_read_vector=read_vector
-        self.last_read_weightings = Parameter(read_weightings.data,requires_grad=False)
-        self.last_write_weighting = Parameter(write_weighting.data,requires_grad=False)
+        self.last_read_weightings = read_weightings
+        self.last_write_weighting = write_weighting
 
         if debug:
             test_simplex_bound(self.last_read_weightings)
@@ -292,8 +292,8 @@ class BatchDNC(nn.Module):
             if (yt != yt).any():
                 raise ValueError("nan is found.")
 
-        states_tuple=(self.last_precedence_weighting, self.temporal_memory_linkage, \
-                      self.last_memory, self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
+        states_tuple=(self.precedence_weighting, self.temporal_memory_linkage, \
+                      self.memory, self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
                       self.last_read_vector, self.not_first_t_flag, h, c)
 
         return yt, states_tuple
@@ -321,7 +321,7 @@ class BatchDNC(nn.Module):
         writenorm = torch.norm(write_key, 2, 2)
         # (self.bs, self.N)
         normalizer = memnorm*writenorm
-        similarties = innerprod / normalizer.t().clamp(min=eps)
+        similarties = innerprod / normalizer.clamp(min=eps)
         similarties = similarties * key_strength.expand(-1, self.N)
         normalized = softmax(similarties, dim=1)
         if debug:
@@ -350,21 +350,20 @@ class BatchDNC(nn.Module):
                 return w12 / (w1 * w2).clamp(min=eps)
         '''
 
-        innerprod = torch.matmul(self.memory.unsqueeze(0), read_keys)
-        # this is confusing. matrix[n] access nth row, not column
-        # this is very counter-intuitive, since columns have meaning,
-        # because they represent vectors
-        mem_norm = torch.norm(self.memory, p=2, dim=1)
+        # (bs, N, R)
+        innerprod = torch.matmul(self.memory, read_keys)
+        mem_norm = torch.norm(self.memory, p=2, dim=2)
         read_norm = torch.norm(read_keys, p=2, dim=1)
-        mem_norm = mem_norm.unsqueeze(1)
+        mem_norm = mem_norm.unsqueeze(2)
         read_norm = read_norm.unsqueeze(1)
-        # (batch_size, locations, read_heads)
+        # (bs, N, R)
         normalizer = torch.matmul(mem_norm, read_norm)
 
         # if transposed then similiarities[0] refers to the first read key
         similarties = innerprod / normalizer.clamp(min=eps)
-        weighted = similarties * key_strengths.unsqueeze(1).expand(-1, self.N, -1)
+        weighted = similarties * key_strengths.unsqueeze(1)
         ret = softmax(weighted, dim=1)
+        # (bs, N, R)
         return ret
 
     # the highest freed will be retained? What does it mean?
@@ -461,9 +460,7 @@ class BatchDNC(nn.Module):
         # Took me 3 hours.
         # sum_ww=sum(write_weighting,1)
         sum_ww = torch.sum(write_weighting, dim=1)
-        self.precedence_weighting = Parameter(
-            ((1 - sum_ww).unsqueeze(1) * self.precedence_weighting + write_weighting).data,
-            requires_grad=False)
+        self.precedence_weighting = (1 - sum_ww).unsqueeze(1) * self.precedence_weighting + write_weighting
         if debug:
             test_simplex_bound(self.precedence_weighting, 1)
         return self.precedence_weighting
@@ -479,9 +476,8 @@ class BatchDNC(nn.Module):
         ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
         ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
         p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
-        raise NotImplementedError("What the heck is this line?")
-        batch_temporal_memory_linkage = lasttml.expand(-1, -1)
-        newtml = (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
+        # batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(-1, -1)
+        newtml = (1 - ww_j - ww_i) * self.temporal_memory_linkage + ww_i * p_j
         is_cuda = ww_j.is_cuda
         if is_cuda:
             idx = torch.arange(0, self.N, out=torch.cuda.LongTensor())
@@ -497,7 +493,7 @@ class BatchDNC(nn.Module):
                 print("precedence close to one?", precedence_weighting.sum() > 1)
                 raise
 
-        expandf = self.not_first_t_flag.expand(self, bs, self.N, self.N)
+        expandf = self.not_first_t_flag.unsqueeze(2).expand(self.bs, self.N, self.N)
         # force to be zero
         newtml = newtml * expandf
         self.temporal_memory_linkage=newtml
@@ -508,7 +504,7 @@ class BatchDNC(nn.Module):
         '''
         ret = torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
         if debug:
-            test_simplex_bound(ret, 1)
+            test_simplex_bound(ret.permute(0,2,1), 1)
         return ret
 
     def forward_weighting(self):
@@ -518,7 +514,7 @@ class BatchDNC(nn.Module):
         '''
         ret = torch.matmul(self.temporal_memory_linkage.transpose(1, 2), self.last_read_weightings)
         if debug:
-            test_simplex_bound(ret, 1)
+            test_simplex_bound(ret.permute(0,2,1))
         return ret
 
     # TODO sparse update, skipped because it's for performance improvement.
@@ -569,7 +565,8 @@ class BatchDNC(nn.Module):
         :return: read_vectors: [r^i_R], (W,R)
         '''
 
-        return torch.matmul(self.memory.t(), read_weightings)
+        ret= torch.matmul(self.memory.transpose(1,2), read_weightings)
+        return ret
 
     def write_to_memory(self, write_weighting, erase_vector, write_vector):
         '''
@@ -581,9 +578,9 @@ class BatchDNC(nn.Module):
         '''
         term1_2 = torch.matmul(write_weighting.unsqueeze(2), erase_vector.unsqueeze(1))
         # term1=self.memory.unsqueeze(0)*Variable(torch.ones((self.bs,self.N,self.W)).cuda()-term1_2.data)
-        term1 = self.memory.unsqueeze(0) * (1 - term1_2)
+        term1 = self.memory * (1 - term1_2)
         term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
-        self.memory = Parameter(torch.mean(term1 + term2, dim=0).data,requires_grad=False)
+        self.memory = term1 + term2
 
 
 class Stock_LSTM(nn.Module):

@@ -134,9 +134,16 @@ class ChannelManager():
             raise StopIteration()
 
     def push_states(self, states_tuple):
+        is_cuda= states_tuple[0].is_cuda
+
         for i, ch in enumerate(self.channels):
-            slice_states_tuple=((state.index_select(0,i) for state in states_tuple))
-            ch.push_states(slice_states_tuple)
+            if is_cuda:
+                slice_states_tuple=tuple((state.index_select(0,Variable(torch.LongTensor([i]).cuda())) for state in states_tuple[:-2]))+\
+                                   tuple((state.index_select(1,Variable(torch.LongTensor([i]).cuda())) for state in states_tuple[-2:]))
+            else:
+                slice_states_tuple=tuple((state.index_select(0,Variable(torch.LongTensor([i]))) for state in states_tuple[:-2]))+\
+                                   tuple((state.index_select(1,Variable(torch.LongTensor([i]))) for state in states_tuple[-2:]))
+                ch.push_states(slice_states_tuple)
 
     def get_states(self):
         batch_states=[]

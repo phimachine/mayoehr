@@ -123,6 +123,8 @@ def salvage(savestr):
     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
+
+
 #
 # def run_one_patient(computer, input, target, reset_flag, states_tuple, target_dim, optimizer, loss_type, real_criterion,
 #                     binary_criterion, validate=False):
@@ -179,13 +181,20 @@ def salvage(savestr):
 def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     optimizer.zero_grad()
     input, target, loss_type, states_tuple = next(channelmanager)
-    input=Variable(input).cuda()
-    target=Variable(target).cuda()
-    loss_type=Variable(loss_type).cuda()
+    target = target.squeeze(1)
+    input = Variable(input).cuda()
+    target = Variable(target).cuda()
+    loss_type = Variable(loss_type).cuda()
     computer.assign_states_tuple(states_tuple)
     output, states_tuple = computer(input)
-    bc.push_states(states_tuple)
-    loss=binary_criterion(cause_of_death_output, cause_of_death_target)
+    channelmanager.push_states(states_tuple)
+
+    time_to_event_output = output[:, 0]
+    cause_of_death_output = output[:, 1:]
+    time_to_event_target = target[:, 0]
+    cause_of_death_target = target[:, 1:]
+
+    loss = binary_criterion(cause_of_death_output, cause_of_death_target)
     loss.backward()
     optimizer.step()
     return loss
@@ -225,7 +234,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
     for epoch in range(starting_epoch, total_epochs):
         # all these are batches
-        for i in range(starting_iter,iter_per_epoch):
+        for i in range(starting_iter, iter_per_epoch):
             train_story_loss = run_one_step(computer, train, optimizer, binary_criterion)
             if train_story_loss is not None:
                 printloss = float(train_story_loss[0])
@@ -284,7 +293,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log.txt"
-    num_workers=3
+    num_workers = 3
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
