@@ -284,7 +284,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log.txt"
-    num_workers=8
+    num_workers=3
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
