@@ -74,7 +74,7 @@ class BatchDNC(nn.Module):
 
         '''COMPUTER'''
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
-
+        self.bn = nn.BatchNorm1d(self.x)
         self.reset_parameters()
 
         '''States'''
@@ -87,6 +87,7 @@ class BatchDNC(nn.Module):
         self.last_write_weighting=None
         self.last_read_vector=None
         self.not_first_t_flag=None
+
 
     def init_states_each_channel(self):
 
@@ -170,25 +171,16 @@ class BatchDNC(nn.Module):
         if (input!=input).any():
             raise ValueError("We have NAN in inputs")
         # TODO there is a change of dimension it seems.
+
+        # of course, here we finally have the batch normalization.
+        # first we comply with the batchnorm standards
+        input=input.squeeze(1)
+        input=self.bn(input)
+        input=input.unsqueeze(1)
+
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
 
         '''Controller'''
-
-        # hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
-        # hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
-        # for i in range(self.L):
-        #     hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
-        #                                      hidden_previous_layer)
-        #     if (hidden_output!=hidden_output).any():
-        #         raise ValueError("We have NAN in controller output.")
-        #     hidden_this_timestep[:, i, :] = hidden_output
-        #     hidden_previous_layer = hidden_output
-        #
-        # flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
-        # output = torch.matmul(flat_hidden, self.W_y)
-        # interface_input = torch.matmul(flat_hidden, self.W_E)
-        # self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
-
         _, st=self.controller(input_x_t)
         h, c= st
         # was (num_layers, batch, hidden_size)
