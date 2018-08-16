@@ -32,7 +32,7 @@ param_v_t = 3620
 param_W = 32
 param_R = 8
 param_N = 512
-param_bs = 16
+param_bs = 32
 param_reset = True
 
 
@@ -125,59 +125,6 @@ def salvage(savestr):
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
 
 
-#
-# def run_one_patient(computer, input, target, reset_flag, states_tuple, target_dim, optimizer, loss_type, real_criterion,
-#                     binary_criterion, validate=False):
-#     global global_exception_counter
-#     global i
-#     patient_loss = None
-#     if debug:
-#         if (input != input).any():
-#             raise ValueError("NA in input")
-#         if (target != target).any():
-#             raise ValueError("NA in target")
-#     try:
-#         optimizer.zero_grad()
-#         input = Variable(input.cuda())
-#         target = Variable(target.cuda())
-#
-#         # process the state tuples and reset if needed TODO
-#
-#         output = computer(input, states_tuple)
-#         time_to_event_output = output[:, :, 0]
-#         cause_of_death_output = output[:, :, 1:]
-#         time_to_event_target = target[:, :, 0]
-#         cause_of_death_target = target[:, :, 1:]
-#
-#         if debug:
-#             assert not (output != output).any()
-#         patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-#
-#         if not validate:
-#             patient_loss.backward()
-#             optimizer.step()
-#
-#         if global_exception_counter > -1:
-#             global_exception_counter -= 1
-#
-#     except ValueError:
-#         traceback.print_exc()
-#         print("Value Error reached")
-#         print(datetime.datetime.now().time())
-#         global_exception_counter += 1
-#         if global_exception_counter == 10:
-#             save_model(computer, optimizer, epoch=0, iteration=np.random.randint(0, 1000), savestr="NA")
-#             task_dir = os.path.dirname(abspath(__file__))
-#             save_dir = Path(task_dir) / "saves" / "probleminput.pkl"
-#             with save_dir.open('wb') as fhand:
-#                 pickle.dump(input, fhand)
-#             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
-#         else:
-#             print("we are at", i)
-#             pass
-#
-#     return patient_loss, states_tuple
-
 def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     optimizer.zero_grad()
     input, target, loss_type, states_tuple = next(channelmanager)
@@ -199,6 +146,28 @@ def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     optimizer.step()
     return loss
 
+def valid_one_step(computer, channelmanager, binary_criterion):
+    input, target, loss_type, states_tuple = next(channelmanager)
+    target = target.squeeze(1)
+    input = Variable(input).cuda()
+    target = Variable(target).cuda()
+    loss_type = Variable(loss_type).cuda()
+    computer.assign_states_tuple(states_tuple)
+    output, states_tuple = computer(input)
+    channelmanager.push_states(states_tuple)
+
+    time_to_event_output = output[:, 0]
+    cause_of_death_output = output[:, 1:]
+    time_to_event_target = target[:, 0]
+    cause_of_death_target = target[:, 1:]
+
+    loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+    return loss
+
+def logprint(logfile, string):
+    with open(logfile, 'a') as handle:
+        handle.write(string)
+    print(string)
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
@@ -219,12 +188,12 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     :return:
     """
     global global_exception_counter
-    print_interval = 10
-    val_interval = 50
-    save_interval = 300
+    print_interval = 100
+    val_interval = 10000
+    save_interval = 100000
     target_dim = None
     rldmax_len = 50
-    val_batch = 10
+    val_batch = 500
     running_loss_deque = deque(maxlen=rldmax_len)
 
     # erase the logfile
@@ -235,9 +204,9 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     for epoch in range(starting_epoch, total_epochs):
         # all these are batches
         for i in range(starting_iter, iter_per_epoch):
-            train_story_loss = run_one_step(computer, train, optimizer, binary_criterion)
-            if train_story_loss is not None:
-                printloss = float(train_story_loss[0])
+            train_step_loss = run_one_step(computer, train, optimizer, binary_criterion)
+            if train_step_loss is not None:
+                printloss = float(train_step_loss[0])
             else:
                 printloss = 10000
             # computer.new_sequence_reset()
@@ -245,31 +214,23 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if i % print_interval == 0:
                 running_loss = np.mean(running_loss_deque)
                 if logfile:
-                    with open(logfile, 'a') as handle:
-                        handle.write("learning.   count: %4d, training loss: %.10f \n" %
+                    logprint(logfile, "learning.   count: %4d, training loss: %.10f" %
                                      (i, printloss))
-                print("learning.   count: %4d, training loss: %.10f" %
-                      (i, printloss))
                 if i != 0:
                     print("count: %4d, running loss: %.10f" % (i, running_loss))
-            #
-            # if i % val_interval == 0:
-            #     for _ in range(val_batch):
-            #         printloss = 0
-            #         (input, target, loss_type) = next(valid_iterator)
-            #         val_loss, valid_loss_tuple = run_one_patient(computer, input, target, reset_flag,
-            #                                                      valid_states_tuple,
-            #                                                      target_dim, optimizer, loss_type,
-            #                                                      real_criterion, binary_criterion, validate=True)
-            #         if val_loss is not None:
-            #             printloss += float(val_loss[0])
-            #     printloss = printloss / val_batch
-            #     if logfile:
-            #         with open(logfile, 'a') as handle:
-            #             handle.write("validation. count: %4d, val loss     : %.10f \n" %
-            #                          (i, printloss))
-            #     print("validation. count: %4d, training loss: %.10f" %
-            #           (i, printloss))
+
+            if i % val_interval == 0:
+                for _ in range(val_batch):
+                    printloss = 0
+                    val_loss=valid_one_step(computer, valid, binary_criterion)
+                    if val_loss is not None:
+                        printloss += float(val_loss[0])
+                printloss = printloss / val_batch
+                if logfile:
+                    logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
+                                     (i, printloss))
+                print("validation. count: %4d, training loss: %.10f" %
+                      (i, printloss))
 
             if i % save_interval == 0:
                 save_model(computer, optimizer, epoch, i, savestr)
@@ -287,7 +248,7 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
 
 def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     total_epochs = 10
-    iter_per_epoch = 100000
+    iter_per_epoch = 1000000
     lr = lr
     optim = None
     starting_epoch = 0
