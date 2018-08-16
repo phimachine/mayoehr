@@ -179,7 +179,8 @@ class BatchDNC(nn.Module):
         input=input.unsqueeze(1)
 
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
-
+        if (input_x_t!=input_x_t).any():
+            raise ValueError("We have NAN in inputs")
         '''Controller'''
         _, st=self.controller(input_x_t)
         h, c= st
@@ -601,6 +602,12 @@ class Stock_LSTM(nn.Module):
         """
         assert self.st is not None
         o, st = self.LSTM(input_x, self.st)
+        if (st[0]!=st[0]).any():
+            with open("debug/lstm.pkl") as f:
+                pickle.dump(self, f)
+            with open("debug/lstm.pkl") as f:
+                pickle.dump(input_x, f)
+            raise ("LSTM produced a NAN, objects dumped.")
         return self.last(o), st
 
     def reset_parameters(self):
