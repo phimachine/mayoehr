@@ -143,7 +143,7 @@ class ChannelManager():
             else:
                 slice_states_tuple=tuple((state.index_select(0,Variable(torch.LongTensor([i]))) for state in states_tuple[:-2]))+\
                                    tuple((state.index_select(1,Variable(torch.LongTensor([i]))) for state in states_tuple[-2:]))
-                ch.push_states(slice_states_tuple)
+            ch.push_states(slice_states_tuple)
 
         return
 
