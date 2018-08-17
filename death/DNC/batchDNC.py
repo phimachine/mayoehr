@@ -170,10 +170,9 @@ class BatchDNC(nn.Module):
     def forward(self, input):
         if (input!=input).any():
             raise ValueError("We have NAN in inputs")
-        # TODO there is a change of dimension it seems.
 
-        # of course, here we finally have the batch normalization.
-        # first we comply with the batchnorm standards
+        # dimension 42067 for all channels report NAN
+        # train.mother.lab
         input=input.squeeze(1)
         input=self.bn(input)
         input=input.unsqueeze(1)
@@ -183,6 +182,8 @@ class BatchDNC(nn.Module):
             raise ValueError("We have NAN in inputs")
         '''Controller'''
         _, st=self.controller(input_x_t)
+        if (input_x_t!=input_x_t).any():
+            raise ValueError("We have NAN in inputs")
         h, c= st
         # was (num_layers, batch, hidden_size)
         hidden=h.permute(1,0,2)

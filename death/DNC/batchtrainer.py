@@ -190,7 +190,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     global global_exception_counter
     print_interval = 100
     val_interval = 10000
-    save_interval = 100000
+    save_interval = 10000
     target_dim = None
     rldmax_len = 50
     val_batch = 500
@@ -254,7 +254,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log.txt"
-    num_workers = 3
+    num_workers = 6
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,

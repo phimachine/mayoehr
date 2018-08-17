@@ -40,7 +40,7 @@ class InputGen(Dataset, DFManager):
     take a data frame manager object and produce inputs wrapped in torch objects
     '''
 
-    def __init__(self, load_pickle=True, verbose=False, debug=False):
+    def __init__(self, verbose=False):
         super(InputGen, self).__init__()
         self.load_pickle(verbose=verbose)
         self.rep_person_id = self.demo.index.values
@@ -57,6 +57,7 @@ class InputGen(Dataset, DFManager):
         self.earla = pd.read_csv("/infodev1/rep/projects/jason/earla.csv", parse_dates=["earliest", "latest"])
         self.earla.set_index("rep_person_id", inplace=True)
         self.len = len(self.rep_person_id)
+        self.check_nan()
         print("Input Gen initiated")
 
     def get_output_dim(self):
@@ -354,6 +355,17 @@ class InputGen(Dataset, DFManager):
         print("performance probe finished")
         print("speed is now 3x faster")
 
+    def check_nan(self):
+        # this function checks all data frames and ensure that there is no nan anywhere.
+        print("checking if there is nan in any of the dataframes")
+        for dfn in self.dfn:
+            df=self.__getattribute__(dfn)
+            if df.isnull().values.any():
+                print("NA found in dataframe", dfn)
+        # I did not expect so many dataframes to contain NA
+        # How did this happen? Who are the NA values?
+        return
+
 class GenHelper(Dataset):
     def __init__(self, mother, length, mapping):
         # here is a mapping from this index to the mother ds index
@@ -420,7 +432,7 @@ def oldmain():
 
 
 if __name__ == "__main__":
-    ig = InputGen(load_pickle=True, verbose=False)
+    ig = InputGen()
     train,valid=train_valid_split(ig)
     traindl=DataLoader(dataset=train,batch_size=1)
     validdl=DataLoader(dataset=valid,batch_size=1)
