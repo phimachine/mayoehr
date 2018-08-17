@@ -1,18 +1,18 @@
 """
-With adjusted loss function.
+D2 is a modification oif the DNC model that resets the memory at every new story.
+This is how people usually implement DNC.
+Use the parameter to control whether experience resets.
 """
 
-import pandas as pd
 import torch
 import numpy as np
-import pdb
 from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein3 import Frankenstein as DNC
+from death.DNC.trashcan.frankenstein2 import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
@@ -138,7 +138,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
         for timestep in range(time_length):
             # first colon is always size 1
-            feeding = input[:, timestep, :].unsqueeze(1)
+            feeding = input[:, timestep, :]
             output = computer(feeding)
             assert not (output != output).any()
             patient_output[0, timestep, :] = output
@@ -148,8 +148,6 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         cause_of_death_output = patient_output[:, :, 1:]
         time_to_event_target = target[:, :, 0]
         cause_of_death_target = target[:, :, 1:]
-
-        total_labels = cause_of_death_target.sum(2)[0,0]
 
         # this block will not work for batch input,
         # you should modify it so that the loss evaluation is not determined by logic but function.
@@ -278,7 +276,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_iteration = 0
     logfile = "log.txt"
 
-    num_workers = 8
+    num_workers = 3
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
@@ -304,8 +302,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         optimizer = optim
 
     real_criterion = nn.SmoothL1Loss()
-    # time-wise sum, label-wise average.
-    binary_criterion = nn.BCEWithLogitsLoss()
+    binary_criterion = nn.BCEWithLogitsLoss(size_average=False)
 
     # starting with the epoch after the loaded one
 

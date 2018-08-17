@@ -4,18 +4,15 @@ This is how people usually implement DNC.
 Use the parameter to control whether experience resets.
 """
 
-import pandas as pd
 from dnc import SDNC
 import torch
 import numpy as np
-import pdb
 from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planD import InputGenD, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from death.DNC.frankenstein2 import Frankenstein as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy
