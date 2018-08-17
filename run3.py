@@ -1,4 +1,4 @@
-from death.DNC.trainerD2 import *
+from death.DNC.trashcan.trainerD2 import *
 # from death.DNC.notmysamtrainer import *
 import traceback
 import datetime

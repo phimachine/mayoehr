@@ -1,7 +1,5 @@
-from death.DNC.trainerD3 import *
+from death.DNC.trashcan.trainerD3 import *
 # from death.DNC.notmysamtrainer import *
-import os
-from shutil import copy
 import traceback
 import datetime
 

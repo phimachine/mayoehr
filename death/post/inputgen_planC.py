@@ -1,4 +1,4 @@
-from death.post.qdata import *
+from death.post.dfmanager import *
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd
@@ -362,6 +362,7 @@ class InputGen(Dataset, DFManager):
             df=self.__getattribute__(dfn)
             if df.isnull().values.any():
                 print("NA found in dataframe", dfn)
+                print(df.isna().any())
         # I did not expect so many dataframes to contain NA
         # How did this happen? Who are the NA values?
         return

@@ -1,4 +1,4 @@
-from death.post.qdata import DFManager
+from death.post.dfmanager import DFManager
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
