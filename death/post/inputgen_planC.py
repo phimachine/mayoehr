@@ -365,14 +365,7 @@ class InputGen(Dataset, DFManager):
             if df.isnull().values.any():
                 print("NA found in dataframe", dfn)
                 print(df.isna().any())
-            else:
-                print("Dataframe", dfn, "clean")
 
-            if dfn == "lab":
-
-
-        # I did not expect so many dataframes to contain NA
-        # How did this happen? Who are the NA values?
         return
 
 class GenHelper(Dataset):

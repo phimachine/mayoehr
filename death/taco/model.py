@@ -1,5 +1,4 @@
-# My next attempt is to use the tacotron model.
-# This is a generic CBHG sequence procecssing model with attention.
-# I will use it with prenet and reconstructor based on MAC network.
-# Let's see how it goes. It should take around two weeks.
-
+# RNN reads a whole sequence, and then outputs the target sequences at <GO> frame.
+# If you think about it this way, can't we read the whole sequence and output the goal at <GO> frame just once?
+# Our goal is to produce a target sequence of length one.
+# In this case, would attention be necessary?
