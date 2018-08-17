@@ -24,6 +24,8 @@ batch_size = 1
 global_exception_counter = 0
 i = None
 debug = True
+verbose=False
+verbose=debug
 
 param_x = 47764
 param_h = 512
@@ -266,7 +268,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
                    N=param_N,
                    bs=param_bs)
 
-    ig = InputGenD(load_pickle=True, verbose=False)
+    ig = InputGenD(verbose=verbose)
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)

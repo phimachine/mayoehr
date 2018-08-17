@@ -37,7 +37,9 @@ def get_timestep_location(earliest, dates):
 # multiple inheritance
 class InputGen(Dataset, DFManager):
     '''
-    take a data frame manager object and produce inputs wrapped in torch objects
+    This is the second object in the python data generation pipeline
+    Take a data frame manager object and produce inputs wrapped in torch objects through Dataset interface
+    See get_by_id()
     '''
 
     def __init__(self, verbose=False):
