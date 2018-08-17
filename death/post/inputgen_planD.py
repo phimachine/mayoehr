@@ -32,9 +32,14 @@ def get_timestep_location(earliest, dates):
 
 
 class InputGenD(InputGen):
+    """
+    This is the third object in the python data generation pipeline.
+    This object takes a raw InputGen Dataset and changes the proportion of death records in the population, to address
+    frozen gradients.
+    """
     # inherit this class mainly so that I can reuse the code and maintain faster
-    def __init__(self, death_proportion=0.9, load_pickle=True, verbose=False, debug=False):
-        super(InputGenD, self).__init__(load_pickle=load_pickle, verbose=verbose, debug=debug)
+    def __init__(self, death_proportion=0.9, verbose=False):
+        super(InputGenD, self).__init__(verbose=verbose)
         # This is sorted
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
         no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]

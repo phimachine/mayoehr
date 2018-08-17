@@ -47,7 +47,7 @@ class InputGen(Dataset, DFManager):
         self.load_pickle(verbose=verbose)
         self.rep_person_id = self.demo.index.values
         self.verbose = verbose
-        # 46872
+        # 47774
         # TODO we need to exploit the structured codes and augment inputs
         self.input_dim = None
         # manual format: (dfname,colname,starting_index)
@@ -365,6 +365,12 @@ class InputGen(Dataset, DFManager):
             if df.isnull().values.any():
                 print("NA found in dataframe", dfn)
                 print(df.isna().any())
+            else:
+                print("Dataframe", dfn, "clean")
+
+            if dfn == "lab":
+
+
         # I did not expect so many dataframes to contain NA
         # How did this happen? Who are the NA values?
         return
