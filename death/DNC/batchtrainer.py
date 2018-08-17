@@ -20,22 +20,7 @@ import traceback
 from collections import deque
 import datetime
 
-batch_size = 1
-global_exception_counter = 0
-i = None
-debug = True
-verbose=False
-verbose=debug
 
-param_x = 47764
-param_h = 512
-param_L = 32
-param_v_t = 3620
-param_W = 32
-param_R = 8
-param_N = 512
-param_bs = 32
-param_reset = True
 
 
 class dummy_context_mgr():
@@ -304,4 +289,5 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
 
 
 if __name__ == "__main__":
+
     main()
