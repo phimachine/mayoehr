@@ -16,6 +16,8 @@ pickle_path = "/infodev1/rep/projects/jason/pickle/"
 class DFManager(object):
     '''
     Dataframe manager
+    It is the first object in the data generation pipelines in Python.
+    It takes csv files and make pandas dataframes
     '''
 
     def __init__(self):
@@ -312,6 +314,8 @@ class DFManager(object):
         :return: 
         '''''
         return self.__getattribute__(df_name)[col_name]
+
+
 
 
 if __name__ == "__main__":
