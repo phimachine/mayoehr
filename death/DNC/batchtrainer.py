@@ -21,6 +21,22 @@ from collections import deque
 import datetime
 
 
+batch_size = 1
+global_exception_counter = 0
+i = None
+debug = True
+verbose=False
+verbose=debug
+
+param_x = 47774
+param_h = 512
+param_L = 32
+param_v_t = 3620
+param_W = 32
+param_R = 8
+param_N = 512
+param_bs = 8
+param_reset = True
 
 
 class dummy_context_mgr():
@@ -113,6 +129,7 @@ def salvage(savestr):
 
 
 def run_one_step(computer, channelmanager, optimizer, binary_criterion):
+    computer.train()
     optimizer.zero_grad()
     input, target, loss_type, states_tuple = next(channelmanager)
     target = target.squeeze(1)
@@ -134,6 +151,7 @@ def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     return loss
 
 def valid_one_step(computer, channelmanager, binary_criterion):
+    computer.eval()
     input, target, loss_type, states_tuple = next(channelmanager)
     target = target.squeeze(1)
     input = Variable(input).cuda()
@@ -241,7 +259,7 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log.txt"
-    num_workers = 6
+    num_workers = 8
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,

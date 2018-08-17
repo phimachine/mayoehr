@@ -37,6 +37,20 @@ def test_simplex_bound(tensor, dim=1):
         raise ValueError('test simple bound failed due to NA')
     return True
 
+class BatchNorm(nn.Module):
+    def __init__(self, channel_dim, eps=1e-5):
+        super(BatchNorm, self).__init__()
+        self.eps=Variable(torch.Tensor([eps])).cuda()
+        self.lin=nn.Linear(channel_dim, channel_dim)
+
+    def forward(self, input):
+        # assume that the tensor is (batch, channels)
+        mbmean=torch.mean(input, dim=0, keepdim=True)
+        mbvar=torch.var(input, dim=0, keepdim=True)
+        new_input=(input-mbmean)*torch.rsqrt(mbvar+self.eps)
+        output=self.lin(new_input)
+
+        return output
 
 class BatchDNC(nn.Module):
     def __init__(self,
@@ -74,7 +88,7 @@ class BatchDNC(nn.Module):
 
         '''COMPUTER'''
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
-        self.bn = nn.BatchNorm1d(self.x)
+        self.bn = BatchNorm(self.x)
         self.reset_parameters()
 
         '''States'''
@@ -177,13 +191,16 @@ class BatchDNC(nn.Module):
         input=self.bn(input)
         input=input.unsqueeze(1)
 
+        if (input!=input).any():
+            raise ValueError("We have NAN after batch normalization")
+
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
         if (input_x_t!=input_x_t).any():
-            raise ValueError("We have NAN in inputs")
+            raise ValueError("We have NAN in last read vector")
         '''Controller'''
         _, st=self.controller(input_x_t)
         if (input_x_t!=input_x_t).any():
-            raise ValueError("We have NAN in inputs")
+            raise ValueError("We have NAN in LSTM outputs")
         h, c= st
         # was (num_layers, batch, hidden_size)
         hidden=h.permute(1,0,2)
