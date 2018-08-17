@@ -17,7 +17,7 @@ class DFManager(object):
     '''
     Dataframe manager
     It is the first object in the data generation pipelines in Python.
-    It takes csv files and make pandas dataframes
+    It takes csv files and make pandas dataframes, then pickle them.
     '''
 
     def __init__(self):
@@ -119,12 +119,30 @@ class DFManager(object):
     def get_dict(self, df, col):
         return getattr(self, df + "_" + col + "_dict")
 
-    def load_raw(self, coerce=False, verbose=True, save=True):
+    def fill_na(self, dfn):
+        df=self.__getattribute__(dfn)
+        filldict={}
+        for key,value in self.dtypes[dfn].items():
+            if value == "int":
+                filldict[key]=0
+            elif value == "float":
+                filldict[key]=0
+            elif value == "bool":
+                filldict[key]=False
+            elif value == "str":
+                filldict[key]=""
+            elif value == "category":
+                df[key].cat.add_categories(["None"], inplace=True)
+                filldict[key]="None"
+            else:
+                raise ValueError("A fill na value that is not managed")
+        df.fillna(filldict,inplace=True)
+
+    def load_raw(self, verbose=True, save=True):
 
         '''
         load all preprocessed datasets, return in the order of death,demo,dia,hos,lab,pres,serv,surg,vital
 
-        :param coerce: coerce load and resave pickle files
         :param verbose: verbose output
         :param save:
         :return: death,demo,dia,hos,lab,pres,serv,surg,vital: panda dataframe objects
@@ -132,7 +150,7 @@ class DFManager(object):
         if not verbose:
             print("loading from raw, this process might take 5 minutes")
 
-        if not self.loaded or (self.loaded and coerce):
+        if not self.loaded:
             v = verbose
 
             for dfn in self.dfn:
@@ -148,6 +166,8 @@ class DFManager(object):
                     print(dfn+":")
                     print(self.__getattribute__(dfn))
                 df.sort_index()
+                self.fill_na(dfn)
+
             self.loaded = True
 
         if save:
@@ -315,17 +335,19 @@ class DFManager(object):
         '''''
         return self.__getattribute__(df_name)[col_name]
 
+def repickle():
+    '''
+    Run this function if you need to remake the pickled panda dataframes
+    This function will take 30 minutes to 1 hour to run, mainly disk I/O.
+    '''
+
+    dfs = DFManager()
+    dfs.load_raw(save=True)
+    # dfs.load_pickle()
+    dfs.make_dictionary(verbose=True,save=True,skip=False)
+    print("end script")
 
 
 
 if __name__ == "__main__":
-    dfs = DFManager()
-
-
-    dfs.load_raw(save=True)
-
-    # dfs.load_pickle()
-
-    dfs.make_dictionary(verbose=True,save=True,skip=False)
-
-    print("end script")
+    repickle()
