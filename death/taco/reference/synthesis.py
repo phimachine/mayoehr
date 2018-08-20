@@ -71,7 +71,7 @@ def generate(model, text):
     mel_input = Variable(torch.from_numpy(mel_input).type(torch.cuda.FloatTensor), volatile=True).cuda()
 
     # Spectrogram to wav
-    _, linear_output = model.forward(characters, mel_input)
+    _, linear_output = model(characters, mel_input)
     wav = inv_spectrogram(linear_output[0].data.cpu().numpy())
     wav = wav[:find_endpoint(wav)]
     out = io.BytesIO()

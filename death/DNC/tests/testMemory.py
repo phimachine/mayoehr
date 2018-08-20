@@ -63,13 +63,13 @@ class Test_Memory_Necessary(unittest.TestCase):
     def test_forward_backward_weighting(self):
         memory=self.overwrite_memory()
         bw=memory.backward_weighting()
-        fw=memory.forward_weighting()
+        fw=memory_weighting()
         self.assertTrue(fw.size()==(param.bs, param.N, param.R))
         self.assertTrue(bw.size()==(param.bs, param.N, param.R))
 
     def test_read_weighting(self):
         memory=self.overwrite_memory()
-        fw=memory.forward_weighting()
+        fw=memory_weighting()
         bw=memory.backward_weighting()
         read_keys=torch.Tensor(param.bs,param.W,param.R).normal_()
         read_key_strengths=torch.Tensor(param.bs,param.R).normal_()

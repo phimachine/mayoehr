@@ -198,7 +198,8 @@ class CBHG(nn.Module):
         conv_projection = self.batchnorm_proj_2(self._conv_fit_dim(self.conv_projection_2(conv_projection))) + input_
 
         # Highway networks
-        highway = self.highway.forward(conv_projection)
+        # [batch, time, projection_size] for both in and out.
+        highway = self.highway(conv_projection)
         highway = torch.transpose(highway, 1, 2)
 
         # Bidirectional GRU
@@ -208,6 +209,7 @@ class CBHG(nn.Module):
             init_gru = Variable(torch.zeros(2 * self.num_gru_layers, batch_size, self.hidden_size))
 
         self.gru.flatten_parameters()
+        # [batch, time, 2*hidden_size] because bidirectional.
         out, _ = self.gru(highway, init_gru)
 
         return out
@@ -239,8 +241,8 @@ class Highwaynet(nn.Module):
 
         # highway gated function
         for fc1, fc2 in zip(self.linears, self.gates):
-            h = F.relu(fc1.forward(out))
-            t = F.sigmoid(fc2.forward(out))
+            h = F.relu(fc1(out))
+            t = F.sigmoid(fc2(out))
 
             c = 1. - t
             out = h * t + out * c
