@@ -80,23 +80,38 @@ class MelDecoder(nn.Module):
             timesteps = dec_input.size()[2] // hp.outputs_per_step
 
             # [GO] Frame
+            # [batch, 2*hidden]
             prev_output = dec_input[:, :, 0]
 
             for i in range(timesteps):
+                # on the paper, the previous output passes through prenet every loop
+                # here it does not.
+                # attn_hidden and all gru_hidden are all the same.
+                # the RNN takes the prev decoder output, processes it, then directly put it against memory for attention
                 prev_output, attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder(prev_output, memory,
                                                                                              attn_hidden=attn_hidden,
                                                                                              gru1_hidden=gru1_hidden,
                                                                                              gru2_hidden=gru2_hidden)
 
                 outputs.append(prev_output)
-
+                '''
+                # what is this line? default param is 100%
+                # as I found out, https://arxiv.org/pdf/1506.03099.pdf
+                # this is the curriculum training that switches from a fully guided mel_input to blind backprop
+                # we cannot do this, because they have the correct mel_spectrogram. We have nothing
+                # this training scheme is very interesting. You train the model pipeline by dividing it
+                # to two models, and feed two sets of labels one at the end and one in the middle.
+                # very good idea. Encourages convergence on interpretable models.
+                # but we cannot use it.
                 if random.random() < hp.teacher_forcing_ratio:
                     # Get spectrum at rth position
                     prev_output = dec_input[:, :, i * hp.outputs_per_step]
                 else:
                     # Get last output
                     prev_output = prev_output[:, :, -1]
-
+                '''
+                prev_output=prev_output[:,:,-1]
+                print("loop")
             # Concatenate all mel spectrogram
             outputs = torch.cat(outputs, 2)
 
@@ -116,6 +131,7 @@ class MelDecoder(nn.Module):
 
             outputs = torch.cat(outputs, 2)
 
+        # [batch, hidden*2, time*timecoef]
         return outputs
 
 class PostProcessingNet(nn.Module):
@@ -126,7 +142,7 @@ class PostProcessingNet(nn.Module):
         super(PostProcessingNet, self).__init__()
         self.postcbhg = CBHG(hp.hidden_size,
                              K=8,
-                             projection_size=hp.num_mels,
+                             projection_size=hp.decoder_output_dim,
                              is_post=True)
         self.linear = SeqLinear(hp.hidden_size * 2,
                                 hp.num_freq)
@@ -156,8 +172,10 @@ class Tacotron(nn.Module):
 
         return mel_output, linear_output
 def main():
-    input=Variable(torch.rand((123,1, 47774))).cuda()
-    mel_input=Variable(torch.rand((123,hp.num_mels))).cuda()
+    # because the algorithm requires time wise convolution as well as a decoder whose length is in
+    # proportion to the input, we need to feed the whole time-wise sequence in the machine.
+    input=Variable(torch.rand((123,100, 47774))).cuda()
+    mel_input=Variable(torch.rand((123,1, hp.num_mels))).cuda()
     taco=Tacotron().cuda()
     output=taco(input, mel_input)
     print("script finished")

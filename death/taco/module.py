@@ -278,9 +278,18 @@ class AttentionDecoder(nn.Module):
         self.gru2 = nn.GRUCell(num_units, num_units)
 
         self.attn_projection = nn.Linear(num_units * 2, num_units)
-        self.out = nn.Linear(num_units, hp.num_mels * hp.outputs_per_step)
+        self.out = nn.Linear(num_units, hp.decoder_output_dim * hp.outputs_per_step)
 
     def forward(self, decoder_input, memory, attn_hidden, gru1_hidden, gru2_hidden):
+        """
+
+        :param decoder_input: that is the last decoder output or the go frame
+        :param memory: this is the raw character input, transformed with encoder
+        :param attn_hidden:
+        :param gru1_hidden:
+        :param gru2_hidden:
+        :return:
+        """
 
         memory_len = memory.size()[1]
         batch_size = memory.size()[0]
@@ -296,6 +305,7 @@ class AttentionDecoder(nn.Module):
         d_t_duplicate = self.W2(d_t).unsqueeze(1).expand_as(memory)
 
         # Calculate attention score and get attention weights
+        # note how score is computed here
         attn_weights = self.v(F.tanh(keys + d_t_duplicate).view(-1, self.num_units)).view(-1, memory_len, 1)
         attn_weights = attn_weights.squeeze(2)
         attn_weights = F.softmax(attn_weights)
@@ -312,7 +322,8 @@ class AttentionDecoder(nn.Module):
         bf_out = gru2_input + gru2_hidden
 
         # Output
-        output = self.out(bf_out).view(-1, hp.num_mels, hp.outputs_per_step)
+        output2 = self.out(bf_out)
+        output = output2.view(-1, hp.decoder_output_dim, hp.outputs_per_step)
 
         return output, d_t, gru1_hidden, gru2_hidden
 
