@@ -233,7 +233,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 if logfile:
                     logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
                                      (i, printloss))
-                print("validation. count: %4d, training loss: %.10f" %
+                print("validation. count: %4d, running loss: %.10f" %
                       (i, printloss))
 
             if i % save_interval == 0:

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 import numpy as np
-import death.taco.param as hp
+import death.taco.hyper as hp
 
 use_cuda = torch.cuda.is_available()
 
@@ -61,7 +61,7 @@ class Prenet(nn.Module):
     """
 
     '''
-    Prenet transforms raw input dimension to a output (hidden) dimension. This means we can use this to control
+    Prenet transforms raw input dimension to a output (feature) dimension. This means we can use this to control
     the network input dimension size should necessary.
     I am also thinking about the possibility to pass a prenet not on input dimension, but on the time dimension,
     so all sequences can be normalized to a same length. This problem was encountered in image recognition? Cropping.

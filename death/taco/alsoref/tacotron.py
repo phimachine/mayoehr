@@ -1,36 +1,13 @@
-# RNN reads a whole sequence, and then outputs the target sequences at <GO> frame.
-# If you think about it this way, can't we read the whole sequence and output the goal at <GO> frame just once?
-# Our goal is to produce a target sequence of length one.
-# In this case, would attention be necessary? Wouldn't attention be a vanilla linear module?
+# coding: utf-8
+from __future__ import with_statement, print_function, absolute_import
 
-# one question left: how to deal with variable input lengths?
-
-# I'm still unsure how to use attention. The deadline is compelling, and I think I will not incorporate attention
-# mechanism in the architecture.
-# A simple way will be a fixed iteration attention RNN wherein the last hidden will be used to compute the target.
-
-
-"""
-The model architecture will be almost exactly the tacotron original architecture.
-The only difference is that after the second CBHG, the GL recons is replaced with a maxpool to target.
-
-This design choice is made for these two reasons:
-I want to retain the attention mechanism to allow the computer to calculate the target with a few steps, which simulate
-a tree like reasoning process. If not, I will only use CBHG to do a multi window convolution on patient history, which
-is not very interesting/powerful.
-I want to retain the last CBHG module, because if I directly maxpool the last hidden without processing it, the hidden
-will need to be on the target space and annotation space at the same time. It's not impossible, given that annotation
-is on the space of input hidden, which is a medical record, while the target is also a medical record. But I cannot
-be 100% sure the control will not interfere with the target, so I will allow CBHG. CBHG can trivially emulate an
-identity transformation, so if maxpool directly is preferred, then this model should not introduce any further bias.
-Variance certainly increases.
-"""
-
-
-import torch.nn as nn
 import torch
-from death.taco.module import *
-from .attention import *
+from torch.autograd import Variable
+from torch import nn
+
+from .attention import BahdanauAttention, AttentionWrapper
+from .attention import get_mask_from_lengths
+
 
 class Prenet(nn.Module):
     def __init__(self, in_dim, sizes=[256, 128]):
@@ -158,6 +135,7 @@ class CBHG(nn.Module):
                 outputs, batch_first=True)
 
         return outputs
+
 
 class Encoder(nn.Module):
     def __init__(self, in_dim):
@@ -292,6 +270,11 @@ class Decoder(nn.Module):
 
         return outputs, alignments
 
+
+def is_end_of_frames(output, eps=0.2):
+    return (output.data <= eps).all()
+
+
 class Tacotron(nn.Module):
     def __init__(self, n_vocab, embedding_dim=256, mel_dim=80, linear_dim=1025,
                  r=5, padding_idx=None, use_memory_mask=False):
@@ -334,13 +317,3 @@ class Tacotron(nn.Module):
         linear_outputs = self.last_linear(linear_outputs)
 
         return mel_outputs, linear_outputs, alignments
-
-def main():
-    input=Variable(torch.rand((123,1,47774)))
-    taco=Tacotron()
-    output=taco(input)
-    print("script finished")
-
-
-if __name__=="__main__":
-    main()
