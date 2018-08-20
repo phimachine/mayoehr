@@ -1,5 +1,6 @@
-from network import *
-from data import get_dataset, DataLoader, collate_fn, get_param_size
+import pandas as pd
+from death.taco.reference.network import *
+from death.taco.reference.data import get_dataset, DataLoader, collate_fn, get_param_size
 from torch import optim
 import numpy as np
 import argparse
