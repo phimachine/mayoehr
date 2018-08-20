@@ -15,7 +15,7 @@ embedding_size = 256
 max_iters = 200
 griffin_lim_iters = 60
 power = 1.5
-outputs_per_step = 5
+outputs_per_step = 1
 teacher_forcing_ratio = 1.0
 
 epochs = 10000
@@ -36,3 +36,5 @@ checkpoint_path = './model_new'
 embedding_size=128
 input_size=47774
 hidden_size=256
+timesteps=10
+decoder_output_dim=256
