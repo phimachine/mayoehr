@@ -313,7 +313,7 @@ class ResetDNC(nn.Module):
         newtlm=self.temporal_linkage_matrix(write_weighting, last_precedence_weighting, lasttml, not_first_t_flag)
         precedence_weighting=self.precedence_weighting(last_precedence_weighting,write_weighting)
 
-        forward_weighting = self.forward_weighting(newtml, last_read_weightings)
+        forward_weighting = self_weighting(newtml, last_read_weightings)
         backward_weighting = self.backward_weighting(newtml, last_read_weightings)
 
         read_weightings = self.read_weightings(memory, last_read_weightings, forward_weighting,

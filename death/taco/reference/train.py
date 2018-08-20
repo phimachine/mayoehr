@@ -81,7 +81,7 @@ def main(args):
                 linear_spectrogram = Variable(torch.from_numpy(data[1]).type(torch.FloatTensor), requires_grad=False)
 
             # Forward
-            mel_output, linear_output = model.forward(characters, mel_input)
+            mel_output, linear_output = model(characters, mel_input)
 
             # Calculate loss
             mel_loss = criterion(mel_output, mel_spectrogram)

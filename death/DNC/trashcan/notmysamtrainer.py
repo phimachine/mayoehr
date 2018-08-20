@@ -328,13 +328,13 @@ class NotMySam(SDNC):
     def forward(self, input, hx=(None, None, None), reset_experience=False, pass_through_memory=True):
         if self.debug:
             outputs, (controller_hidden, mem_hidden, read_vectors), viz=\
-                super(NotMySam, self).forward(input, hx=(None, None, None), reset_experience=False, pass_through_memory=True)
+                super(NotMySam, self)(input, hx=(None, None, None), reset_experience=False, pass_through_memory=True)
             outputs = self.last_output(outputs)
 
             return outputs, (controller_hidden,mem_hidden,read_vectors), viz
         else:
             outputs, (controller_hidden, mem_hidden, read_vectors)=\
-                super(NotMySam, self).forward(input, hx=(None, None, None), reset_experience=False, pass_through_memory=True)
+                super(NotMySam, self)(input, hx=(None, None, None), reset_experience=False, pass_through_memory=True)
             outputs = self.last_output(outputs)
 
             return outputs, (controller_hidden,mem_hidden,read_vectors)

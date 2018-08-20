@@ -23,8 +23,8 @@ class Encoder(nn.Module):
     def forward(self, input_):
 
         input_ = torch.transpose(self.embed(input_),1,2)
-        prenet = self.prenet.forward(input_)
-        memory = self.cbhg.forward(prenet)
+        prenet = self.prenet(input_)
+        memory = self.cbhg(prenet)
 
         return memory
 
@@ -46,14 +46,14 @@ class MelDecoder(nn.Module):
         # Training phase
         if self.training:
             # Prenet
-            dec_input = self.prenet.forward(decoder_input)
+            dec_input = self.prenet(decoder_input)
             timesteps = dec_input.size()[2] // hp.outputs_per_step
 
             # [GO] Frame
             prev_output = dec_input[:, :, 0]
 
             for i in range(timesteps):
-                prev_output, attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder.forward(prev_output, memory,
+                prev_output, attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder(prev_output, memory,
                                                                                              attn_hidden=attn_hidden,
                                                                                              gru1_hidden=gru1_hidden,
                                                                                              gru2_hidden=gru2_hidden)
@@ -75,9 +75,9 @@ class MelDecoder(nn.Module):
             prev_output = decoder_input
 
             for i in range(hp.max_iters):
-                prev_output = self.prenet.forward(prev_output)
+                prev_output = self.prenet(prev_output)
                 prev_output = prev_output[:,:,0]
-                prev_output, attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder.forward(prev_output, memory,
+                prev_output, attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder(prev_output, memory,
                                                                                          attn_hidden=attn_hidden,
                                                                                          gru1_hidden=gru1_hidden,
                                                                                          gru2_hidden=gru2_hidden)
@@ -102,8 +102,8 @@ class PostProcessingNet(nn.Module):
                                 hp.num_freq)
 
     def forward(self, input_):
-        out = self.postcbhg.forward(input_)
-        out = self.linear.forward(torch.transpose(out,1,2))
+        out = self.postcbhg(input_)
+        out = self.linear(torch.transpose(out,1,2))
 
         return out
 
@@ -118,9 +118,9 @@ class Tacotron(nn.Module):
         self.decoder2 = PostProcessingNet()
 
     def forward(self, characters, mel_input):
-        # .forward() should never be explicitly called.
-        memory = self.encoder.forward(characters)
-        mel_output = self.decoder1.forward(mel_input, memory)
-        linear_output = self.decoder2.forward(mel_output)
+        # () should never be explicitly called.
+        memory = self.encoder(characters)
+        mel_output = self.decoder1(mel_input, memory)
+        linear_output = self.decoder2(mel_output)
 
         return mel_output, linear_output
