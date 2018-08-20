@@ -1,10 +1,10 @@
-import hyperparams as hp
+import death.taco.reference.hyperparams as hp
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import os
 import librosa
 import numpy as np
-from Tacotron.text import text_to_sequence
+from death.taco.reference.text import text_to_sequence
 import collections
 from scipy import signal
 

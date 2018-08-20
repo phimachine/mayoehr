@@ -18,6 +18,7 @@ from os.path import abspath
 from pathlib import Path
 import pickle
 from torch.nn import LSTM
+from death.DNC.bnpy import BatchNorm1d
 debug = True
 
 def sv(var):
@@ -88,7 +89,8 @@ class BatchDNC(nn.Module):
 
         '''COMPUTER'''
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
-        self.bn = BatchNorm(self.x)
+        # print("Using 0.4.1 PyTorch BatchNorm1d")
+        self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
         self.reset_parameters()
 
         '''States'''
@@ -188,11 +190,18 @@ class BatchDNC(nn.Module):
         # dimension 42067 for all channels report NAN
         # train.mother.lab
         input=input.squeeze(1)
-        input=self.bn(input)
-        input=input.unsqueeze(1)
 
-        if (input!=input).any():
-            raise ValueError("We have NAN after batch normalization")
+        try:
+            bnout=self.bn(input)
+            if (input != input).any():
+                raise ValueError("We have NAN after batch normalization")
+        except ValueError:
+            print("reinitialize batch norm")
+            self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
+            bnout=self.bn(input)
+
+        input=bnout.unsqueeze(1)
+
 
         input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
         if (input_x_t!=input_x_t).any():

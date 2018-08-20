@@ -26,16 +26,15 @@ global_exception_counter = 0
 i = None
 debug = True
 verbose=False
-verbose=debug
 
 param_x = 47774
 param_h = 512
-param_L = 32
+param_L = 16
 param_v_t = 3620
 param_W = 32
 param_R = 8
 param_N = 512
-param_bs = 8
+param_bs = 16
 param_reset = True
 
 
@@ -197,7 +196,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     val_interval = 10000
     save_interval = 10000
     target_dim = None
-    rldmax_len = 50
+    rldmax_len = 500
     val_batch = 500
     running_loss_deque = deque(maxlen=rldmax_len)
 

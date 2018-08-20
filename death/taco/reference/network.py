@@ -1,8 +1,8 @@
 #-*- coding: utf-8 -*-
 
-from module import *
-from text.symbols import symbols
-import hyperparams as hp
+from death.taco.reference.module import *
+from death.taco.reference.text.symbols import symbols
+import death.taco.reference.hyperparams as hp
 import random
 
 class Encoder(nn.Module):
@@ -118,6 +118,7 @@ class Tacotron(nn.Module):
         self.decoder2 = PostProcessingNet()
 
     def forward(self, characters, mel_input):
+        # .forward() should never be explicitly called.
         memory = self.encoder.forward(characters)
         mel_output = self.decoder1.forward(mel_input, memory)
         linear_output = self.decoder2.forward(mel_output)

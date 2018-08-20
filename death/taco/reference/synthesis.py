@@ -1,12 +1,12 @@
 #-*- coding: utf-8 -*-
 
-from network import *
-from data import inv_spectrogram, find_endpoint, save_wav, spectrogram
+from death.taco.reference.network import *
+from death.taco.reference.data import inv_spectrogram, find_endpoint, save_wav, spectrogram
 import numpy as np
 import argparse
 import os, sys
 import io
-from text import text_to_sequence
+from death.taco.reference.text import text_to_sequence
 
 use_cuda = torch.cuda.is_available()
 
