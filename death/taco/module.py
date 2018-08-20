@@ -4,13 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 import numpy as np
-import hyperparams as hp
+import death.taco.hyper as hp
 
 use_cuda = torch.cuda.is_available()
 
 '''
 My Annotations when reading this code.
 '''
+
+
 class SeqLinear(nn.Module):
     """
     Linear layer for sequences
@@ -21,6 +23,7 @@ class SeqLinear(nn.Module):
     This does not have ReLU? It really should. Let's see the network code.
     Oh nevermind, look at PreNet.
     '''
+
     def __init__(self, input_size, output_size, time_dim=2):
         """
         :param input_size: dimension of input
@@ -32,7 +35,6 @@ class SeqLinear(nn.Module):
         self.output_size = output_size
         self.time_dim = time_dim
         self.linear = nn.Linear(input_size, output_size)
-
 
     def forward(self, input_):
         """
@@ -52,13 +54,14 @@ class SeqLinear(nn.Module):
 
         return out
 
+
 class Prenet(nn.Module):
     """
     Prenet before passing through the network
     """
 
     '''
-    Prenet transforms raw input dimension to a output (hidden) dimension. This means we can use this to control
+    Prenet transforms raw input dimension to a output (feature) dimension. This means we can use this to control
     the network input dimension size should necessary.
     I am also thinking about the possibility to pass a prenet not on input dimension, but on the time dimension,
     so all sequences can be normalized to a same length. This problem was encountered in image recognition? Cropping.
@@ -66,6 +69,7 @@ class Prenet(nn.Module):
     to make sure that the attention is dictated by a distribution and has no sequential prior.
     We will see.
     '''
+
     def __init__(self, input_size, hidden_size, output_size):
         """
 
@@ -78,19 +82,19 @@ class Prenet(nn.Module):
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.layer = nn.Sequential(OrderedDict([
-             ('fc1', SeqLinear(self.input_size, self.hidden_size)),
-             ('relu1', nn.ReLU()),
-             ('dropout1', nn.Dropout(0.5)),
-             ('fc2', SeqLinear(self.hidden_size, self.output_size)),
-             ('relu2', nn.ReLU()),
-             ('dropout2', nn.Dropout(0.5)),
+            ('fc1', SeqLinear(self.input_size, self.hidden_size)),
+            ('relu1', nn.ReLU()),
+            ('dropout1', nn.Dropout(0.5)),
+            ('fc2', SeqLinear(self.hidden_size, self.output_size)),
+            ('relu2', nn.ReLU()),
+            ('dropout2', nn.Dropout(0.5)),
         ]))
 
     def forward(self, input_):
-
         out = self.layer(input_)
 
         return out
+
 
 class CBHG(nn.Module):
     """
@@ -102,7 +106,8 @@ class CBHG(nn.Module):
     They used batch normalization.
     How do they deal with sequences with different lengths?
     '''
-    def __init__(self, hidden_size, K=16, projection_size = 128, num_gru_layers=2, max_pool_kernel_size=2, is_post=False):
+
+    def __init__(self, hidden_size, K=16, projection_size=128, num_gru_layers=2, max_pool_kernel_size=2, is_post=False):
         """
 
         :param hidden_size: dimension of hidden unit
@@ -118,37 +123,37 @@ class CBHG(nn.Module):
         self.projection_size = projection_size
         self.convbank_list = nn.ModuleList()
         self.convbank_list.append(nn.Conv1d(in_channels=projection_size,
-                                                out_channels=hidden_size,
-                                                kernel_size=1,
-                                                padding=int(np.floor(1/2))))
+                                            out_channels=hidden_size,
+                                            kernel_size=1,
+                                            padding=int(np.floor(1 / 2))))
 
-        for i in range(2, K+1):
+        for i in range(2, K + 1):
             self.convbank_list.append(nn.Conv1d(in_channels=hidden_size,
                                                 out_channels=hidden_size,
                                                 kernel_size=i,
-                                                padding=int(np.floor(i/2))))
+                                                padding=int(np.floor(i / 2))))
 
         self.batchnorm_list = nn.ModuleList()
-        for i in range(1, K+1):
+        for i in range(1, K + 1):
             self.batchnorm_list.append(nn.BatchNorm1d(hidden_size))
 
         convbank_outdim = hidden_size * K
         if is_post:
             self.conv_projection_1 = nn.Conv1d(in_channels=convbank_outdim,
-                                             out_channels=hidden_size * 2,
-                                             kernel_size=3,
-                                             padding=int(np.floor(3/2)))
+                                               out_channels=hidden_size * 2,
+                                               kernel_size=3,
+                                               padding=int(np.floor(3 / 2)))
             self.conv_projection_2 = nn.Conv1d(in_channels=hidden_size * 2,
                                                out_channels=projection_size,
                                                kernel_size=3,
-                                               padding=int(np.floor(3/2)))
+                                               padding=int(np.floor(3 / 2)))
             self.batchnorm_proj_1 = nn.BatchNorm1d(hidden_size * 2)
 
         else:
             self.conv_projection_1 = nn.Conv1d(in_channels=convbank_outdim,
-                                             out_channels=hidden_size,
-                                             kernel_size=3,
-                                             padding=int(np.floor(3 / 2)))
+                                               out_channels=hidden_size,
+                                               kernel_size=3,
+                                               padding=int(np.floor(3 / 2)))
             self.conv_projection_2 = nn.Conv1d(in_channels=hidden_size,
                                                out_channels=projection_size,
                                                kernel_size=3,
@@ -157,17 +162,15 @@ class CBHG(nn.Module):
 
         self.batchnorm_proj_2 = nn.BatchNorm1d(projection_size)
 
-
         self.max_pool = nn.MaxPool1d(max_pool_kernel_size, stride=1, padding=1)
         self.highway = Highwaynet(self.projection_size)
         self.gru = nn.GRU(self.projection_size, self.hidden_size, num_layers=2,
                           batch_first=True,
                           bidirectional=True)
 
-
     def _conv_fit_dim(self, x, kernel_size=3):
         if kernel_size % 2 == 0:
-            return x[:,:,:-1]
+            return x[:, :, :-1]
         else:
             return x
 
@@ -181,22 +184,23 @@ class CBHG(nn.Module):
 
         # Convolution bank filters
         for k, (conv, batchnorm) in enumerate(zip(self.convbank_list, self.batchnorm_list)):
-            convbank_input = F.relu(batchnorm(self._conv_fit_dim(conv(convbank_input), k+1).contiguous()))
+            convbank_input = F.relu(batchnorm(self._conv_fit_dim(conv(convbank_input), k + 1).contiguous()))
             convbank_list.append(convbank_input)
 
         # Concatenate all features
         conv_cat = torch.cat(convbank_list, dim=1)
 
         # Max pooling
-        conv_cat = self.max_pool(conv_cat)[:,:,:-1]
+        conv_cat = self.max_pool(conv_cat)[:, :, :-1]
 
         # Projection
         conv_projection = F.relu(self.batchnorm_proj_1(self._conv_fit_dim(self.conv_projection_1(conv_cat))))
         conv_projection = self.batchnorm_proj_2(self._conv_fit_dim(self.conv_projection_2(conv_projection))) + input_
 
         # Highway networks
+        # [batch, time, projection_size] for both in and out.
         highway = self.highway(conv_projection)
-        highway = torch.transpose(highway, 1,2)
+        highway = torch.transpose(highway, 1, 2)
 
         # Bidirectional GRU
         if use_cuda:
@@ -205,6 +209,7 @@ class CBHG(nn.Module):
             init_gru = Variable(torch.zeros(2 * self.num_gru_layers, batch_size, self.hidden_size))
 
         self.gru.flatten_parameters()
+        # [batch, time, 2*hidden_size] because bidirectional.
         out, _ = self.gru(highway, init_gru)
 
         return out
@@ -214,6 +219,7 @@ class Highwaynet(nn.Module):
     """
     Highway network
     """
+
     def __init__(self, num_units, num_layers=4):
         """
 
@@ -235,7 +241,6 @@ class Highwaynet(nn.Module):
 
         # highway gated function
         for fc1, fc2 in zip(self.linears, self.gates):
-
             h = F.relu(fc1(out))
             t = F.sigmoid(fc2(out))
 
@@ -243,6 +248,7 @@ class Highwaynet(nn.Module):
             out = h * t + out * c
 
         return out
+
 
 class AttentionDecoder(nn.Module):
     """
@@ -252,8 +258,9 @@ class AttentionDecoder(nn.Module):
     Our decoder will be very different. It depends.
     If we run this model directly to an output, then there is no alignment between input and output, and therefore
     attention is not a good idea.
-    
+
     '''
+
     def __init__(self, num_units):
         """
 
@@ -271,9 +278,18 @@ class AttentionDecoder(nn.Module):
         self.gru2 = nn.GRUCell(num_units, num_units)
 
         self.attn_projection = nn.Linear(num_units * 2, num_units)
-        self.out = nn.Linear(num_units, hp.num_mels * hp.outputs_per_step)
+        self.out = nn.Linear(num_units, hp.decoder_output_dim * hp.outputs_per_step)
 
     def forward(self, decoder_input, memory, attn_hidden, gru1_hidden, gru2_hidden):
+        """
+
+        :param decoder_input: that is the last decoder output or the go frame
+        :param memory: this is the raw character input, transformed with encoder
+        :param attn_hidden:
+        :param gru1_hidden:
+        :param gru2_hidden:
+        :return:
+        """
 
         memory_len = memory.size()[1]
         batch_size = memory.size()[0]
@@ -289,12 +305,13 @@ class AttentionDecoder(nn.Module):
         d_t_duplicate = self.W2(d_t).unsqueeze(1).expand_as(memory)
 
         # Calculate attention score and get attention weights
+        # note how score is computed here
         attn_weights = self.v(F.tanh(keys + d_t_duplicate).view(-1, self.num_units)).view(-1, memory_len, 1)
         attn_weights = attn_weights.squeeze(2)
         attn_weights = F.softmax(attn_weights)
 
         # Concatenate with original query
-        d_t_prime = torch.bmm(attn_weights.view([batch_size,1,-1]), memory).squeeze(1)
+        d_t_prime = torch.bmm(attn_weights.view([batch_size, 1, -1]), memory).squeeze(1)
 
         # Residual GRU
         gru1_input = self.attn_projection(torch.cat([d_t, d_t_prime], 1))
@@ -305,7 +322,8 @@ class AttentionDecoder(nn.Module):
         bf_out = gru2_input + gru2_hidden
 
         # Output
-        output = self.out(bf_out).view(-1, hp.num_mels, hp.outputs_per_step)
+        output2 = self.out(bf_out)
+        output = output2.view(-1, hp.decoder_output_dim, hp.outputs_per_step)
 
         return output, d_t, gru1_hidden, gru2_hidden
 

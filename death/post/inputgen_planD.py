@@ -1,10 +1,13 @@
+"""
+D is different from C because it rebalances the dataset to have more death records, so that the optimal
+prediction strategy is not to output zero for all.
+"""
+
+
 from death.post.inputgen_planC import *
 
-
 # we can only assume that all deaths are recorded
-
 # torch integration reference: https://github.com/utkuozbulak/pytorch-custom-dataset-examples
-
 # This is the plan C.
 
 def get_timestep_location(earliest, dates):
@@ -29,9 +32,14 @@ def get_timestep_location(earliest, dates):
 
 
 class InputGenD(InputGen):
+    """
+    This is the third object in the python data generation pipeline.
+    This object takes a raw InputGen Dataset and changes the proportion of death records in the population, to address
+    frozen gradients.
+    """
     # inherit this class mainly so that I can reuse the code and maintain faster
-    def __init__(self, death_proportion=0.9, load_pickle=True, verbose=False, debug=False):
-        super(InputGenD, self).__init__(load_pickle=load_pickle, verbose=verbose, debug=debug)
+    def __init__(self, death_proportion=0.9, verbose=False):
+        super(InputGenD, self).__init__(verbose=verbose)
         # This is sorted
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
         no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]
@@ -48,8 +56,6 @@ class InputGenD(InputGen):
         # TODO there is a critical bug that shows that my post processing might need to be updated.
         # TODO somehow a value that is in rep_person_id+death is not appearing in earla, which means
         # TODO it does not have a record in our db.
-        # index=28119
-        # id=99102
         id = self.all_indices[index]
         return self.get_by_id(id, debug)
         # return torch.Tensor(i),torch.Tensor(o)
@@ -71,16 +77,17 @@ class GenHelper(Dataset):
         return self.length
 
 
-def train_valid_split(ds, split_fold=10, random_seed=None):
+def train_valid_split(ds, split_fold=10, random_seed=12345):
     """
     This is a pytorch generic function that takes a data.Dataset object and splits it to validation and training
     efficiently.
     This is just a factory method, nothing special. Can't believe no one ever did this for PyTorch.
 
+    You need to fix the seed so that when this object is reinitiated, no valid leaks into train.
+
     :return:
     """
 
-    
     if random_seed is None:
         np.random.seed(random_seed)
 

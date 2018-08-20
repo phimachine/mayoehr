@@ -1,9 +1,7 @@
 """
-I would like to eliminate the numerical instability here.
-I will use a stock LSTM here.
-
-Also, I'm very skeptical about the use of requires.grad=False flag.
-It certainly does not train the parameter, but does it prevent gradient from flowing through?
+8/12/2018
+Batch DNC is the model with externally stored states and batch processing timesteps on forward()
+This architecture uses the stock LSTM.
 """
 
 import torch
@@ -20,7 +18,7 @@ from os.path import abspath
 from pathlib import Path
 import pickle
 from torch.nn import LSTM
-
+from death.DNC.bnpy import BatchNorm1d
 debug = True
 
 def sv(var):
@@ -32,8 +30,7 @@ def test_simplex_bound(tensor, dim=1):
     # so that for every x, y is simplex bound
 
     if dim != 1:
-        raise DeprecationWarning("no longer accepts dim other othan one")
-        raise NotImplementedError
+        raise NotImplementedError("no longer accepts dim other othan one")
     t = tensor.contiguous()
     if (t.sum(1) - 1 > 1e-6).any() or (t.sum(1) < -1e-6).any() or (t < 0).any() or (t > 1).any():
         raise ValueError("test simplex bound failed")
@@ -41,8 +38,22 @@ def test_simplex_bound(tensor, dim=1):
         raise ValueError('test simple bound failed due to NA')
     return True
 
+class BatchNorm(nn.Module):
+    def __init__(self, channel_dim, eps=1e-5):
+        super(BatchNorm, self).__init__()
+        self.eps=Variable(torch.Tensor([eps])).cuda()
+        self.lin=nn.Linear(channel_dim, channel_dim)
 
-class Frankenstein(nn.Module):
+    def forward(self, input):
+        # assume that the tensor is (batch, channels)
+        mbmean=torch.mean(input, dim=0, keepdim=True)
+        mbvar=torch.var(input, dim=0, keepdim=True)
+        new_input=(input-mbmean)*torch.rsqrt(mbvar+self.eps)
+        output=self.lin(new_input)
+
+        return output
+
+class BatchDNC(nn.Module):
     def __init__(self,
                  x=47764,
                  h=128,
@@ -51,12 +62,9 @@ class Frankenstein(nn.Module):
                  W=32,
                  R=8,
                  N=512,
-                 bs=1,
-                 reset=True,
-                 palette=False):
-        super(Frankenstein, self).__init__()
+                 bs=1):
+        super(BatchDNC, self).__init__()
 
-        self.reset=reset
         # debugging usages
         self.last_state_dict=None
 
@@ -72,159 +80,143 @@ class Frankenstein(nn.Module):
         self.E_t = W * R + 3 * W + 5 * R + 3
 
         '''CONTROLLER'''
-        self.ctrl=Controller(x, R, W, h, L)
-        self.state_tuple=None
         # self.RNN_list = nn.ModuleList()
         # for _ in range(self.L):
-        #     self.RNN_list.append(RNN_Unit(self.x, self.R, self.W, self.h, self.bs))
-        # self.hidden_previous_timestep = Parameter(torch.Tensor(self.bs, self.L, self.h).cuda(), requires_grad=False)
+        #     self.RNN_list.append(LSTM_Unit(self.x, self.R, self.W, self.h, self.bs))
         self.W_y = Parameter(torch.Tensor(self.L * self.h, self.v_t).cuda())
         self.W_E = Parameter(torch.Tensor(self.L * self.h, self.E_t).cuda())
-        self.b_y = Parameter(torch.Tensor(self.v_t).cuda())
-        self.b_E = Parameter(torch.Tensor(self.E_t).cuda())
+        self.controller=Stock_LSTM(self.x, self.R, self.W, self.h, self.L, self.v_t)
+
+        '''COMPUTER'''
+        self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
+        # print("Using 0.4.1 PyTorch BatchNorm1d")
+        self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
+        self.reset_parameters()
+
+        '''States'''
+        self.hidden_previous_timestep=None
+        self.precedence_weighting=None
+        self.temporal_memory_linkage=None
+        self.memory=None
+        self.last_read_weightings=None
+        self.last_usage_vector=None
+        self.last_write_weighting=None
+        self.last_read_vector=None
+        self.not_first_t_flag=None
+
+
+    def init_states_each_channel(self):
+
+        '''CONTROLLER'''
 
         '''MEMORY'''
         # p, (N), should be simplex bound
-        self.precedence_weighting = Variable(torch.Tensor(self.bs, self.N).cuda())
+        precedence_weighting = Variable(torch.Tensor(1, self.N).cuda()).zero_()
         # (N,N)
-        self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N)).cuda()
+        temporal_memory_linkage = Variable(torch.Tensor(1, self.N, self.N).cuda()).zero_()
         # (N,W)
-        self.memory = Variable(torch.Tensor(self.N, self.W).cuda())
+        stdv = 1.0 / math.sqrt(self.W)
+        memory = Variable(torch.Tensor(1, self.N, self.W).cuda().uniform_(-stdv,stdv))
         # (N, R).
-        self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).cuda())
+        last_read_weightings = Variable(torch.Tensor(1, self.N, self.R).cuda()).zero_()
         # u_t, (N)
-        self.last_usage_vector = Variable(torch.Tensor(self.bs, self.N).cuda())
+        last_usage_vector = Variable(torch.Tensor(1, self.N).cuda()).zero_()
         # store last write weightings for the calculation of usage vector
-        self.last_write_weighting = Variable(torch.Tensor(self.bs, self.N)).cuda()
-
-        self.palette=None
-        if palette:
-            stdv=1.0
-            self.memory.data.uniform_(-stdv,stdv)
-            self.palette=palette
-            self.initialz=self.memory.data
-
-        self.first_t_flag=True
+        last_write_weighting = Variable(torch.Tensor(1, self.N).cuda()).zero_()
 
         '''COMPUTER'''
-        self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).cuda())
-        self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
+        # needs to be initialized, otherwise throw NAN on first forward pass
+        last_read_vector = Variable(torch.Tensor(1, self.W, self.R).cuda()).zero_()
 
-        self.reset_parameters()
+        '''Second pass initiaion purpose'''
+        not_first_t_flag = Variable(torch.Tensor(1, 1).cuda()).zero_().zero_()
+
+        '''LSTM states'''
+        # for lstm in self.RNN_list:
+        #     states_list+=lstm.init_states_each_channel()
+        h=Variable(torch.Tensor(self.L, 1, self.h)).zero_().cuda()
+        c=Variable(torch.Tensor(self.L, 1, self.h)).zero_().cuda()
+
+        states_tuple=(precedence_weighting, temporal_memory_linkage, memory,
+                     last_read_weightings, last_usage_vector,last_write_weighting,
+                     last_read_vector, not_first_t_flag, h, c)
+
+        return states_tuple
 
     def reset_parameters(self):
         # if debug:
         #     print("parameters are reset")
         '''Controller'''
-        self.ctrl.reset_parameters()
         # for module in self.RNN_list:
         #     # this should iterate over RNN_Units only
         #     module.reset_parameters()
         # self.hidden_previous_timestep.zero_()
-        self.state_tuple=None
+        # # this breaks graph, only allowed on initializationf
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_y.data.uniform_(-stdv, stdv)
-        self.b_y.data.uniform_(-stdv, stdv)
         stdv = 1.0 / math.sqrt(self.E_t)
         self.W_E.data.uniform_(-stdv, stdv)
-        self.b_E.data.uniform_(-stdv, stdv)
-
-        '''Memory'''
-        self.precedence_weighting.zero_()
-        self.last_usage_vector.zero_()
-        self.last_read_weightings.zero_()
-        self.last_write_weighting.zero_()
-        self.temporal_memory_linkage.zero_()
-        # memory must be initialized like this, otherwise usage vector will be stuck at zero.
-        stdv=1.0
-        self.memory.data.uniform_(-stdv,stdv)
-        self.first_t_flag=True
+        self.controller.reset_parameters()
 
         '''Computer'''
-        # see paper, paragraph 2 page 7
-        self.last_read_vector.zero_()
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_r.data.uniform_(-stdv, stdv)
 
-    def new_sequence_reset(self):
+    def assign_states_tuple(self,states_tuple):
         '''
-        The biggest question is whether to reset memory every time a new sequence is taken in.
-        My take is to not reset the memory, but this might not be the best strategy there is.
-        If memory is not reset at each new sequence, then we should not reset the memory at all?
+        This function needs to be called before every forward()
+
+        :param states_tuple: packed state tuple
         :return:
         '''
-        # if debug:
-        #     print('new sequence reset')
-        '''controller'''
-        self.state_tuple=None
-        # for RNN in self.RNN_list:
-        #     RNN.new_sequence_reset()
-        self.W_y = Parameter(self.W_y.data)
-        self.b_y = Parameter(self.b_y.data)
-        self.W_E = Parameter(self.W_E.data)
-        self.b_E = Parameter(self.b_E.data)
+        # at this point, all the state tuples must be concatenated on batch dimension
+        # pass to self so that we don't need to modify other functions.
 
-        '''memory'''
+        self.precedence_weighting, self.temporal_memory_linkage, self.memory, \
+        self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
+        self.last_read_vector, self.not_first_t_flag\
+            = states_tuple[:8]
+        # 9 is h 10 is c
+        # each is (num_layers * num_directions, batch, hidden_size)
+        self.controller.assign_states_tuple(states_tuple[8:10])
+        # for i in range(self.L):
+        #     i.assign_states_tuple(states_tuple[9+2*i:11+2*i])
 
-        if self.reset:
-            if self.palette:
-                self.memory= Variable(initialz)
-            else:
-                # we will reset the memory altogether.
-                # TODO The question is, should we reset the memory to a fixed state? There are good arguments for it.
-                stdv = 1.0
-                # gradient should not carry over, since at this stage, requires_grad on this parameter should be False.
-                self.memory = Variable(torch.Tensor(self.N, self.W).cuda().uniform_(-stdv, stdv))
-                # TODO is there a reason to reinitialize the parameter object? I don't think so. The graph is not carried over.
-            #
-            # self.last_usage_vector.zero_()
-            # self.precedence_weighting.zero_()
-            # self.temporal_memory_linkage.zero_()
-            # self.last_read_weightings.zero_()
-            # self.last_write_weighting.zero_()
-
-            self.last_usage_vector = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
-            self.precedence_weighting = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
-            self.temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N).zero_().cuda())
-            self.last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).zero_().cuda())
-            self.last_write_weighting = Variable(torch.Tensor(self.bs, self.N).zero_().cuda())
-
-        self.first_t_flag=True
-
-        '''computer'''
-        self.last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).zero_().cuda())
-        self.W_r = Parameter(self.W_r.data)
 
     def forward(self, input):
         if (input!=input).any():
             raise ValueError("We have NAN in inputs")
-        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, -1).unsqueeze(1)), dim=2)
 
+        # dimension 42067 for all channels report NAN
+        # train.mother.lab
+        input=input.squeeze(1)
+
+        try:
+            bnout=self.bn(input)
+            if (input != input).any():
+                raise ValueError("We have NAN after batch normalization")
+        except ValueError:
+            print("reinitialize batch norm")
+            self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
+            bnout=self.bn(input)
+
+        input=bnout.unsqueeze(1)
+
+
+        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
+        if (input_x_t!=input_x_t).any():
+            raise ValueError("We have NAN in last read vector")
         '''Controller'''
-        _, st=self.ctrl(input_x_t, self.state_tuple)
-
-        h, c = st
-        # permute to (batch, num_layers \* num_directions, hidden_size)
-        flat_hidden=h.permute(1, 0, 2)
-        flat_hidden=flat_hidden.view(self.bs, -1)
-        output=torch.matmul(flat_hidden, self.W_y)
+        _, st=self.controller(input_x_t)
+        if (input_x_t!=input_x_t).any():
+            raise ValueError("We have NAN in LSTM outputs")
+        h, c= st
+        # was (num_layers, batch, hidden_size)
+        hidden=h.permute(1,0,2)
+        flat_hidden = hidden.contiguous().view((self.bs, self.L * self.h))
+        vt = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
-        self.hidden_previous_timestep = h
-        self.state_previous_timestep = c
-        # hidden_previous_layer = Variable(torch.Tensor(self.bs, self.h).zero_().cuda())
-        # hidden_this_timestep = Variable(torch.Tensor(self.bs, self.L, self.h).cuda())
-        # for i in range(self.L):
-        #     hidden_output = self.RNN_list[i](input_x_t, self.hidden_previous_timestep[:, i, :],
-        #                                      hidden_previous_layer)
-        #     if (hidden_output!=hidden_output).any():
-        #         raise ValueError("We have NAN in controller output.")
-        #     hidden_this_timestep[:, i, :] = hidden_output
-        #     hidden_previous_layer = hidden_output
-        #
-        # flat_hidden = hidden_this_timestep.view((self.bs, self.L * self.h))
-        # output = torch.matmul(flat_hidden, self.W_y)
-        # interface_input = torch.matmul(flat_hidden, self.W_E)
-        # self.hidden_previous_timestep = Parameter(hidden_this_timestep.data,requires_grad=False)
+        # self.hidden_previous_timestep = h
 
         '''interface'''
         last_index = self.W * self.R
@@ -294,7 +286,7 @@ class Frankenstein(nn.Module):
         self.update_temporal_linkage_matrix(write_weighting)
         self.update_precedence_weighting(write_weighting)
 
-        forward_weighting = self.forward_weighting()
+        forward_weighting = self_weighting()
         backward_weighting = self.backward_weighting()
 
         read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,
@@ -306,26 +298,25 @@ class Frankenstein(nn.Module):
             # this is a problem! TODO
             raise ValueError("nan is found.")
 
-
-
         '''back to computer'''
-        output2 = output + torch.matmul(read_vector.view(self.bs, self.W * self.R), self.W_r)
+        yt = vt + torch.matmul(read_vector.view(self.bs, self.W * self.R), self.W_r)
 
         # update the last weightings
         self.last_read_vector=read_vector
         self.last_read_weightings = read_weightings
         self.last_write_weighting = write_weighting
 
-
-        self.first_t_flag=False
-
         if debug:
             test_simplex_bound(self.last_read_weightings)
             test_simplex_bound(self.last_write_weighting)
-            if (output2 != output2).any():
+            if (yt != yt).any():
                 raise ValueError("nan is found.")
 
-        return output2
+        states_tuple=(self.precedence_weighting, self.temporal_memory_linkage, \
+                      self.memory, self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
+                      self.last_read_vector, self.not_first_t_flag, h, c)
+
+        return yt, states_tuple
 
     def write_content_weighting(self, write_key, key_strength, eps=1e-8):
         '''
@@ -341,15 +332,16 @@ class Frankenstein(nn.Module):
         # write_key will be (bs, W)
         # I expect a return of (N,bs), which marks the similiarity of each W with each mem loc
 
+        write_key=write_key.unsqueeze(1)
         # (self.bs, self.N)
-        innerprod = torch.matmul(write_key, self.memory.t())
-        # (parm.N)
-        memnorm = torch.norm(self.memory, 2, 1)
-        # (self.bs)
-        writenorm = torch.norm(write_key, 2, 1)
-        # (self.N, self.bs)
-        normalizer = torch.ger(memnorm, writenorm)
-        similarties = innerprod / normalizer.t().clamp(min=eps)
+        innerprod = torch.matmul(write_key, self.memory.transpose(1,2)).squeeze(1)
+        # (self.bs, parm.N)
+        memnorm = torch.norm(self.memory, 2, 2)
+        # (self.bs, 1)
+        writenorm = torch.norm(write_key, 2, 2)
+        # (self.bs, self.N)
+        normalizer = memnorm*writenorm
+        similarties = innerprod / normalizer.clamp(min=eps)
         similarties = similarties * key_strength.expand(-1, self.N)
         normalized = softmax(similarties, dim=1)
         if debug:
@@ -378,21 +370,20 @@ class Frankenstein(nn.Module):
                 return w12 / (w1 * w2).clamp(min=eps)
         '''
 
-        innerprod = torch.matmul(self.memory.unsqueeze(0), read_keys)
-        # this is confusing. matrix[n] access nth row, not column
-        # this is very counter-intuitive, since columns have meaning,
-        # because they represent vectors
-        mem_norm = torch.norm(self.memory, p=2, dim=1)
+        # (bs, N, R)
+        innerprod = torch.matmul(self.memory, read_keys)
+        mem_norm = torch.norm(self.memory, p=2, dim=2)
         read_norm = torch.norm(read_keys, p=2, dim=1)
-        mem_norm = mem_norm.unsqueeze(1)
+        mem_norm = mem_norm.unsqueeze(2)
         read_norm = read_norm.unsqueeze(1)
-        # (batch_size, locations, read_heads)
+        # (bs, N, R)
         normalizer = torch.matmul(mem_norm, read_norm)
 
         # if transposed then similiarities[0] refers to the first read key
         similarties = innerprod / normalizer.clamp(min=eps)
-        weighted = similarties * key_strengths.unsqueeze(1).expand(-1, self.N, -1)
+        weighted = similarties * key_strengths.unsqueeze(1)
         ret = softmax(weighted, dim=1)
+        # (bs, N, R)
         return ret
 
     # the highest freed will be retained? What does it mean?
@@ -419,19 +410,15 @@ class Frankenstein(nn.Module):
         :param memory_retention: \psi_t, (N), simplex bound
         :return: u_t, (N), [0,1], the next usage
         '''
-        if self.first_t_flag:
-            ret = Parameter(torch.Tensor(self.bs, self.N).zero_().cuda(), requires_grad=False)
-            return ret
-        ret = (self.last_usage_vector + self.last_write_weighting - self.last_usage_vector * self.last_write_weighting) \
+        usage_vector = (self.last_usage_vector + self.last_write_weighting - self.last_usage_vector * self.last_write_weighting) \
               * memory_retention
-
-        # Here we should use .data instead? Like:
-        # self.usage_vector.data=ret.data
-        # Usage vector contain all computation history,
-        # which is not necessary? I'm not sure, maybe the write weighting should be back_propped here?
-        # We reset usage vector for every seq, but should we for every timestep?
-        self.last_usage_vector = ret
-        return ret
+        # if first_t, then usage_vector is asserted to be zero
+        if (usage_vector != usage_vector).any():
+            raise ValueError("NA found in usage vector, not first t flag reset behavior not certain")
+        expandf = self.not_first_t_flag.expand(self.bs, self.N)
+        usage_vector = usage_vector * expandf
+        self.last_usage_vector=usage_vector
+        return usage_vector
 
     def allocation_weighting(self):
         '''
@@ -506,33 +493,30 @@ class Frankenstein(nn.Module):
         :return: updated_temporal_linkage_matrix
         '''
 
-        # TODO We need to mathematically understand why this function will
-        # TODO maintain the simplex bound condition.
-        if self.first_t_flag:
-            return self.temporal_memory_linkage
+        ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
+        ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
+        p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
+        # batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(-1, -1)
+        newtml = (1 - ww_j - ww_i) * self.temporal_memory_linkage + ww_i * p_j
+        is_cuda = ww_j.is_cuda
+        if is_cuda:
+            idx = torch.arange(0, self.N, out=torch.cuda.LongTensor())
         else:
-            ww_j = write_weighting.unsqueeze(1).expand(-1, self.N, -1)
-            ww_i = write_weighting.unsqueeze(2).expand(-1, -1, self.N)
-            p_j = self.precedence_weighting.unsqueeze(1).expand(-1, self.N, -1)
-            batch_temporal_memory_linkage = self.temporal_memory_linkage.expand(self.bs, -1, -1)
-            newtml = (1 - ww_j - ww_i) * batch_temporal_memory_linkage + ww_i * p_j
-            is_cuda= ww_j.is_cuda
-            if is_cuda:
-                ### WHAT IS THIS?
-                idx = torch.arange(0, self.N, out=torch.cuda.LongTensor())
-            else:
-                idx = torch.arange(0, self.N, out=torch.LongTensor())
-            newtml[:,idx,idx]=0
-            if debug:
-                try:
-                    test_simplex_bound(newtml, 1)
-                    test_simplex_bound(newtml.transpose(1, 2), 1)
-                except ValueError:
-                    traceback.print_exc()
-                    print("precedence close to one?", self.precedence_weighting.sum()>1)
-                    raise
-            self.temporal_memory_linkage=newtml
-            return self.temporal_memory_linkage
+            idx = torch.arange(0, self.N, out=torch.LongTensor())
+        newtml[:, idx, idx] = 0
+        if debug:
+            try:
+                test_simplex_bound(newtml, 1)
+                test_simplex_bound(newtml.transpose(1, 2), 1)
+            except ValueError:
+                traceback.print_exc()
+                print("precedence close to one?", precedence_weighting.sum() > 1)
+                raise
+
+        expandf = self.not_first_t_flag.unsqueeze(2).expand(self.bs, self.N, self.N)
+        # force to be zero
+        newtml = newtml * expandf
+        self.temporal_memory_linkage=newtml
 
     def backward_weighting(self):
         '''
@@ -540,7 +524,7 @@ class Frankenstein(nn.Module):
         '''
         ret = torch.matmul(self.temporal_memory_linkage, self.last_read_weightings)
         if debug:
-            test_simplex_bound(ret, 1)
+            test_simplex_bound(ret.permute(0,2,1), 1)
         return ret
 
     def forward_weighting(self):
@@ -550,7 +534,7 @@ class Frankenstein(nn.Module):
         '''
         ret = torch.matmul(self.temporal_memory_linkage.transpose(1, 2), self.last_read_weightings)
         if debug:
-            test_simplex_bound(ret, 1)
+            test_simplex_bound(ret.permute(0,2,1))
         return ret
 
     # TODO sparse update, skipped because it's for performance improvement.
@@ -601,7 +585,8 @@ class Frankenstein(nn.Module):
         :return: read_vectors: [r^i_R], (W,R)
         '''
 
-        return torch.matmul(self.memory.t(), read_weightings)
+        ret= torch.matmul(self.memory.transpose(1,2), read_weightings)
+        return ret
 
     def write_to_memory(self, write_weighting, erase_vector, write_vector):
         '''
@@ -613,52 +598,62 @@ class Frankenstein(nn.Module):
         '''
         term1_2 = torch.matmul(write_weighting.unsqueeze(2), erase_vector.unsqueeze(1))
         # term1=self.memory.unsqueeze(0)*Variable(torch.ones((self.bs,self.N,self.W)).cuda()-term1_2.data)
-        term1 = self.memory.unsqueeze(0) * (1 - term1_2)
+        term1 = self.memory * (1 - term1_2)
         term2 = torch.matmul(write_weighting.unsqueeze(2), write_vector.unsqueeze(1))
-        self.memory = torch.mean(term1 + term2, dim=0)
+        self.memory = term1 + term2
 
-class Controller(nn.Module):
-    def __init__(self, x, R, W, h, L):
-        super(Controller, self).__init__()
+
+class Stock_LSTM(nn.Module):
+    """
+    I prefer using this Stock LSTM for numerical stability. The performance, however, is inferior.
+    """
+    def __init__(self, x, R, W, h, L, v_t):
+        super(Stock_LSTM, self).__init__()
 
         self.x = x
         self.R = R
         self.W = W
         self.h = h
         self.L = L
+        self.v_t= v_t
 
         self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
                        dropout=True)
+        self.last=nn.Linear(self.h, self.v_t)
+        self.st=None
 
-    def forward(self, input_x, state_tuple):
+    def forward(self, input_x):
         """
-
         :param input_x: input and memory values
-        :param state_tuple: hidden and state
         :return:
         """
-        if state_tuple is None:
-            return self.LSTM(input_x)
-        else:
-            return self.LSTM(input_x, state_tuple)
+        assert self.st is not None
+        o, st = self.LSTM(input_x, self.st)
+        if (st[0]!=st[0]).any():
+            with open("debug/lstm.pkl") as f:
+                pickle.dump(self, f)
+            with open("debug/lstm.pkl") as f:
+                pickle.dump(input_x, f)
+            raise ("LSTM produced a NAN, objects dumped.")
+        return self.last(o), st
 
     def reset_parameters(self):
         self.LSTM.reset_parameters()
+        self.last.reset_parameters()
 
-    def new_sequence_reset(self):
-        for p in self.LSTM.parameters():
-            p=p.detach()
+    def assign_states_tuple(self, states_tuple):
+        self.st=states_tuple
+
+# the problem seems to be in the RNN Unit.
+# we exchange the RNN units and one has memory overflow, the other has convergence issues.
 #
-# # the problem seems to be in the RNN Unit.
-# # we exchange the RNN units and one has memory overflow, the other has convergence issues.
-#
-# class RNN_Unit(nn.Module):
+# class LSTM_Unit(nn.Module):
 #     """
-#     A single unit of deep RNN
+#     A single layer unit of LSTM
 #     """
 #
-#     def __init__(self, x, R, W, h, L):
-#         super(RNN_Unit, self).__init__()
+#     def __init__(self, x, R, W, h, bs):
+#         super(LSTM_Unit, self).__init__()
 #
 #         self.x = x
 #         self.R = R
@@ -671,7 +666,7 @@ class Controller(nn.Module):
 #         self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
 #         self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
 #
-#         self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+#         self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
 #
 #     def reset_parameters(self):
 #         for module in self.children():
@@ -694,15 +689,20 @@ class Controller(nn.Module):
 #
 #         return new_hidden
 #
-#     def new_sequence_reset(self):
-#         # is detach in place?
-#         self.W_input.weight.detach()
-#         self.W_input.bias.detach()
-#         self.W_output.weight.detach()
-#         self.W_output.bias.detach()
-#         self.W_forget.weight.detach()
-#         self.W_forget.bias.detach()
-#         self.W_state.weight.detach()
-#         self.W_state.bias.detach()
 #
-#         self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
+#     def reset_batch_channel(self,list_of_channels):
+#         raise NotImplementedError()
+#     #
+#     # def new_sequence_reset(self):
+#     #     raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
+#     #
+#     #     self.W_input.weight.detach()
+#     #     self.W_input.bias.detach()
+#     #     self.W_output.weight.detach()
+#     #     self.W_output.bias.detach()
+#     #     self.W_forget.weight.detach()
+#     #     self.W_forget.bias.detach()
+#     #     self.W_state.weight.detach()
+#     #     self.W_state.bias.detach()
+#     #
+#     #     self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)

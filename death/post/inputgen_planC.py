@@ -1,4 +1,4 @@
-from death.post.qdata import *
+from death.post.dfmanager import *
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd
@@ -37,15 +37,17 @@ def get_timestep_location(earliest, dates):
 # multiple inheritance
 class InputGen(Dataset, DFManager):
     '''
-    take a data frame manager object and produce inputs wrapped in torch objects
+    This is the second object in the python data generation pipeline
+    Take a data frame manager object and produce inputs wrapped in torch objects through Dataset interface
+    See get_by_id()
     '''
 
-    def __init__(self, load_pickle=True, verbose=False, debug=False):
+    def __init__(self, verbose=False):
         super(InputGen, self).__init__()
         self.load_pickle(verbose=verbose)
         self.rep_person_id = self.demo.index.values
         self.verbose = verbose
-        # 46872
+        # 47774
         # TODO we need to exploit the structured codes and augment inputs
         self.input_dim = None
         # manual format: (dfname,colname,starting_index)
@@ -57,6 +59,7 @@ class InputGen(Dataset, DFManager):
         self.earla = pd.read_csv("/infodev1/rep/projects/jason/earla.csv", parse_dates=["earliest", "latest"])
         self.earla.set_index("rep_person_id", inplace=True)
         self.len = len(self.rep_person_id)
+        self.check_nan()
         print("Input Gen initiated")
 
     def get_output_dim(self):
@@ -354,6 +357,17 @@ class InputGen(Dataset, DFManager):
         print("performance probe finished")
         print("speed is now 3x faster")
 
+    def check_nan(self):
+        # this function checks all data frames and ensure that there is no nan anywhere.
+        print("checking if there is nan in any of the dataframes")
+        for dfn in self.dfn:
+            df=self.__getattribute__(dfn)
+            if df.isnull().values.any():
+                print("NA found in dataframe", dfn)
+                print(df.isna().any())
+
+        return
+
 class GenHelper(Dataset):
     def __init__(self, mother, length, mapping):
         # here is a mapping from this index to the mother ds index
@@ -420,7 +434,7 @@ def oldmain():
 
 
 if __name__ == "__main__":
-    ig = InputGen(load_pickle=True, verbose=False)
+    ig = InputGen()
     train,valid=train_valid_split(ig)
     traindl=DataLoader(dataset=train,batch_size=1)
     validdl=DataLoader(dataset=valid,batch_size=1)

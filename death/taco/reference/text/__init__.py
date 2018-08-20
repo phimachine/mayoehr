@@ -1,8 +1,8 @@
 #-*- coding: utf-8 -*-
 
 import re
-from Tacotron.text import cleaners
-from Tacotron.text.symbols import symbols
+from death.taco.reference.text import cleaners
+from death.taco.reference.text.symbols import symbols
 
 
 

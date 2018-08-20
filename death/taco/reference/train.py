@@ -1,5 +1,6 @@
-from network import *
-from data import get_dataset, DataLoader, collate_fn, get_param_size
+import pandas as pd
+from death.taco.reference.network import *
+from death.taco.reference.data import get_dataset, DataLoader, collate_fn, get_param_size
 from torch import optim
 import numpy as np
 import argparse
@@ -80,7 +81,7 @@ def main(args):
                 linear_spectrogram = Variable(torch.from_numpy(data[1]).type(torch.FloatTensor), requires_grad=False)
 
             # Forward
-            mel_output, linear_output = model.forward(characters, mel_input)
+            mel_output, linear_output = model(characters, mel_input)
 
             # Calculate loss
             mel_loss = criterion(mel_output, mel_spectrogram)

@@ -1,9 +1,6 @@
 # from death.DNC.trainerD2 import *
-from death.DNC.notmysamtrainer import *
-import os
-from shutil import copy
+from death.DNC.trashcan.notmysamtrainer import *
 import traceback
-import datetime
 
 if __name__ == "__main__":
 

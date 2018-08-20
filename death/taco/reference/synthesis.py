@@ -1,12 +1,12 @@
 #-*- coding: utf-8 -*-
 
-from network import *
-from data import inv_spectrogram, find_endpoint, save_wav, spectrogram
+from death.taco.reference.network import *
+from death.taco.reference.data import inv_spectrogram, find_endpoint, save_wav, spectrogram
 import numpy as np
 import argparse
 import os, sys
 import io
-from text import text_to_sequence
+from death.taco.reference.text import text_to_sequence
 
 use_cuda = torch.cuda.is_available()
 
@@ -71,7 +71,7 @@ def generate(model, text):
     mel_input = Variable(torch.from_numpy(mel_input).type(torch.cuda.FloatTensor), volatile=True).cuda()
 
     # Spectrogram to wav
-    _, linear_output = model.forward(characters, mel_input)
+    _, linear_output = model(characters, mel_input)
     wav = inv_spectrogram(linear_output[0].data.cpu().numpy())
     wav = wav[:find_endpoint(wav)]
     out = io.BytesIO()
