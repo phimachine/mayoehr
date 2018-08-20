@@ -1,0 +1,3 @@
+embedding_size=128
+input_size=47774
+hidden_size=256
