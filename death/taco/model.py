@@ -58,34 +58,40 @@ class Encoder(nn.Module):
 
         return memory
 
+
 class MelDecoder(nn.Module):
     """
     Decoder
     """
     def __init__(self):
         super(MelDecoder, self).__init__()
-        self.prenet = Prenet(hp.num_mels, hp.hidden_size * 2, hp.hidden_size)
+        self.prenet = SecondPrenet(hp.decoder_output_dim, hp.hidden_size * 2, hp.hidden_size)
         self.attn_decoder = AttentionDecoder(hp.hidden_size * 2)
 
-    def forward(self, decoder_input, memory):
+    def forward(self, memory):
 
         # Initialize hidden state of GRUcells
-        attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder.inithidden(decoder_input.size()[0])
+        attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder.inithidden(memory.size()[0])
         outputs = list()
 
         # Training phase
         if self.training:
-            # Prenet
-            dec_input = self.prenet(decoder_input)
-            timesteps = dec_input.size()[2] // hp.outputs_per_step
-
-            # [GO] Frame
-            # [batch, 2*hidden]
-            prev_output = dec_input[:, :, 0]
+            # # Prenet
+            # dec_input = self.prenet(decoder_input)
+            timesteps = memory.size()[1] // hp.outputs_per_step
+            #
+            # # [GO] Frame
+            # # [batch, 2*hidden]
+            # prev_output = dec_input[:, :, 0]
+            prev_output = Variable(torch.zeros(memory.shape[0], hp.decoder_output_dim)).cuda()
 
             for i in range(timesteps):
+
                 # on the paper, the previous output passes through prenet every loop
                 # here it does not.
+                # I made a new prenet so that it can be passed through
+                prev_output = self.prenet(prev_output)
+
                 # attn_hidden and all gru_hidden are all the same.
                 # the RNN takes the prev decoder output, processes it, then directly put it against memory for attention
                 prev_output, attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder(prev_output, memory,
@@ -93,6 +99,7 @@ class MelDecoder(nn.Module):
                                                                                              gru1_hidden=gru1_hidden,
                                                                                              gru2_hidden=gru2_hidden)
 
+                # (batch_num, hidden, outputs_per_step)
                 outputs.append(prev_output)
                 '''
                 # what is this line? default param is 100%
@@ -110,14 +117,14 @@ class MelDecoder(nn.Module):
                     # Get last output
                     prev_output = prev_output[:, :, -1]
                 '''
+                # this is the r=3 and taking the last one. as in paper
                 prev_output=prev_output[:,:,-1]
-                print("loop")
             # Concatenate all mel spectrogram
             outputs = torch.cat(outputs, 2)
 
         else:
             # [GO] Frame
-            prev_output = decoder_input
+            prev_output = Variable(torch.zeros(memory.shape[0], hp.decoder_output_dim)).cuda()
 
             for i in range(hp.max_iters):
                 prev_output = self.prenet(prev_output)
@@ -144,13 +151,15 @@ class PostProcessingNet(nn.Module):
                              K=8,
                              projection_size=hp.decoder_output_dim,
                              is_post=True)
+        # here is a modification.
+        # we take max directly
         self.linear = SeqLinear(hp.hidden_size * 2,
-                                hp.num_freq)
+                                hp.target_size)
 
     def forward(self, input_):
         out = self.postcbhg(input_)
         out = self.linear(torch.transpose(out,1,2))
-
+        out, idx = torch.max(out,dim=2)
         return out
 
 class Tacotron(nn.Module):
@@ -160,25 +169,27 @@ class Tacotron(nn.Module):
     def __init__(self):
         super(Tacotron, self).__init__()
         self.encoder = Encoder(hp.input_size,hp.embedding_size)
-        self.decoder1 = MelDecoder()
-        self.decoder2 = PostProcessingNet()
+        self.decoder = MelDecoder()
+        self.postp = PostProcessingNet()
 
-    def forward(self, characters, mel_input):
+    def forward(self, characters):
         # .forward() should never be explicitly called.
         # memory is just a character feature, with dimension of (batch, time, hidden_size*2)
         memory = self.encoder(characters)
-        mel_output = self.decoder1(mel_input, memory)
-        linear_output = self.decoder2(mel_output)
+        decoder_output = self.decoder(memory)
+        output = self.postp(decoder_output)
 
-        return mel_output, linear_output
+        return output
+
 def main():
     # because the algorithm requires time wise convolution as well as a decoder whose length is in
     # proportion to the input, we need to feed the whole time-wise sequence in the machine.
-    input=Variable(torch.rand((123,100, 47774))).cuda()
-    mel_input=Variable(torch.rand((123,1, hp.num_mels))).cuda()
+    input=Variable(torch.rand((16, 100, 47774))).cuda()
+    mel_input=Variable(torch.rand((16,1, hp.num_mels))).cuda()
     taco=Tacotron().cuda()
-    output=taco(input, mel_input)
+    output=taco(input)
     print("script finished")
+    print(output)
 
 
 if __name__=="__main__":
