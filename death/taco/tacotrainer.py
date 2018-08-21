@@ -18,6 +18,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
+from death.taco.collate import pad_collate
 
 global_exception_counter = 0
 i = None
@@ -259,16 +260,15 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 break
 
 
-def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
+def forevermain(load=False, lr=1e-3, savestr=""):
     print("Will run main() forever in a loop.")
     while True:
         try:
-            main(load, lr, savestr, reset, palette)
+            main(load, lr, savestr)
         except ValueError:
             traceback.print_exc()
 
-
-def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
+def main(load=False, lr=1e-3, savestr=""):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = lr
@@ -277,13 +277,13 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     starting_iteration = 0
     logfile = "log.txt"
 
-    num_workers = 8
+    num_workers = 2
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
-    validdl = DataLoader(dataset=validds, batch_size=1)
+    traindl = DataLoader(dataset=trainds, batch_size=2, num_workers=num_workers, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=2, collate_fn=pad_collate)
     print("Using", num_workers, "workers for training set")
     computer = Tacotron()
 
