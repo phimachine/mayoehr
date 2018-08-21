@@ -96,6 +96,39 @@ class Prenet(nn.Module):
         return out
 
 
+class SecondPrenet(nn.Module):
+    """
+    On the paper, there are two prenets. One on the character embedding, and another one the mel spectrogram
+    These two prenets function differently. So of course I need to make them separately.
+    Notably, this prenet does not apply to all time-steps.
+    """
+
+    def __init__(self, input_size, hidden_size, output_size):
+        """
+
+        :param input_size: dimension of input
+        :param hidden_size: dimension of hidden unit
+        :param output_size: dimension of output
+        """
+        super(SecondPrenet, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.layer = nn.Sequential(OrderedDict([
+            ('fc1', nn.Linear(self.input_size, self.hidden_size)),
+            ('relu1', nn.ReLU()),
+            ('dropout1', nn.Dropout(0.5)),
+            ('fc2', nn.Linear(self.hidden_size, self.output_size)),
+            ('relu2', nn.ReLU()),
+            ('dropout2', nn.Dropout(0.5)),
+        ]))
+
+    def forward(self, input_):
+        out = self.layer(input_)
+
+        return out
+
+
 class CBHG(nn.Module):
     """
     CBHG Module
@@ -308,7 +341,7 @@ class AttentionDecoder(nn.Module):
         # note how score is computed here
         attn_weights = self.v(F.tanh(keys + d_t_duplicate).view(-1, self.num_units)).view(-1, memory_len, 1)
         attn_weights = attn_weights.squeeze(2)
-        attn_weights = F.softmax(attn_weights)
+        attn_weights = F.softmax(attn_weights,dim=1)
 
         # Concatenate with original query
         d_t_prime = torch.bmm(attn_weights.view([batch_size, 1, -1]), memory).squeeze(1)
