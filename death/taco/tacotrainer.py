@@ -281,13 +281,13 @@ def main(load=False, lr=1e-3, savestr=""):
     starting_iteration = 0
     logfile = "log.txt"
 
-    num_workers = 32
+    num_workers = 16
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=16, num_workers=num_workers, collate_fn=pad_collate)
-    validdl = DataLoader(dataset=validds, batch_size=16, num_workers=num_workers, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=16, num_workers=4, collate_fn=pad_collate)
     print("Using", num_workers, "workers for training set")
     computer = Tacotron()
 
