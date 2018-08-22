@@ -38,4 +38,4 @@ input_size=47774
 hidden_size=256
 timesteps=10
 decoder_output_dim=256
-target_size=3621
+target_size=3620

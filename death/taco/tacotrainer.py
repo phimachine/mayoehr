@@ -24,6 +24,9 @@ global_exception_counter = 0
 i = None
 debug=True
 
+def sv(var):
+    return var.data.cpu().numpy()
+
 class dummy_context_mgr():
     def __enter__(self):
         return None
@@ -148,8 +151,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         # patient_output: (batch_size 1, time_length, output_dim ~4000)
         time_to_event_output = patient_output[:, 0]
         cause_of_death_output = patient_output[:, 1:]
-        time_to_event_target = target[:, 0]
-        cause_of_death_target = target[:, 1:]
+        time_to_event_target = target[:, 0, 0]
+        cause_of_death_target = target[:, 0, 1:]
 
 
         # this block will not work for batch input,
@@ -169,7 +172,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
         #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
         #     patient_loss = toe_loss/100 + cod_loss
-        patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target[:, 0, :])
+        # patient loss is always negative. Why?
+        patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
             patient_loss.backward()
@@ -277,13 +281,13 @@ def main(load=False, lr=1e-3, savestr=""):
     starting_iteration = 0
     logfile = "log.txt"
 
-    num_workers = 2
+    num_workers = 32
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=2, num_workers=num_workers, collate_fn=pad_collate)
-    validdl = DataLoader(dataset=validds, batch_size=2, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=16, num_workers=num_workers, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=16, num_workers=num_workers, collate_fn=pad_collate)
     print("Using", num_workers, "workers for training set")
     computer = Tacotron()
 
