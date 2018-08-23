@@ -36,6 +36,8 @@ class dummy_context_mgr():
 
 
 def save_model(net, optim, epoch, iteration, savestr):
+    if epoch!=0:
+        print("what is this?")
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
     if not os.path.isdir(Path(task_dir)/"saves"/savestr):
