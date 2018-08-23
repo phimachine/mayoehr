@@ -36,11 +36,13 @@ class dummy_context_mgr():
 
 
 def save_model(net, optim, epoch, iteration, savestr):
+    if epoch!=0:
+        print("what is this?")
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
     if not os.path.isdir(Path(task_dir)/"saves"/savestr):
         os.mkdir(Path(task_dir)/"saves"/savestr)
-    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/DNC_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/taco_" + str(epoch) + "_" + str(iteration) + ".pkl")
     with pickle_file.open('wb') as fhand:
         torch.save((net, optim, epoch, iteration), fhand)
     print('model saved at', pickle_file)
@@ -266,6 +268,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     print("model saved for epoch", epoch, "input", i)
             else:
                 break
+        starting_iter=0
 
 
 def forevermain(load=False, lr=1e-3, savestr=""):
@@ -278,7 +281,7 @@ def forevermain(load=False, lr=1e-3, savestr=""):
 
 def main(load=False, lr=1e-3, savestr=""):
     total_epochs = 10
-    iter_per_epoch = 100000
+    iter_per_epoch = 10000
     lr = lr
     optim = None
     starting_epoch = 0
