@@ -201,9 +201,9 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
+          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
     global global_exception_counter
-
+    valid_iterator=iter(valid)
     print_interval = 10
     val_interval = 50
     save_interval = 300
@@ -244,7 +244,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 if i % val_interval == 0:
                     for _ in range(val_batch):
                         printloss = 0
-                        (input, target, loss_type) = next(valid_iterator)
+                        try:
+                            (input, target, loss_type) = next(valid_iterator)
+                        except StopIteration:
+                            valid_iterator=iter(valid)
+                            (input, target, loss_type) = next(valid_iterator)
                         val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                    real_criterion, binary_criterion, validate=True)
                         if val_loss is not None:
@@ -286,8 +290,8 @@ def main(load=False, lr=1e-3, savestr=""):
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=16, num_workers=num_workers, collate_fn=pad_collate)
-    validdl = DataLoader(dataset=validds, batch_size=16, num_workers=4, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=4, collate_fn=pad_collate)
     print("Using", num_workers, "workers for training set")
     computer = Tacotron()
 
@@ -313,9 +317,9 @@ def main(load=False, lr=1e-3, savestr=""):
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
+          traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
 
 if __name__ == "__main__":
-    main()
+    main(load=True)

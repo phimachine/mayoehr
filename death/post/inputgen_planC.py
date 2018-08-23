@@ -217,7 +217,10 @@ class InputGen(Dataset, DFManager):
                 # no na testing, I tested it in R
                 # if cod==cod and und==und:
                 dic = self.__getattribute__("death_code_dict")
-                idx = dic[code]
+                try:
+                    idx = dic[code]
+                except KeyError:
+                    idx = dic["0"]
                 insidx += [1 + idx]
                 if underlying:
                     insidx += [self.underlying_code_location + idx]

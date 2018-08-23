@@ -71,7 +71,11 @@ class GenHelper(Dataset):
         self.mother = mother
 
     def __getitem__(self, index):
-        return self.mother[self.mapping[index]]
+        try:
+            '''There seems to be a key error. Not sure which key it is.'''
+            return self.mother[self.mapping[index]]
+        except KeyError:
+            raise
 
     def __len__(self):
         return self.length
