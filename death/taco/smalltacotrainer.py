@@ -36,13 +36,11 @@ class dummy_context_mgr():
 
 
 def save_model(net, optim, epoch, iteration, savestr):
-    if epoch!=0:
-        print("what is this?")
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    if not os.path.isdir(Path(task_dir)/"saves"/savestr):
-        os.mkdir(Path(task_dir)/"saves"/savestr)
-    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/taco_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    if not os.path.isdir(Path(task_dir)/"smalltacosaves"/savestr):
+        os.mkdir(Path(task_dir)/"smalltacosaves"/savestr)
+    pickle_file = Path(task_dir).joinpath("smalltacosaves/" + savestr + "/smalltaco_" + str(epoch) + "_" + str(iteration) + ".pkl")
     with pickle_file.open('wb') as fhand:
         torch.save((net, optim, epoch, iteration), fhand)
     print('model saved at', pickle_file)
@@ -50,7 +48,7 @@ def save_model(net, optim, epoch, iteration, savestr):
 
 def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "saves" / savestr
+    save_dir = Path(task_dir) / "smalltacosaves" / savestr
     highestepoch = 0
     highestiter = 0
     for child in save_dir.iterdir():
@@ -70,7 +68,7 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
     pickle_file = Path(task_dir).joinpath(
-        "saves/" + savestr + "/DNC_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+        "smalltacosaves/" + savestr + "/smalltaco_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at",pickle_file)
     with pickle_file.open('rb') as pickle_file:
         computer, optim, epoch, iteration = torch.load(pickle_file)
@@ -133,22 +131,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
 
-        # we have no critical index, becuase critical index are those timesteps that
-        # DNC is required to produce outputs. This is not the case for our project.
-        # criterion does not need to be reinitiated for every story, because we are not using a mask
-
         patient_output=computer(input)
-
-
-        # time_length = input.size()[1]
-        # # with torch.no_grad if validate else dummy_context_mgr():
-        # patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
-        # for timestep in range(time_length):
-        #     # first colon is always size 1
-        #     feeding = input[:, timestep, :].unsqueeze(1)
-        #     output = computer(feeding)
-        #     assert not (output != output).any()
-        #     patient_output[0, timestep, :] = output
 
         # patient_output: (batch_size 1, time_length, output_dim ~4000)
         time_to_event_output = patient_output[:, 0]
@@ -156,25 +139,6 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         time_to_event_target = target[:, 0, 0]
         cause_of_death_target = target[:, 0, 1:]
 
-
-        # this block will not work for batch input,
-        # you should modify it so that the loss evaluation is not determined by logic but function.
-        # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
-        #
-        # if loss_type[0] == 0:
-        #     # in record
-        #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
-        # else:
-        #     # not in record
-        #     # be careful with the sign, penalize when and only when positive
-        #     underestimation = time_to_event_target - time_to_event_output
-        #     underestimation = nn.functional.relu(underestimation)
-        #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
-        # patient loss is always negative. Why?
         patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
@@ -207,7 +171,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     global global_exception_counter
     valid_iterator=iter(valid)
     print_interval = 10
-    val_interval = 50
+    val_interval = 100
     save_interval = 300
     target_dim = None
     rldmax_len = 50
@@ -286,14 +250,14 @@ def main(load=False, lr=1e-3, savestr=""):
     optim = None
     starting_epoch = 0
     starting_iteration = 0
-    logfile = "log.txt"
+    logfile = "smalltacolog.txt"
 
-    num_workers = 16
+    num_workers = 32
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=32, num_workers=num_workers, collate_fn=pad_collate)
     validdl = DataLoader(dataset=validds, batch_size=8, num_workers=4, collate_fn=pad_collate)
     print("Using", num_workers, "workers for training set")
     computer = Tacotron()
@@ -326,10 +290,3 @@ def main(load=False, lr=1e-3, savestr=""):
 
 if __name__ == "__main__":
     main(load=True)
-
-"""
-Training was run for 10 hours, for 10 epochs.
-The performance however, is not so good. In the end the moving average loss is around the same with what it achieved
-within 10 minutes. What does it mean? Wrong model again? Does not seem like any information is extracted.
-If you give it literally anything with a backprop, this is what you're gonna get.
-"""
