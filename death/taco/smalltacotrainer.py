@@ -243,7 +243,7 @@ def forevermain(load=False, lr=1e-3, savestr=""):
         except ValueError:
             traceback.print_exc()
 
-def main(load=False, lr=1e-3, savestr=""):
+def main(load=False, lr=1e-4, savestr="6"):
     total_epochs = 10
     iter_per_epoch = 10000
     lr = lr
@@ -290,3 +290,7 @@ def main(load=False, lr=1e-3, savestr=""):
 
 if __name__ == "__main__":
     main(load=True)
+
+"""
+Small taco has the same performance with 10 epochs of training. Moving averaged loss converges with 100 training samples.
+"""
