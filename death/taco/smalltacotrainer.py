@@ -2,7 +2,6 @@
 Tacotrainer is modified from trainerD3.
 This will involve another batch solution I think. I will need to define a collate function.
 """
-import pandas
 import torch
 import numpy as np
 from pathlib import Path
@@ -290,3 +289,8 @@ def main(load=False, lr=1e-3, savestr=""):
 
 if __name__ == "__main__":
     main(load=True)
+
+
+"""
+ablation studies not very good either.
+"""
