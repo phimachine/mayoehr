@@ -70,7 +70,7 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
     pickle_file = Path(task_dir).joinpath(
-        "saves/" + savestr + "/DNC_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+        "saves/" + savestr + "/taco_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at",pickle_file)
     with pickle_file.open('rb') as pickle_file:
         computer, optim, epoch, iteration = torch.load(pickle_file)
