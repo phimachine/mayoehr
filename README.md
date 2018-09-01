@@ -71,7 +71,6 @@ Small taco does nto hvae post processing, but achieves the same performance.
 
 LSTM mdoel is the baseline for all deep learning models. It is the fastest
 
-
 ### Results for now?
 
 The loss of all models that I have created are around 0.0053. All loss
@@ -84,3 +83,33 @@ stuck at particular non-zero values. It shows that the model only
 captures the background probabilities, but is unable to capture input-target
 relationships.
 
+## How to use the dataset
+### I want to use the pre processed csv files by R
+The preprocessed R data objects are located on infodev1 drives. The path is
+/infodev1/rep/projects/jason. See /death/README.md for the file names and the
+content of the files. Some post processing has been done, so I did not use the
+csv files directly, and there might be additional columns computed later on.
+
+### I want to use the post processed input/output by python
+You can load the pandas tables that I have processed if you will be working in
+Python. To do so, take a look at the death/post/dfmanager.py.
+
+After the intialization, you should have dfmanager.dia to be the diagnosis
+pandas dataframe, for example.
+
+
+### I want to use 47774 dim input and 3620 dim output directly in Python
+I flattened all the pandas dataframes to be a single vector of input and a
+single vector of output for every single training point. This leads to a
+47774 dim input and 3620 dim output. This method of flattening might not be
+the optimal solution, might not work for every model, and certainly does not work
+for every project goal. However, if you want
+to start from here, you should take a look at death/post/inputgen_planD.py and
+inputgen_planC.py. These two scripts will project each column of pandas
+dataframes, depending on their types and factors, onto some section of the single
+tensor.
+
+### I want to run a deep learning model with pytorch
+You should take a look at death/post/channelmanager.py and inputgen_planD. Both
+objects are built to be/based on PyTorch Datasets and should be loaded to pytorch
+with no problem.
