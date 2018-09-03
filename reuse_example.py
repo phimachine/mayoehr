@@ -3,13 +3,13 @@
 ### To see the pandas data frames
 # Note that DFManager allows you to load from pickle file or raw csv files
 # pickle loading is much faster. loading raw rebuilds pickle
-
+#
 from death.post.dfmanager import DFManager
 dfs = DFManager()
 dfs.load_pickle(verbose=True)
 # from here, you can see all dataframes as dfs' properties
 # for example, this is demographics csv:
-dfs.demo
+print(dfs.demo)
 
 # if you want to load_raw and rebuild pickle files, run:
 dfs.load_raw(save=True)
@@ -17,15 +17,14 @@ dfs.load_raw(save=True)
 dfs.make_dictionary(verbose=True, save=True, skip=False)
 
 
-
 ### To see the inputs and outputs used by the deep learning model
 from death.post.inputgen_planD import InputGenD, train_valid_split
-ig = InputGenD(load_pickle=True, verbose=False)
+ig = InputGenD(verbose=False)
 # split to training set and validation set if you want
 # it's fine if you don't do this step
 train, valid = train_valid_split(ig)
 # __getitem__() method is how you should access this dataset
-train[123]
+print(train[123])
 
 
 ### Loading into PyTorch is trickier, because sequences don't have even lengths
