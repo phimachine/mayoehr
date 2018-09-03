@@ -1,3 +1,5 @@
+# This script makes a fake index so that multiindexing can be used in pandas.
+
 require(lubridate)
 require(data.table)
 require(dplyr)
