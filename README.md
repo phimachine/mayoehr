@@ -83,7 +83,12 @@ stuck at particular non-zero values. It shows that the model only
 captures the background probabilities, but is unable to capture input-target
 relationships.
 
-## How to use the dataset
+## How to reuse the project
+
+The dataset is loaded by mainly four stages: (raw,) post-processed,
+pandas, flattened, PyTorch . You can build your own project upon any
+of the four stages. Check reuse_examples.py for some code examples.
+
 ### I want to use the pre processed csv files by R
 The preprocessed R data objects are located on infodev1 drives. The path is
 /infodev1/rep/projects/jason. See /death/README.md for the file names and the
