@@ -286,7 +286,7 @@ class BatchDNC(nn.Module):
         self.update_temporal_linkage_matrix(write_weighting)
         self.update_precedence_weighting(write_weighting)
 
-        forward_weighting = self_weighting()
+        forward_weighting = self.forward_weighting()
         backward_weighting = self.backward_weighting()
 
         read_weightings = self.read_weightings(forward_weighting, backward_weighting, read_keys, read_strengths,

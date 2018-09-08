@@ -4,7 +4,7 @@ not dependent on paricular inputs. That is, model outputs 12% for all
 classification tasks, because it's the background probability.
 Relationships between input and output is not captured.
 
-This assumption is not evidenced.
+This is true for Tacotron. LSTM and DNC still to be tested.
 
 If this assumption is true, it means, for the input-target relationship,
 the signal failed to transmit. That is, for large sample, the derivative
@@ -32,7 +32,9 @@ requires a cultural prior not from data. If without such cultural
 prior, you would not know what the model captures. That's why such
 models are hackable.
 
-With our dataset, the hacker knows it's a time-dependent series
+With our dataset, the hacker knows it's a
+
+ time-dependent series
 that is largely sparse.
 The hacker knows it's a bunch of events, but what event?
 The hacker has no clue whatsoever. For each step, the input is fed

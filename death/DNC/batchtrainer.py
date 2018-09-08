@@ -241,6 +241,48 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 print("model saved for epoch", epoch, "input", i)
 
 
+def valid(computer, optimizer, real_criterion, binary_criterion,
+          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
+    """
+
+    :param computer:
+    :param optimizer:
+    :param real_criterion:
+    :param binary_criterion:
+    :param train: this is the ChannelManager class. It has a __next__ method defined.
+    :param valid: ditto
+    :param starting_epoch:
+    :param total_epochs:
+    :param starting_iter:
+    :param iter_per_epoch:
+    :param savestr: a custom string that identifies this training run
+    :param logfile:
+    :return:
+    """
+    global global_exception_counter
+    print_interval = 100
+    val_interval = 10000
+    save_interval = 10000
+    target_dim = None
+    rldmax_len = 500
+    val_batch = 1000
+    running_loss_deque = deque(maxlen=rldmax_len)
+
+    val_losses=[]
+    for _ in range(val_batch):
+        val_loss=valid_one_step(computer, valid, binary_criterion)
+        val_losses.append(val_loss)
+        if val_loss is not None:
+            printloss = float(val_loss[0])
+            val_losses.append(printloss)
+        if logfile:
+            logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
+                             (i, printloss))
+        print("validation. count: %4d, running loss: %.10f" %
+              (i, printloss))
+    print("loss:",np.mean(val_losses))
+
+
 def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     print("Will run main() forever in a loop.")
     while True:
@@ -250,7 +292,7 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
             traceback.print_exc()
 
 
-def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
+def main(load=False, lr=1e-3, savestr="batch", reset=True, palette=False):
     total_epochs = 10
     iter_per_epoch = 1000000
     lr = lr
@@ -301,6 +343,60 @@ def main(load=False, lr=1e-3, savestr="", reset=True, palette=False):
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
+          traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
+          logfile)
+
+def valid_only():
+    total_epochs = 10
+    iter_per_epoch = 1000000
+    lr = None
+    optim = None
+    starting_epoch = 0
+    starting_iteration = 0
+    logfile = "log.txt"
+    num_workers = 8
+    savestr=""
+
+    print("Using", num_workers, "workers for training set")
+    computer = DNC(x=param_x,
+                   h=param_h,
+                   L=param_L,
+                   v_t=param_v_t,
+                   W=param_W,
+                   R=param_R,
+                   N=param_N,
+                   bs=param_bs)
+
+    ig = InputGenD(verbose=verbose)
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
+    trainds, validds = train_valid_split(ig, split_fold=10)
+    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
+    validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
+    traindl = ChannelManager(traindl, param_bs, model=computer)
+    validdl = ChannelManager(validdl, param_bs, model=computer)
+
+    # load model:
+    print("loading model")
+    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch,
+                                                                     starting_iteration, savestr)
+
+    computer = computer.cuda()
+    if optim is None:
+        print("Using Adam with lr", lr)
+        optimizer = torch.optim.Adam([i for i in computer.parameters() if i.requires_grad], lr=lr)
+    else:
+        # print('use Adadelta optimizer with learning rate ', lr)
+        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+        optimizer = optim
+
+    real_criterion = nn.SmoothL1Loss()
+    # time-wise sum, label-wise average.
+    binary_criterion = nn.BCEWithLogitsLoss()
+
+    # starting with the epoch after the loaded one
+
+    valid(computer, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
