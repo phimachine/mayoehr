@@ -244,6 +244,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 def valid(computer, optimizer, real_criterion, binary_criterion,
           train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
     """
+    I have problem comparing the performances of different models. They do not seem to refer to the same value.
+    Processing by sequences and processing by steps are fundamentally different and unfair.
 
     :param computer:
     :param optimizer:
@@ -265,16 +267,18 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
     save_interval = 10000
     target_dim = None
     rldmax_len = 500
-    val_batch = 1000
+    val_batch = 100000
     running_loss_deque = deque(maxlen=rldmax_len)
+    computer.eval()
 
     val_losses=[]
-    for _ in range(val_batch):
+    for i in range(val_batch):
         val_loss=valid_one_step(computer, valid, binary_criterion)
-        val_losses.append(val_loss)
         if val_loss is not None:
             printloss = float(val_loss[0])
             val_losses.append(printloss)
+        else:
+            raise ValueError("Why is val_loss None again?")
         if logfile:
             logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
                              (i, printloss))
@@ -347,6 +351,12 @@ def main(load=False, lr=1e-3, savestr="batch", reset=True, palette=False):
           logfile)
 
 def valid_only():
+    '''
+    The loss is 0.024
+
+    :return:
+    '''
+
     total_epochs = 10
     iter_per_epoch = 1000000
     lr = None
@@ -355,7 +365,7 @@ def valid_only():
     starting_iteration = 0
     logfile = "log.txt"
     num_workers = 8
-    savestr=""
+    savestr="batch"
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
@@ -403,4 +413,4 @@ def valid_only():
 
 if __name__ == "__main__":
 
-    main()
+    valid_only()
