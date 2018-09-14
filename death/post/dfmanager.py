@@ -253,7 +253,7 @@ class DFManager(object):
         :param n:
         :return:
         """
-        if word =="":
+        if word =="" or word=="empty":
             return n
 
         if word not in dic:

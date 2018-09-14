@@ -341,6 +341,7 @@ class InputGen(Dataset, DFManager):
                         if multival == multival:
                             vals = multival.split("|")
                             vals = list(filter(lambda a: a != "", vals))
+                            vals = list(filter(lambda a: a != "empty", vals))
 
                             for val in vals:
                                 self.code_into_array_structurally(input,[ts,startidx],val,dic)
