@@ -64,4 +64,10 @@ bias would not be big since much information can be extracted from the inputs. I
 ## my DNC
 For experiment purposes, I will use my own DNC implementation and feed the input in.
 
-In the end, it's advantageous to use ixaxaar/pytorch-dnc because I don't want to debug my model.
+## Input augmentation
+
+We have run all models for one run at least, and we have a basic idea how the models are doing.
+
+For now, all models seem to experience early saturation.
+They capture background distributions without further exploiting any
+relationships between inputs and outputs. Problematic.

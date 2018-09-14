@@ -217,6 +217,9 @@ class DFManager(object):
         This is done exhaustively through every row of every set. Dictionaries are pickled and
         saved in Dfs.
 
+        TODO this is the critical function. We need to modify this function to augment the codes.
+
+
         :param write:
         :return:
         '''
@@ -241,6 +244,24 @@ class DFManager(object):
                 print("generating dictionary on no bar " + df + " " + col)
             self.no_bar_dictionary(df, col, save=save, skip=skip)
 
+    def code_into_dic_structurally(self, word, dic, n):
+        """
+        Given a structured code and a dictionary, insert code by structural information.
+        Example word: 1SA30B
+        :param word:
+        :param dic:
+        :param n:
+        :return:
+        """
+        if word =="":
+            return n
+
+        if word not in dic:
+            dic[word] = n
+            n+=1
+
+        return self.code_into_dic_structurally(word[:-1], dic, n)
+
     def bar_separated_dictionary(self, df_name, col_name, save=True, skip=True):
         '''
 
@@ -249,6 +270,7 @@ class DFManager(object):
         :param save:
         :return:
         '''
+
 
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
         print(savepath)
@@ -274,11 +296,7 @@ class DFManager(object):
                     for word in splitted:
                         # Is there empty? in case I forgot in R
                         if not pd.isna(word):
-                            if word not in dic and word != "":
-                                if word == "NA":
-                                    print("unprocessed NA FOUND")
-                                dic[word] = n
-                                n += 1
+                            n=self.code_into_dic_structurally(word, dic, n)
 
             except AttributeError:
                 print("woah woah woah what did you do")
@@ -312,11 +330,7 @@ class DFManager(object):
 
         for row in series:
             if not pd.isna(row):
-                if row not in dic and row != "":
-                    if row == "NA":
-                        print("unprocessed NA FOUND")
-                    dic[row] = n
-                    n += 1
+                n=self.code_into_dic_structurally(row, dic, n)
 
         if save == True:
             with savepath.open('wb') as f:

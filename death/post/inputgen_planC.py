@@ -149,6 +149,23 @@ class InputGen(Dataset, DFManager):
         id = self.rep_person_id[index]
         return self.get_by_id(id,debug)
 
+    def code_into_array_structurally(self, array, indices, word, dic):
+        """
+        Lookup the dictionary and insert the code by it structure into the array.
+
+        :param array:
+        :param indices: [timesteps, startidx]
+        :param values:
+        :return:
+        """
+        if word!=word or word=="":
+            print("a code is empty or NAN")
+        else:
+            newidx=indices.copy()
+            # start idx plus dic index
+            newidx[1]+=dic[word]
+            np.add.at(array,newidx,1)
+
     def get_by_id(self,id,debug=False):
         time_length = self.earla.loc[id]["int"] + 1
         earliest = self.earla.loc[id]["earliest"]
@@ -217,15 +234,19 @@ class InputGen(Dataset, DFManager):
                 # no na testing, I tested it in R
                 # if cod==cod and und==und:
                 dic = self.__getattribute__("death_code_dict")
-                try:
-                    idx = dic[code]
-                except KeyError:
-                    idx = dic["0"]
-                insidx += [1 + idx]
+                # try:
+                #     idx = dic[code]
+                # except KeyError:
+                #     print("Death code does not exist")
+                #     idx = dic["0"]
+                self.code_into_array_structurally(target, [tss, 1], code, dic)
                 if underlying:
-                    insidx += [self.underlying_code_location + idx]
+                    self.code_into_array_structurally(target, [tss, self.underlying_code_location], code, dic)
+                # insidx += [1 + idx]
+                # if underlying:
+                #     insidx += [self.underlying_code_location + idx]
             # does not accumulate!
-            target[:, insidx] = 1
+            # target[:, insidx] = 1
             loss_type = np.zeros(1,dtype=np.long)
         else:
             loss_type = np.ones(1,dtype=np.long)
@@ -285,14 +306,14 @@ class InputGen(Dataset, DFManager):
                             raise
                     # this line will increment only 1:
                     # input[tsloc,startidx]+=allrows[coln]
-                    # this line will accumulate count:
-                    # TODO THERE IS A BUG HERE
                     try:
                         np.add.at(input, (tsloc, startidx), np.nan_to_num(allrows[coln].values))
                     except IndexError:
                         print("we found it")
                 if (input != input).any():
                     raise ValueError("NA FOUND")
+
+                # codes
                 for coln in nobarsep:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
@@ -301,13 +322,15 @@ class InputGen(Dataset, DFManager):
 
                     for ts, val in zip(tsloc, allrows[coln]):
                         # if not nan
-                        if val == val and val != "":
-                            insidx += [dic[val] + startidx]
-                            nantsloc += [ts]
-                    np.add.at(input, [nantsloc, insidx], 1)
+                        self.code_into_array_structurally(input,[ts,startidx],val,dic)
+                    #     if val == val and val != "":
+                    #         insidx += [dic[val] + startidx]
+                    #         nantsloc += [ts]
+                    # np.add.at(input, [nantsloc, insidx], 1)
                     # again, accumulate count if multiple occurrence
                 if (input != input).any():
                     raise ValueError("NA FOUND")
+
                 for coln in barsep:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
@@ -318,12 +341,17 @@ class InputGen(Dataset, DFManager):
                         if multival == multival:
                             vals = multival.split("|")
                             vals = list(filter(lambda a: a != "", vals))
-                            tss += [ts] * len(vals)
-                            insidx += [dic[val] + startidx for val in vals if val == val]
-                    try:
-                        np.add.at(input, [tss, insidx], 1)
-                    except IndexError:
-                        raise IndexError
+
+                            for val in vals:
+                                self.code_into_array_structurally(input,[ts,startidx],val,dic)
+                            #
+                            # tss += [ts] * len(vals)
+                            # insidx += [dic[val] + startidx for val in vals if val == val]
+                    # try:
+                    #     np.add.at(input, [tss, insidx], 1)
+                    # except IndexError:
+                    #     raise IndexError
+
         if (input != input).any():
             raise ValueError("NA FOUND")
         # high frequency visitors have been handled smoothly, by aggregating

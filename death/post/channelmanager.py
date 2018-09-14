@@ -79,7 +79,7 @@ class ChannelManager():
         self.seqdims=seqdims
         self.staticdims=staticdims
         self.model=model
-
+        self.seqcount=0
         self._add_channels(self.bs)
 
         for ch in self.channels:
@@ -95,6 +95,7 @@ class ChannelManager():
 
     def get_new_sequences(self):
         newdata = next(self.dliter)
+        self.seqcount+=1
         new_sequences = list(newdata[i] for i in self.seqdims)
         static_feed = list(newdata[i] for i in self.staticdims)
         return new_sequences, static_feed

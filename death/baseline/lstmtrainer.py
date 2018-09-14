@@ -18,6 +18,10 @@ import datetime
 
 batch_size = 1
 
+
+def sv(var):
+    return var.data.cpu().numpy()
+
 class dummy_context_mgr():
     def __enter__(self):
         return None
@@ -116,7 +120,6 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         patient_output=computer(input)
         cause_of_death_output = patient_output[:, :, 1:]
         cause_of_death_target = target[:, :, 1:]
-
         patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
@@ -184,7 +187,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                         with open(logfile, 'a') as handle:
                             handle.write("validation. count: %4d, val loss     : %.10f \n" %
                                          (i, printloss))
-                    print("validation. count: %4d, training loss: %.10f" %
+                    print("validation. count: %4d, val loss: %.10f" %
                           (i, printloss))
 
                 if i % save_interval == 0:
@@ -193,8 +196,29 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             else:
                 break
 
+def valid(computer, optimizer, real_criterion, binary_criterion,
+          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+    running_loss=[]
+    target_dim=None
+
+    for i in range(100):
+        (input, target, loss_type) = next(valid_iterator)
+        val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+                                   real_criterion, binary_criterion, validate=True)
+        if val_loss is not None:
+            printloss = float(val_loss[0])
+            running_loss.append((printloss))
+        if logfile:
+            with open(logfile, 'a') as handle:
+                handle.write("validation. count: %4d, val loss     : %.10f \n" %
+                             (i, printloss))
+        print("validation. count: %4d, val loss: %.10f" %
+              (i, printloss))
+    print(np.mean(running_loss))
+
+
 class lstmwrapper(nn.Module):
-    def __init__(self,input_size=47764, output_size=3620,hidden_size=128,num_layers=16,batch_first=True,
+    def __init__(self,input_size=47774, output_size=3620,hidden_size=128,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapper, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
@@ -219,7 +243,7 @@ def main(load=False):
     starting_iteration= 0
     logfile = "log.txt"
 
-    num_workers = 32
+    num_workers = 1
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
@@ -228,8 +252,7 @@ def main(load=False):
     validdl = DataLoader(dataset=validds, batch_size=1)
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether
-    lstm=lstmwrapper(input_size=47764,hidden_size=512,num_layers=128,batch_first=True,
-                     dropout=True)
+    lstm=lstmwrapper()
 
     # load model:
     if load:
@@ -252,6 +275,51 @@ def main(load=False):
     train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
+def validationonly():
+    '''
+
+    Average loss is 0.00496016011456959
+
+    :return:
+    '''
+
+    lr = 1e-2
+    optim = None
+    logfile = "vallog.txt"
+
+    num_workers = 16
+    ig = InputGenD()
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
+    trainds, validds = train_valid_split(ig, split_fold=10)
+    validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
+    print("Using", num_workers, "workers for validation set")
+    # testing whether this LSTM works is basically a question whether
+    lstm = lstmwrapper()
+
+    # load model:
+    print("loading model")
+    lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0)
+
+    lstm = lstm.cuda()
+    if optim is None:
+        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
+    else:
+        # print('use Adadelta optimizer with learning rate ', lr)
+        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+        optimizer = optim
+
+    real_criterion = nn.SmoothL1Loss()
+    binary_criterion = nn.BCEWithLogitsLoss()
+
+    traindl=None
+    total_epochs=None
+    iter_per_epoch=None
+
+    # starting with the epoch after the loaded one
+    valid(lstm, optimizer, real_criterion, binary_criterion,
+          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 if __name__ == "__main__":
-    main()
+    # main(load=True
+    validationonly()
