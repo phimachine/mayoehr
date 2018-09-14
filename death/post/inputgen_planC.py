@@ -149,17 +149,22 @@ class InputGen(Dataset, DFManager):
         id = self.rep_person_id[index]
         return self.get_by_id(id,debug)
 
-    def insert_structural(self,array,indices,word,dic):
+    def code_into_array_structurally(self, array, indices, word, dic):
         """
+        Lookup the dictionary and insert the code by it structure into the array.
 
         :param array:
         :param indices: [timesteps, startidx]
         :param values:
         :return:
         """
-        newidx=indices.copy()
-        newidx[1]+=dic[word]
-        np.add.at(array,newidx,1)
+        if word!=word or word=="":
+            print("a code is empty or NAN")
+        else:
+            newidx=indices.copy()
+            # start idx plus dic index
+            newidx[1]+=dic[word]
+            np.add.at(array,newidx,1)
 
     def get_by_id(self,id,debug=False):
         time_length = self.earla.loc[id]["int"] + 1
@@ -234,9 +239,9 @@ class InputGen(Dataset, DFManager):
                 # except KeyError:
                 #     print("Death code does not exist")
                 #     idx = dic["0"]
-                self.insert_structural(target,[tss,1],code,dic)
+                self.code_into_array_structurally(target, [tss, 1], code, dic)
                 if underlying:
-                    self.insert_structural(target,[tss,self.underlying_code_location],code,dic)
+                    self.code_into_array_structurally(target, [tss, self.underlying_code_location], code, dic)
                 # insidx += [1 + idx]
                 # if underlying:
                 #     insidx += [self.underlying_code_location + idx]
@@ -308,7 +313,7 @@ class InputGen(Dataset, DFManager):
                 if (input != input).any():
                     raise ValueError("NA FOUND")
 
-                ### start working from here.
+                # codes
                 for coln in nobarsep:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
@@ -317,10 +322,11 @@ class InputGen(Dataset, DFManager):
 
                     for ts, val in zip(tsloc, allrows[coln]):
                         # if not nan
-                        if val == val and val != "":
-                            insidx += [dic[val] + startidx]
-                            nantsloc += [ts]
-                    np.add.at(input, [nantsloc, insidx], 1)
+                        self.code_into_array_structurally(input,[ts,startidx],val,dic)
+                    #     if val == val and val != "":
+                    #         insidx += [dic[val] + startidx]
+                    #         nantsloc += [ts]
+                    # np.add.at(input, [nantsloc, insidx], 1)
                     # again, accumulate count if multiple occurrence
                 if (input != input).any():
                     raise ValueError("NA FOUND")
@@ -335,12 +341,16 @@ class InputGen(Dataset, DFManager):
                         if multival == multival:
                             vals = multival.split("|")
                             vals = list(filter(lambda a: a != "", vals))
-                            tss += [ts] * len(vals)
-                            insidx += [dic[val] + startidx for val in vals if val == val]
-                    try:
-                        np.add.at(input, [tss, insidx], 1)
-                    except IndexError:
-                        raise IndexError
+
+                            for val in vals:
+                                self.code_into_array_structurally(input,[ts,startidx],val,dic)
+                            #
+                            # tss += [ts] * len(vals)
+                            # insidx += [dic[val] + startidx for val in vals if val == val]
+                    # try:
+                    #     np.add.at(input, [tss, insidx], 1)
+                    # except IndexError:
+                    #     raise IndexError
 
         if (input != input).any():
             raise ValueError("NA FOUND")

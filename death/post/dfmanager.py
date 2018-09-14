@@ -244,8 +244,9 @@ class DFManager(object):
                 print("generating dictionary on no bar " + df + " " + col)
             self.no_bar_dictionary(df, col, save=save, skip=skip)
 
-    def strucutral_code(self, word, dic, n):
+    def code_into_dic_structurally(self, word, dic, n):
         """
+        Given a structured code and a dictionary, insert code by structural information.
         Example word: 1SA30B
         :param word:
         :param dic:
@@ -259,7 +260,7 @@ class DFManager(object):
             dic[word] = n
             n+=1
 
-        return self.strucutral_code(word[:-1],dic,n)
+        return self.code_into_dic_structurally(word[:-1], dic, n)
 
     def bar_separated_dictionary(self, df_name, col_name, save=True, skip=True):
         '''
@@ -295,7 +296,7 @@ class DFManager(object):
                     for word in splitted:
                         # Is there empty? in case I forgot in R
                         if not pd.isna(word):
-                            n=self.strucutral_code(word,dic,n)
+                            n=self.code_into_dic_structurally(word, dic, n)
 
             except AttributeError:
                 print("woah woah woah what did you do")
@@ -329,7 +330,7 @@ class DFManager(object):
 
         for row in series:
             if not pd.isna(row):
-                n=self.strucutral_code(row,dic,n)
+                n=self.code_into_dic_structurally(row, dic, n)
 
         if save == True:
             with savepath.open('wb') as f:
