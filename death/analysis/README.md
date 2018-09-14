@@ -52,3 +52,9 @@ What is our property? What bakes our property in the network?
 We need structured codes. But we should not send it in as flattened
 codes. What model can effectively process trees? How does DNC
 deal with trees?
+
+If the input is a tree structure, shouldn't the processing pipeline
+be a tree too? The deeper nodes do not have enough training points, but
+naturally that should be the case. This means the end nodes should
+refrain from influcing in the final output by default. Identity
+transform or gate. Does skip connection help?
