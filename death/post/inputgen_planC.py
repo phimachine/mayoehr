@@ -5,6 +5,9 @@ import pandas as pd
 import copy
 import time
 import torch
+import collections
+
+
 
 
 # we can only assume that all deaths are recorded
@@ -42,7 +45,7 @@ class InputGen(Dataset, DFManager):
     See get_by_id()
     '''
 
-    def __init__(self, verbose=False):
+    def __init__(self, verbose=False, debug=False):
         super(InputGen, self).__init__()
         self.load_pickle(verbose=verbose)
         self.rep_person_id = self.demo.index.values
@@ -60,6 +63,7 @@ class InputGen(Dataset, DFManager):
         self.earla.set_index("rep_person_id", inplace=True)
         self.len = len(self.rep_person_id)
         self.check_nan()
+        self.debug=debug
         print("Input Gen initiated")
 
     def get_output_dim(self):
@@ -140,31 +144,36 @@ class InputGen(Dataset, DFManager):
 
         return start, end
 
-    def __getitem__(self, index, debug=False):
+    def __getitem__(self, index):
         '''
 
         :param index:
         :return:
         '''
         id = self.rep_person_id[index]
-        return self.get_by_id(id,debug)
+        return self.get_by_id(id,self.debug)
 
-    def code_into_array_structurally(self, array, indices, word, dic):
+    def code_into_array_structurally(self, array, indices, word, dic, debug):
         """
         Lookup the dictionary and insert the code by it structure into the array.
 
         :param array:
-        :param indices: [timesteps, startidx]
+        :param indices: [timesteps, startindices], both of them must be lists.
         :param values:
         :return:
         """
+        # type checking. np.add.at behaves differently for different types
+        if debug:
+            if not isinstance(indices[0],collections.Iterable) or not isinstance(indices[1], collections.Iterable):
+                raise TypeError("code_into_array_structurally() type error, indices[n] must be iterable")
         if word!=word or word=="":
             print("a code is empty or NAN")
         else:
-            newidx=indices.copy()
             # start idx plus dic index
-            newidx[1]+=dic[word]
-            np.add.at(array,newidx,1)
+            codelist=indices[1]
+            for idx in range(len(codelist)):
+                codelist[idx]+=dic[word]
+            np.add.at(array,indices,1)
 
     def get_by_id(self,id,debug=False):
         time_length = self.earla.loc[id]["int"] + 1
@@ -239,9 +248,9 @@ class InputGen(Dataset, DFManager):
                 # except KeyError:
                 #     print("Death code does not exist")
                 #     idx = dic["0"]
-                self.code_into_array_structurally(target, [tss, 1], code, dic)
+                self.code_into_array_structurally(target, [tss, [1]], code, dic, debug)
                 if underlying:
-                    self.code_into_array_structurally(target, [tss, self.underlying_code_location], code, dic)
+                    self.code_into_array_structurally(target, [tss, [self.underlying_code_location]], code, dic, debug)
                 # insidx += [1 + idx]
                 # if underlying:
                 #     insidx += [self.underlying_code_location + idx]
@@ -322,7 +331,7 @@ class InputGen(Dataset, DFManager):
 
                     for ts, val in zip(tsloc, allrows[coln]):
                         # if not nan
-                        self.code_into_array_structurally(input,[ts,startidx],val,dic)
+                        self.code_into_array_structurally(input,[[ts],[startidx]],val,dic, debug)
                     #     if val == val and val != "":
                     #         insidx += [dic[val] + startidx]
                     #         nantsloc += [ts]
@@ -344,7 +353,7 @@ class InputGen(Dataset, DFManager):
                             vals = list(filter(lambda a: a != "empty", vals))
 
                             for val in vals:
-                                self.code_into_array_structurally(input,[ts,startidx],val,dic)
+                                self.code_into_array_structurally(input,[[ts],[startidx]],val,dic, debug)
                             #
                             # tss += [ts] * len(vals)
                             # insidx += [dic[val] + startidx for val in vals if val == val]

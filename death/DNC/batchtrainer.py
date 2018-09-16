@@ -27,10 +27,10 @@ i = None
 debug = True
 verbose=False
 
-param_x = 47774
+param_x = 69505
 param_h = 512
 param_L = 16
-param_v_t = 3620
+param_v_t = 5952
 param_W = 32
 param_R = 8
 param_N = 512
@@ -295,10 +295,9 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         except ValueError:
             traceback.print_exc()
 
-
-def main(load=False, lr=1e-3, savestr="batch", reset=True, palette=False):
+def main(load=False, lr=1e-3, savestr="struc"):
     total_epochs = 10
-    iter_per_epoch = 1000000
+    iter_per_epoch = 100000
     lr = lr
     optim = None
     starting_epoch = 0
@@ -316,7 +315,7 @@ def main(load=False, lr=1e-3, savestr="batch", reset=True, palette=False):
                    N=param_N,
                    bs=param_bs)
 
-    ig = InputGenD(verbose=verbose)
+    ig = InputGenD(verbose=False)
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
@@ -350,6 +349,7 @@ def main(load=False, lr=1e-3, savestr="batch", reset=True, palette=False):
           traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
+
 def valid_only():
     '''
     The loss is 0.024
@@ -364,7 +364,7 @@ def valid_only():
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log.txt"
-    num_workers = 8
+    num_workers = 0
     savestr="batch"
 
     print("Using", num_workers, "workers for training set")
@@ -377,7 +377,7 @@ def valid_only():
                    N=param_N,
                    bs=param_bs)
 
-    ig = InputGenD(verbose=verbose)
+    ig = InputGenD(verbose=verbose, debug=debug)
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
@@ -413,4 +413,4 @@ def valid_only():
 
 if __name__ == "__main__":
 
-    valid_only()
+    main()

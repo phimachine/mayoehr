@@ -55,7 +55,7 @@ class BatchNorm(nn.Module):
 
 class BatchDNC(nn.Module):
     def __init__(self,
-                 x=47774,
+                 x=69505,
                  h=128,
                  L=16,
                  v_t=3620,

@@ -38,8 +38,8 @@ class InputGenD(InputGen):
     frozen gradients.
     """
     # inherit this class mainly so that I can reuse the code and maintain faster
-    def __init__(self, death_proportion=0.9, verbose=False):
-        super(InputGenD, self).__init__(verbose=verbose)
+    def __init__(self, death_proportion=0.9, verbose=False, debug=False):
+        super(InputGenD, self).__init__(verbose=verbose, debug=debug)
         # This is sorted
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
         no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]
