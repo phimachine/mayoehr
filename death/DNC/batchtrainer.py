@@ -353,6 +353,7 @@ def main(load=False, lr=1e-3, savestr="struc"):
 def valid_only():
     '''
     The loss is 0.024
+    Doesn't make any sense. At run time the running loss is 0.0003 and so is training loss sample.
 
     :return:
     '''
@@ -412,5 +413,4 @@ def valid_only():
 
 
 if __name__ == "__main__":
-
     main()

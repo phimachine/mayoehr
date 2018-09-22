@@ -191,12 +191,8 @@ class BatchDNC(nn.Module):
         # train.mother.lab
         input=input.squeeze(1)
 
-        try:
-            bnout=self.bn(input)
-            if (input != input).any():
-                raise ValueError("We have NAN after batch normalization")
-        except ValueError:
-            print("reinitialize batch norm")
+        bnout=self.bn(input)
+        if (bnout != bnout).any():
             self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
             bnout=self.bn(input)
 
