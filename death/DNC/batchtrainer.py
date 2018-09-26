@@ -288,7 +288,7 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
         if logfile:
             logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
                              (i, printloss))
-        print("validation. count: %4d, running loss: %.10f" %
+        print("validation. count: %4d, loss: %.10f" %
               (i, printloss))
     print("loss:",np.mean(val_losses))
 
@@ -325,7 +325,6 @@ def main(load=True, lr=1e-3, savestr="struc"):
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
-    # TODO debugging
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
     traindl = ChannelManager(traindl, param_bs, model=computer)

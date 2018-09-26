@@ -5,7 +5,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planD import InputGenD, train_valid_split
+from death.post.channelmanager import InputGenD, ChannelManager, train_valid_split
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -190,7 +190,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                             printloss += float(val_loss[0])
                         else:
                             raise ValueError ("Investigate this")
-                    printloss=printloss/val_batch
                     if logfile:
                         with open(logfile, 'a') as handle:
                             handle.write("validation. count: %4d, val loss     : %.10f \n" %
@@ -258,7 +257,8 @@ def main(load=False):
     trainds,validds=train_valid_split(ig,split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
-
+    traindl = ChannelManager(traindl, param_bs, model=computer)
+    validdl = ChannelManager(validdl, param_bs, model=computer)
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether
     lstm=lstmwrapper()
