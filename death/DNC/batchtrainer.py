@@ -173,6 +173,7 @@ def logprint(logfile, string):
         handle.write(string)
     print(string)
 
+failure=0
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
     """
@@ -193,7 +194,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     """
     global global_exception_counter
     print_interval = 100
-    val_interval = 10000
+    val_interval = 100
     save_interval = 10000
     target_dim = None
     rldmax_len = 500
@@ -212,6 +213,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if train_step_loss is not None:
                 printloss = float(train_step_loss[0])
             else:
+                print("What is happening?")
                 printloss = 10000
             # computer.new_sequence_reset()
             running_loss_deque.appendleft(printloss)
@@ -224,17 +226,21 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     print("count: %4d, running loss: %.10f" % (i, running_loss))
 
             if i % val_interval == 0:
+                printloss = 0
                 for _ in range(val_batch):
-                    printloss = 0
                     val_loss=valid_one_step(computer, valid, binary_criterion)
                     if val_loss is not None:
                         printloss += float(val_loss[0])
+                    else:
+                        global failure
+                        failure+=1
                 printloss = printloss / val_batch
                 if logfile:
                     logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
                                      (i, printloss))
-                print("validation. count: %4d, running loss: %.10f" %
-                      (i, printloss))
+                else:
+                    print("validation. count: %4d, running loss: %.10f" %
+                          (i, printloss))
 
             if i % save_interval == 0:
                 save_model(computer, optimizer, epoch, i, savestr)
@@ -295,7 +301,7 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         except ValueError:
             traceback.print_exc()
 
-def main(load=False, lr=1e-3, savestr="struc"):
+def main(load=True, lr=1e-3, savestr="struc"):
     total_epochs = 10
     iter_per_epoch = 100000
     lr = lr
@@ -319,6 +325,7 @@ def main(load=False, lr=1e-3, savestr="struc"):
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
+    # TODO debugging
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
     traindl = ChannelManager(traindl, param_bs, model=computer)
@@ -350,7 +357,7 @@ def main(load=False, lr=1e-3, savestr="struc"):
           logfile)
 
 
-def valid_only():
+def valid_only(savestr="struc"):
     '''
     The loss is 0.024
     Doesn't make any sense. At run time the running loss is 0.0003 and so is training loss sample.
@@ -366,7 +373,6 @@ def valid_only():
     starting_iteration = 0
     logfile = "log.txt"
     num_workers = 0
-    savestr="batch"
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
@@ -413,4 +419,19 @@ def valid_only():
 
 
 if __name__ == "__main__":
-    main()
+    """
+    Using 8 workers for training set
+    Loading dataframes from pickle file
+    checking if there is nan in any of the dataframes
+    Input Gen initiated
+    Using InputGen Plan D, with death proportion 0.9
+    loading model
+    loading model at /local2/tmp/pycharm_project_292/death/DNC/saves/struc/DNC_0_10000.pkl
+    Loaded model at epoch  0 iteartion 10000
+    learning.   count: 10000, training loss: 0.0047931052
+    count: 10000, running loss: 0.0047931052
+    
+    loaded first training loop has 0.004 loss. How come validation is another result?
+    """
+
+    valid_only()

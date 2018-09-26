@@ -164,6 +164,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                                                    real_criterion, binary_criterion)
                 if train_story_loss is not None:
                     printloss=float(train_story_loss[0])
+                else:
+                    raise ValueError("Why would story loss be None?")
                 running_loss_deque.appendleft(printloss)
                 if i % print_interval == 0:
                     running_loss=np.mean(running_loss_deque)
@@ -218,7 +220,7 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapper(nn.Module):
-    def __init__(self,input_size=47774, output_size=3620,hidden_size=128,num_layers=16,batch_first=True,
+    def __init__(self,input_size=69505, output_size=5952,hidden_size=128,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapper, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
@@ -243,7 +245,7 @@ def main(load=False):
     starting_iteration= 0
     logfile = "log.txt"
 
-    num_workers = 1
+    num_workers = 16
     ig = InputGenD()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
@@ -322,4 +324,4 @@ def validationonly():
 
 if __name__ == "__main__":
     # main(load=True
-    validationonly()
+    main()
