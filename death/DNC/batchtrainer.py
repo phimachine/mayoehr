@@ -419,6 +419,8 @@ def valid_only(savestr="struc"):
 
 if __name__ == "__main__":
     """
+    training
+    
     Using 8 workers for training set
     Loading dataframes from pickle file
     checking if there is nan in any of the dataframes

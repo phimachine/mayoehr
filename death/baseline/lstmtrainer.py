@@ -288,6 +288,7 @@ def validationonly():
     '''
 
     Average loss is 0.00496016011456959
+    This is consistent with the training loss.
 
     :return:
     '''
