@@ -196,10 +196,10 @@ class BatchDNC(nn.Module):
             self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False).cuda()
             bnout=self.bn(input)
 
-        input=bnout.unsqueeze(1)
+        bnout=bnout.unsqueeze(1)
 
 
-        input_x_t = torch.cat((input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
+        input_x_t = torch.cat((bnout, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
         if (input_x_t!=input_x_t).any():
             raise ValueError("We have NAN in last read vector")
         '''Controller'''
