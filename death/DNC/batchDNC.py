@@ -193,7 +193,7 @@ class BatchDNC(nn.Module):
 
         bnout=self.bn(input)
         if (bnout != bnout).any():
-            self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
+            self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False).cuda()
             bnout=self.bn(input)
 
         input=bnout.unsqueeze(1)

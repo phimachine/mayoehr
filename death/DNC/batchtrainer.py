@@ -28,13 +28,13 @@ debug = True
 verbose=False
 
 param_x = 69505
-param_h = 512
-param_L = 16
+param_h = 256
+param_L = 8
 param_v_t = 5952
-param_W = 32
-param_R = 8
-param_N = 512
-param_bs = 16
+param_W = 16
+param_R = 4
+param_N = 256
+param_bs = 32
 param_reset = True
 
 
@@ -194,7 +194,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     """
     global global_exception_counter
     print_interval = 100
-    val_interval = 100
+    val_interval = 1000
     save_interval = 10000
     target_dim = None
     rldmax_len = 500
@@ -435,4 +435,4 @@ if __name__ == "__main__":
     loaded first training loop has 0.004 loss. How come validation is another result?
     """
 
-    valid_only()
+    main()
