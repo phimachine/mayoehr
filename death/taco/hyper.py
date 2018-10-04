@@ -34,7 +34,7 @@ checkpoint_path = './model_new'
 
 # my definition
 embedding_size=128
-input_size=47774
+input_size=69505
 hidden_size=256
 timesteps=10
 decoder_output_dim=256

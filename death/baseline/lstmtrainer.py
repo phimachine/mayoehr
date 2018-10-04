@@ -143,7 +143,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+    valid_iterator=iter(valid_dl)
     print_interval=10
     val_interval=50
     save_interval=400
@@ -183,7 +184,12 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     printloss=0
                     for _ in range(val_batch):
                         # we should consider running validation multiple times and average. TODO
-                        (input,target,loss_type)=next(valid_iterator)
+                        try:
+                            (input,target,loss_type)=next(valid_iterator)
+                        except StopIteration:
+                            valid_iterator=iter(valid_dl)
+                            (input,target,loss_type)=next(valid_iterator)
+
                         val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                                        real_criterion, binary_criterion, validate=True)
                         if val_loss is not None:
@@ -205,12 +211,13 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 break
 
 def valid(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_iterator, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
     running_loss=[]
     target_dim=None
+    valid_iterator=iter(valid_dl)
 
-    for i in range(100):
-        (input, target, loss_type) = next(valid_iterator)
+    for i in valid_iterator:
+        input, target, loss_type=next(valid_iterator)
         val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
                                    real_criterion, binary_criterion, validate=True)
         if val_loss is not None:
@@ -241,6 +248,48 @@ class lstmwrapper(nn.Module):
     def forward(self, input, hx=None):
         output,statetuple=self.lstm(input,hx)
         return self.output(output)
+
+def validationonly():
+    '''
+    :return:
+    '''
+
+    lr = 1e-2
+    optim = None
+    logfile = "vallog.txt"
+
+    num_workers = 8
+    ig = InputGenD()
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
+    trainds, validds = train_valid_split(ig, split_fold=10)
+    validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
+    print("Using", num_workers, "workers for validation set")
+    # testing whether this LSTM works is basically a question whether
+    lstm = lstmwrapper()
+
+    # load model:
+    print("loading model")
+    lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0)
+
+    lstm = lstm.cuda()
+    if optim is None:
+        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
+    else:
+        # print('use Adadelta optimizer with learning rate ', lr)
+        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+        optimizer = optim
+
+    real_criterion = nn.SmoothL1Loss()
+    binary_criterion = nn.BCEWithLogitsLoss()
+
+    traindl=None
+    total_epochs=None
+    iter_per_epoch=None
+
+    # starting with the epoch after the loaded one
+    valid(lstm, optimizer, real_criterion, binary_criterion,
+          traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 def main(load=False):
     total_epochs = 10
@@ -282,54 +331,16 @@ def main(load=False):
     # starting with the epoch after the loaded one
 
     train(lstm, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
+          traindl, validdl, int(starting_epoch), total_epochs,
+          int(starting_iteration), iter_per_epoch, logfile)
 
-def validationonly():
-    '''
-
-    Average loss is 0.00496016011456959
-    This is consistent with the training loss.
-
-    :return:
-    '''
-
-    lr = 1e-2
-    optim = None
-    logfile = "vallog.txt"
-
-    num_workers = 8
-    ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
-    validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
-    print("Using", num_workers, "workers for validation set")
-    # testing whether this LSTM works is basically a question whether
-    lstm = lstmwrapper()
-
-    # load model:
-    print("loading model")
-    lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0)
-
-    lstm = lstm.cuda()
-    if optim is None:
-        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
-    else:
-        # print('use Adadelta optimizer with learning rate ', lr)
-        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
-        optimizer = optim
-
-    real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss()
-
-    traindl=None
-    total_epochs=None
-    iter_per_epoch=None
-
-    # starting with the epoch after the loaded one
-    valid(lstm, optimizer, real_criterion, binary_criterion,
-          traindl, iter(validdl), int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 if __name__ == "__main__":
     # main(load=True
     main()
+
+    '''
+    Loss is around 0.004
+    Validation set was exhausted. We should make a wrapper and reuse it.w
+    Hidden size 128, layer size 16
+    '''

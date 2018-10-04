@@ -28,13 +28,13 @@ debug = True
 verbose=False
 
 param_x = 69505
-param_h = 256
-param_L = 8
+param_h = 128
+param_L = 4
 param_v_t = 5952
-param_W = 16
+param_W = 8
 param_R = 4
-param_N = 256
-param_bs = 64
+param_N = 64
+param_bs = 128
 param_reset = True
 
 
@@ -220,10 +220,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if i % print_interval == 0:
                 running_loss = np.mean(running_loss_deque)
                 if logfile:
-                    logprint(logfile, "learning.   count: %4d, training loss: %.10f" %
-                                     (i, printloss))
-                if i != 0:
-                    print("count: %4d, running loss: %.10f" % (i, running_loss))
+                    logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
+                                     (i, printloss, running_loss))
 
             if i % val_interval == 0:
                 printloss = 0

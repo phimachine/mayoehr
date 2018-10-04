@@ -55,26 +55,42 @@ class BatchNorm(nn.Module):
 
 class BatchDNC(nn.Module):
     def __init__(self,
-                 x=69505,
-                 h=128,
-                 L=16,
-                 v_t=3620,
-                 W=32,
-                 R=8,
-                 N=512,
-                 bs=1):
+                 x,
+                 h,
+                 L,
+                 v_t,
+                 W,
+                 R,
+                 N,
+                 bs):
         super(BatchDNC, self).__init__()
 
         # debugging usages
         self.last_state_dict=None
 
         '''PARAMETERS'''
+        # input vector size x_t
+        # dataset specific
         self.x = x
+        # single hidden unit output size h^l_t
+        # state size
+        # output size, forget gate size, input gate size are all equal to state size s
+        # all weight matrices in equation 1-5 then has dimension (s, x+2*h)
+        # by equation 5, h=s=o
         self.h = h
+        # Controller RNN layers count
+        # refers to the number of parallel RNN units
         self.L = L
+        # Controller output v_t size
+        # dataset specific
         self.v_t = v_t
+        # Memory location width
+        # Memory read heads count R
+        # Controller interface epsilon_t size, derived
         self.W = W
         self.R = R
+        # Total memory address count
+        # Total memory block (N, W)
         self.N = N
         self.bs = bs
         self.E_t = W * R + 3 * W + 5 * R + 3
@@ -191,12 +207,17 @@ class BatchDNC(nn.Module):
         # train.mother.lab
         input=input.squeeze(1)
 
+
+        # This part of the code has NAN problem
+        # The reason is because batch normalization cannot be applied to a series of highly sparse
+        # it's thus reasonable to change NAN to zero.
         bnout=self.bn(input)
-        if (bnout != bnout).any():
-            print("BN has produced NAN, new solution")
-            bnout[bnout!=bnout]=0
-            # self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False).cuda()
-            # bnout=self.bn(input)
+        # if (bnout != bnout).any():
+
+        # through this piece, it's clear that dimension 59105 is highly sparse and is causing problem
+        # it's sensible to make it 0, because it's the original value
+        # print("BN has produced NAN, Location at ", (bnout!=bnout).nonzero())
+        bnout[bnout!=bnout]=0
 
         bnout=bnout.unsqueeze(1)
 

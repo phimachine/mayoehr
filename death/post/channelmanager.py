@@ -94,7 +94,11 @@ class ChannelManager():
             self.channels.append(Channel(self.model))
 
     def get_new_sequences(self):
-        newdata = next(self.dliter)
+        try:
+            newdata = next(self.dliter)
+        except:
+            self.dliter=iter(self.dataloader)
+            newdata = next(self.dliter)
         self.seqcount+=1
         new_sequences = list(newdata[i] for i in self.seqdims)
         static_feed = list(newdata[i] for i in self.staticdims)

@@ -7,4 +7,4 @@ import datetime
 if __name__ == "__main__":
 
     with torch.cuda.device(1):
-        main()
+        main(load=False)
