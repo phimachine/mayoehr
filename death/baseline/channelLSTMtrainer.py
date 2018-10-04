@@ -141,6 +141,26 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
     return patient_loss
 
+def run_one_step(computer, channelmanager, optimizer, binary_criterion):
+    computer.train()
+    optimizer.zero_grad()
+    input, target, loss_type, states_tuple = next(channelmanager)
+    target=target.squeeze(1)
+    input=Variable(input).cuda()
+    loss_type = Variable(loss_type).cuda()
+    computer.assign_states_tuple(states_tuple)
+    output, states_tuple = computer(input)
+    channelmanager.push_states(states_tuple)
+
+    time_to_event_output = output[:, 0]
+    cause_of_death_output = output[:, 1:]
+    time_to_event_target = target[:, 0]
+    cause_of_death_target = target[:, 1:]
+
+    loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+    loss.backward()
+    optimizer.step()
+    return loss
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
@@ -231,23 +251,6 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
               (i, printloss))
     print(np.mean(running_loss))
 
-
-class lstmwrapper(nn.Module):
-    def __init__(self,input_size=69505, output_size=5952,hidden_size=128,num_layers=16,batch_first=True,
-                 dropout=True):
-        super(lstmwrapper, self).__init__()
-        self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
-                       batch_first=batch_first,dropout=dropout)
-        self.output=nn.Linear(hidden_size,output_size)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.lstm.reset_parameters()
-        self.output.reset_parameters()
-
-    def forward(self, input, hx=None):
-        output,statetuple=self.lstm(input,hx)
-        return self.output(output)
 
 def validationonly():
     '''
