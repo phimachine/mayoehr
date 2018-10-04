@@ -476,15 +476,4 @@ def oldmain():
 
 if __name__ == "__main__":
     ig = InputGen()
-    train,valid=train_valid_split(ig)
-    traindl=DataLoader(dataset=train,batch_size=1)
-    validdl=DataLoader(dataset=valid,batch_size=1)
-    print(train[1])
-    for x, y in enumerate(traindl):
-        if x==2:
-            break
-        print(y)
-    for x, y in enumerate(validdl):
-        if x == 2:
-            break
-        print(y)
+    ig.__getitem__(20730)

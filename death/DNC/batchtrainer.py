@@ -34,7 +34,7 @@ param_v_t = 5952
 param_W = 16
 param_R = 4
 param_N = 256
-param_bs = 32
+param_bs = 64
 param_reset = True
 
 
@@ -166,7 +166,6 @@ def valid_one_step(computer, channelmanager, binary_criterion):
     cause_of_death_target = target[:, 1:]
 
     loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-    print(loss)
     return loss
 
 def logprint(logfile, string):
@@ -196,7 +195,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     global global_exception_counter
     print_interval = 100
     val_interval = 1000
-    save_interval = 10000
+    save_interval = 1000
     target_dim = None
     rldmax_len = 500
     val_batch = 500
@@ -229,12 +228,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if i % val_interval == 0:
                 printloss = 0
                 for _ in range(val_batch):
-<<<<<<< Updated upstream
                     val_loss=valid_one_step(computer, valid, binary_criterion)
-=======
-                    printloss = 0
-                    val_loss=valid_one_step(computer, train, binary_criterion)
->>>>>>> Stashed changes
                     if val_loss is not None:
                         printloss += float(val_loss[0])
                     else:
@@ -307,9 +301,7 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         except ValueError:
             traceback.print_exc()
 
-<<<<<<< Updated upstream
-def main(load=True, lr=1e-3, savestr="struc"):
-=======
+
 def main(load=False, lr=1e-3, savestr="struc"):
     '''
     training loss is around 0.0003
@@ -318,7 +310,6 @@ def main(load=False, lr=1e-3, savestr="struc"):
     :param savestr:
     :return:
     '''
->>>>>>> Stashed changes
     total_epochs = 10
     iter_per_epoch = 100000
     lr = lr
@@ -389,10 +380,6 @@ def valid_only(savestr="struc"):
     starting_iteration = 0
     logfile = "log.txt"
     num_workers = 0
-<<<<<<< Updated upstream
-=======
-    savestr="struc"
->>>>>>> Stashed changes
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
@@ -439,7 +426,6 @@ def valid_only(savestr="struc"):
 
 
 if __name__ == "__main__":
-<<<<<<< Updated upstream
     """
     training
     
@@ -458,6 +444,4 @@ if __name__ == "__main__":
     """
 
     main()
-=======
-    valid_only()
->>>>>>> Stashed changes
+
