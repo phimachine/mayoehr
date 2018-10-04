@@ -34,7 +34,7 @@ param_v_t = 5952
 param_W = 16
 param_R = 4
 param_N = 256
-param_bs = 32
+param_bs = 64
 param_reset = True
 
 
@@ -166,7 +166,6 @@ def valid_one_step(computer, channelmanager, binary_criterion):
     cause_of_death_target = target[:, 1:]
 
     loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-    print(loss)
     return loss
 
 def logprint(logfile, string):
@@ -196,7 +195,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     global global_exception_counter
     print_interval = 100
     val_interval = 1000
-    save_interval = 10000
+    save_interval = 1000
     target_dim = None
     rldmax_len = 500
     val_batch = 500

@@ -193,8 +193,10 @@ class BatchDNC(nn.Module):
 
         bnout=self.bn(input)
         if (bnout != bnout).any():
-            self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False).cuda()
-            bnout=self.bn(input)
+            print("BN has produced NAN, new solution")
+            bnout[bnout!=bnout]=0
+            # self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False).cuda()
+            # bnout=self.bn(input)
 
         bnout=bnout.unsqueeze(1)
 
