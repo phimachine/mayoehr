@@ -332,3 +332,10 @@ def validationonly():
 if __name__ == "__main__":
     # main(load=True
     main()
+
+'''
+Note on October 4,
+
+LSTM reached a validation error around 0.005, consistent with running loss.
+Validation set runs out.
+'''

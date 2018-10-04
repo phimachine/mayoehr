@@ -229,12 +229,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if i % val_interval == 0:
                 printloss = 0
                 for _ in range(val_batch):
-<<<<<<< Updated upstream
                     val_loss=valid_one_step(computer, valid, binary_criterion)
-=======
-                    printloss = 0
-                    val_loss=valid_one_step(computer, train, binary_criterion)
->>>>>>> Stashed changes
                     if val_loss is not None:
                         printloss += float(val_loss[0])
                     else:
@@ -307,10 +302,7 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         except ValueError:
             traceback.print_exc()
 
-<<<<<<< Updated upstream
 def main(load=True, lr=1e-3, savestr="struc"):
-=======
-def main(load=False, lr=1e-3, savestr="struc"):
     '''
     training loss is around 0.0003
     :param load:
@@ -318,7 +310,6 @@ def main(load=False, lr=1e-3, savestr="struc"):
     :param savestr:
     :return:
     '''
->>>>>>> Stashed changes
     total_epochs = 10
     iter_per_epoch = 100000
     lr = lr
@@ -375,8 +366,7 @@ def main(load=False, lr=1e-3, savestr="struc"):
 
 def valid_only(savestr="struc"):
     '''
-    The loss is 0.024
-    Doesn't make any sense. At run time the running loss is 0.0003 and so is training loss sample.
+    This bug has been fixed.
 
     :return:
     '''
@@ -389,10 +379,6 @@ def valid_only(savestr="struc"):
     starting_iteration = 0
     logfile = "log.txt"
     num_workers = 0
-<<<<<<< Updated upstream
-=======
-    savestr="struc"
->>>>>>> Stashed changes
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
@@ -439,25 +425,4 @@ def valid_only(savestr="struc"):
 
 
 if __name__ == "__main__":
-<<<<<<< Updated upstream
-    """
-    training
-    
-    Using 8 workers for training set
-    Loading dataframes from pickle file
-    checking if there is nan in any of the dataframes
-    Input Gen initiated
-    Using InputGen Plan D, with death proportion 0.9
-    loading model
-    loading model at /local2/tmp/pycharm_project_292/death/DNC/saves/struc/DNC_0_10000.pkl
-    Loaded model at epoch  0 iteartion 10000
-    learning.   count: 10000, training loss: 0.0047931052
-    count: 10000, running loss: 0.0047931052
-    
-    loaded first training loop has 0.004 loss. How come validation is another result?
-    """
-
     main()
-=======
-    valid_only()
->>>>>>> Stashed changes
