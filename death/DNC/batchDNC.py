@@ -122,6 +122,13 @@ class BatchDNC(nn.Module):
 
 
     def init_states_each_channel(self):
+        """
+        This function will be used by the channel manager to initialize the hidden state for each channel (single batch)
+        I designed that the function needs to be put here together with the model, instead of CM, because CM should
+        be model agnostic, and hidden init is model dependent.
+
+        :return: state tuple for each channel, the channel manager will take care of the stacking of tensors.
+        """
 
         '''CONTROLLER'''
 

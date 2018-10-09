@@ -15,6 +15,8 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
+from death.baseline.channelLSTM import channelLSTM
+from death.baseline.lstmcm import ChannelManager
 
 batch_size = 1
 
@@ -103,44 +105,6 @@ def salvage():
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
 
-global_exception_counter=0
-def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
-                    binary_criterion, validate=False):
-    global global_exception_counter
-    patient_loss=None
-    try:
-        optimizer.zero_grad()
-        input = Variable(torch.Tensor(input).cuda())
-        target = Variable(torch.Tensor(target).cuda())
-
-        # we have no critical index, becuase critical index are those timesteps that
-        # DNC is required to produce outputs. This is not the case for our project.
-        # criterion does not need to be reinitiated for every story, because we are not using a mask
-
-        patient_output=computer(input)
-        cause_of_death_output = patient_output[:, :, 1:]
-        cause_of_death_target = target[:, :, 1:]
-        patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
-
-        if not validate:
-            patient_loss.backward()
-            optimizer.step()
-
-        if global_exception_counter>-1:
-            global_exception_counter-=1
-    except ValueError:
-        traceback.print_exc()
-        print("Value Error reached")
-        print(datetime.datetime.now().time())
-        global_exception_counter+=1
-        if global_exception_counter==10:
-            save_model(computer,optimizer,epoch=0,iteration=global_exception_counter)
-            raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
-        else:
-            pass
-
-    return patient_loss
-
 def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     computer.train()
     optimizer.zero_grad()
@@ -162,7 +126,85 @@ def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     optimizer.step()
     return loss
 
+def valid_one_step(computer, channelmanager, binary_criterion):
+    computer.eval()
+    input, target, loss_type, states_tuple = next(channelmanager)
+    target = target.squeeze(1)
+    input = Variable(input).cuda()
+    target = Variable(target).cuda()
+    loss_type = Variable(loss_type).cuda()
+    computer.assign_states_tuple(states_tuple)
+    output, states_tuple = computer(input)
+    channelmanager.push_states(states_tuple)
+
+    time_to_event_output = output[:, 0]
+    cause_of_death_output = output[:, 1:]
+    time_to_event_target = target[:, 0]
+    cause_of_death_target = target[:, 1:]
+
+    loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+    return loss
+
+
+def logprint(logfile, string):
+    with open(logfile, 'a') as handle:
+        handle.write(string)
+    print(string)
+
 def train(computer, optimizer, real_criterion, binary_criterion,
+          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=True):
+    print_interval = 100
+    val_interval = 1000
+    save_interval = 1000
+    target_dim = None
+    rldmax_len = 500
+    val_batch = 500
+    running_loss_deque = deque(maxlen=rldmax_len)
+
+    # erase the logfile
+    if logfile:
+        logfile=str(datetime.datetime.now())
+
+
+    for epoch in range(starting_epoch, total_epochs):
+        # all these are batches
+        for i in range(starting_iter, iter_per_epoch):
+            train_step_loss = run_one_step(computer, train, optimizer, binary_criterion)
+            if train_step_loss is not None:
+                printloss = float(train_step_loss[0])
+            else:
+                raise ValueError("What is happening?")
+                printloss = 10000
+            # computer.new_sequence_reset()
+            running_loss_deque.appendleft(printloss)
+            if i % print_interval == 0:
+                running_loss = np.mean(running_loss_deque)
+                if logfile:
+                    logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
+                                     (i, printloss, running_loss))
+
+            if i % val_interval == 0:
+                printloss = 0
+                for _ in range(val_batch):
+                    val_loss=valid_one_step(computer, valid, binary_criterion)
+                    if val_loss is not None:
+                        printloss += float(val_loss[0])
+                    else:
+                        global failure
+                        failure+=1
+                printloss = printloss / val_batch
+                if logfile:
+                    logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
+                                     (i, printloss))
+                else:
+                    print("validation. count: %4d, running loss: %.10f" %
+                          (i, printloss))
+
+            if i % save_interval == 0:
+                save_model(computer, optimizer, epoch, i, savestr)
+                print("model saved for epoch", epoch, "input", i)
+
+def train2(computer, optimizer, real_criterion, binary_criterion,
           train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
     valid_iterator=iter(valid_dl)
     print_interval=10
@@ -231,25 +273,49 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 break
 
 def valid(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
-    running_loss=[]
-    target_dim=None
-    valid_iterator=iter(valid_dl)
+          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
+    """
+    I have problem comparing the performances of different models. They do not seem to refer to the same value.
+    Processing by sequences and processing by steps are fundamentally different and unfair.
 
-    for i in valid_iterator:
-        input, target, loss_type=next(valid_iterator)
-        val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                   real_criterion, binary_criterion, validate=True)
+    :param computer:
+    :param optimizer:
+    :param real_criterion:
+    :param binary_criterion:
+    :param train: this is the ChannelManager class. It has a __next__ method defined.
+    :param valid: ditto
+    :param starting_epoch:
+    :param total_epochs:
+    :param starting_iter:
+    :param iter_per_epoch:
+    :param savestr: a custom string that identifies this training run
+    :param logfile:
+    :return:
+    """
+    global global_exception_counter
+    print_interval = 100
+    val_interval = 10000
+    save_interval = 10000
+    target_dim = None
+    rldmax_len = 500
+    val_batch = 100000
+    running_loss_deque = deque(maxlen=rldmax_len)
+    computer.eval()
+
+    val_losses=[]
+    for i in range(val_batch):
+        val_loss=valid_one_step(computer, valid, binary_criterion)
         if val_loss is not None:
             printloss = float(val_loss[0])
-            running_loss.append((printloss))
+            val_losses.append(printloss)
+        else:
+            raise ValueError("Why is val_loss None again?")
         if logfile:
-            with open(logfile, 'a') as handle:
-                handle.write("validation. count: %4d, val loss     : %.10f \n" %
+            logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
                              (i, printloss))
-        print("validation. count: %4d, val loss: %.10f" %
+        print("validation. count: %4d, loss: %.10f" %
               (i, printloss))
-    print(np.mean(running_loss))
+    print("loss:",np.mean(val_losses))
 
 
 def validationonly():
@@ -269,7 +335,7 @@ def validationonly():
     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
     print("Using", num_workers, "workers for validation set")
     # testing whether this LSTM works is basically a question whether
-    lstm = lstmwrapper()
+    lstm = channelLSTM()
 
     # load model:
     print("loading model")
@@ -294,6 +360,7 @@ def validationonly():
     valid(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
+
 def main(load=False):
     total_epochs = 10
     iter_per_epoch = 100000
@@ -302,18 +369,23 @@ def main(load=False):
     starting_epoch = 0
     starting_iteration= 0
     logfile = "log.txt"
+    param_bs=16
 
     num_workers = 16
     ig = InputGenD()
+    lstm=channelLSTM()
+
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds,validds=train_valid_split(ig,split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
+    traindl = ChannelManager(traindl, param_bs, model=lstm)
+    validdl = ChannelManager(validdl, param_bs, model=lstm)
+
 
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether
-    lstm=lstmwrapper()
 
     # load model:
     if load:
@@ -336,6 +408,7 @@ def main(load=False):
     train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
           int(starting_iteration), iter_per_epoch, logfile)
+
 
 
 if __name__ == "__main__":
