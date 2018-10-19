@@ -375,8 +375,6 @@ def main(load=False):
     ig = InputGenD()
     lstm=channelLSTM()
 
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
     trainds,validds=train_valid_split(ig,split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1)
