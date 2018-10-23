@@ -118,3 +118,23 @@ tensor.
 You should take a look at death/post/channelmanager.py and inputgen_planD. Both
 objects are built to be/based on PyTorch Datasets and should be loaded to pytorch
 with no problem.
+
+
+## Work
+### Statistical models baselines
+The range of statistical models applicable to time series is limited.
+Some modification is due.
+
+### Validation redesign
+Turns out it's not easy to do validation. A lot of work is put in.
+We resampled the valid set,
+and we need to revert this change.
+
+### Hyperparamter tuning
+Manual tuning is not possible. We should do grid search on base of
+2.
+
+### Deep models benchmark unification
+For some deep models, a whole sequence is taken in before it's evaluated.
+For others, evaluation happens for each time step. The comparison between
+the two's performances is not fair. This problem is solved partially.

@@ -2,6 +2,7 @@ from torch.nn.modules import LSTM
 import torch.nn as nn
 from torch.autograd import Variable
 import torch
+import pdb
 
 class channelLSTM(nn.Module):
     def __init__(self,input_size=69505, output_size=5952,hidden_size=128,num_layers=32,batch_first=True,
@@ -21,8 +22,8 @@ class channelLSTM(nn.Module):
 
     def init_states_each_channel(self):
         # num_layers, channel, dim
-        h=Variable(torch.Tensor(self.num_layers, 1, self.hidden_size)).cuda()
-        s=Variable(torch.Tensor(self.num_layers, 1, self.hidden_size)).cuda()
+        h=Variable(torch.Tensor(self.num_layers, 1, self.hidden_size)).cuda().zero_()
+        s=Variable(torch.Tensor(self.num_layers, 1, self.hidden_size)).cuda().zero_()
         return (h,s)
 
     def assign_states_tuple(self, states_tuple):
@@ -30,4 +31,6 @@ class channelLSTM(nn.Module):
 
     def forward(self, input):
         output,statetuple=self.lstm(input,self.hx)
-        return self.output(output), statetuple
+        output=output.squeeze(1)
+        output=self.output(output)
+        return output, statetuple

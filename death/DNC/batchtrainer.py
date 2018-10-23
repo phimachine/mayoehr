@@ -302,6 +302,9 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
 def main(load=True, lr=1e-3, savestr="struc"):
     '''
     training loss is around 0.0003
+    validation loss is around 0.006, frozen after first 10,000 samples
+    still seems overfitting
+
     :param load:
     :param lr:
     :param savestr:

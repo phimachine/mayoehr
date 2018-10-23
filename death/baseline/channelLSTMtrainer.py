@@ -109,7 +109,7 @@ def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     computer.train()
     optimizer.zero_grad()
     input, target, loss_type, states_tuple = next(channelmanager)
-    target=target.squeeze(1)
+    target=Variable(target.squeeze(1).cuda())
     input=Variable(input).cuda()
     loss_type = Variable(loss_type).cuda()
     computer.assign_states_tuple(states_tuple)
@@ -120,7 +120,6 @@ def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     cause_of_death_output = output[:, 1:]
     time_to_event_target = target[:, 0]
     cause_of_death_target = target[:, 1:]
-
     loss = binary_criterion(cause_of_death_output, cause_of_death_target)
     loss.backward()
     optimizer.step()
@@ -131,7 +130,7 @@ def valid_one_step(computer, channelmanager, binary_criterion):
     input, target, loss_type, states_tuple = next(channelmanager)
     target = target.squeeze(1)
     input = Variable(input).cuda()
-    target = Variable(target).cuda()
+    target = Variable(target.cuda())
     loss_type = Variable(loss_type).cuda()
     computer.assign_states_tuple(states_tuple)
     output, states_tuple = computer(input)
