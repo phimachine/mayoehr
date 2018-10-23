@@ -31,12 +31,14 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-def save_model(net, optim, epoch, iteration):
+def save_model(net, optim, epoch, iteration, savestr):
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(epoch) +  "_" + str(iteration) + ".pkl")
-    pickle_file = pickle_file.open('wb')
-    torch.save((net,  optim, epoch, iteration), pickle_file)
+    if not os.path.isdir(Path(task_dir) / "saves" / savestr):
+        os.mkdir(Path(task_dir) / "saves" / savestr)
+    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/DNC_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    with pickle_file.open('wb') as fhand:
+        torch.save((net, optim, epoch, iteration), fhand)
     print('model saved at', pickle_file)
 
 def load_model(computer, optim, starting_epoch, starting_iteration):
@@ -203,7 +205,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 save_model(computer, optimizer, epoch, i, savestr)
                 print("model saved for epoch", epoch, "input", i)
 
-def train2(computer, optimizer, real_criterion, binary_criterion,
+def train_obsolete(computer, optimizer, real_criterion, binary_criterion,
           train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
     valid_iterator=iter(valid_dl)
     print_interval=10
@@ -404,7 +406,7 @@ def main(load=False):
 
     train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
-          int(starting_iteration), iter_per_epoch, logfile)
+          int(starting_iteration), iter_per_epoch, "cnlstm", logfile)
 
 
 

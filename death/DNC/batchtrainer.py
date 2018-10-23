@@ -302,8 +302,19 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
 def main(load=True, lr=1e-3, savestr="struc"):
     '''
     training loss is around 0.0003
-    validation loss is around 0.006, frozen after first 10,000 samples
-    still seems overfitting
+    validation loss is around 0.006, peak at 0.005 with early stopping
+    still seems overfitting.
+    I ran the training for 10 epochs, which took around a week. The running loss keeps decreasing
+
+    epoch   train_loss   valid_loss
+    1       0.0018       0.005
+    2       0.0016       0.005
+    3       0.0012       0.005
+    ...
+    10      0.0004       0.006
+
+    The log is enclosed for analysis at DNC root folder.
+    The validation loss saturates after 10,000 training samples. It suggests inappropriate model or overfitting.
 
     :param load:
     :param lr:
