@@ -53,9 +53,6 @@ class InputGenD(InputGen):
         print("Using InputGen Plan D, with death proportion", self.death_proportion)
 
     def __getitem__(self, index, debug=False):
-        # TODO there is a critical bug that shows that my post processing might need to be updated.
-        # TODO somehow a value that is in rep_person_id+death is not appearing in earla, which means
-        # TODO it does not have a record in our db.
         id = self.all_indices[index]
         return self.get_by_id(id, debug)
         # return torch.Tensor(i),torch.Tensor(o)
