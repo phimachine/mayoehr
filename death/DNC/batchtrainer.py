@@ -10,6 +10,7 @@ from pathlib import Path
 import os
 from os.path import abspath
 from death.post.channelmanager import InputGenD, ChannelManager, train_valid_split
+from death.post.inputgen_planE import InputGenE
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.DNC.batchDNC import BatchDNC as DNC
@@ -169,8 +170,9 @@ def valid_one_step(computer, channelmanager, binary_criterion):
     return loss
 
 def logprint(logfile, string):
-    with open(logfile, 'a') as handle:
-        handle.write(string)
+    if logprint is not None and logprint !=False:
+        with open(logfile, 'a') as handle:
+            handle.write(string)
     print(string)
 
 failure=0
@@ -283,11 +285,9 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
             val_losses.append(printloss)
         else:
             raise ValueError("Why is val_loss None again?")
-        if logfile:
-            logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
-                             (i, printloss))
-        print("validation. count: %4d, loss: %.10f" %
-              (i, printloss))
+
+        logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
+                         (i, printloss))
     print("loss:",np.mean(val_losses))
 
 
@@ -377,7 +377,6 @@ def main(load=True, lr=1e-3, savestr="struc"):
 
 def valid_only(savestr="struc"):
     '''
-    This bug has been fixed.
 
     :return:
     '''
@@ -389,7 +388,7 @@ def valid_only(savestr="struc"):
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log.txt"
-    num_workers = 0
+    num_workers = 8
 
     print("Using", num_workers, "workers for training set")
     computer = DNC(x=param_x,
@@ -405,6 +404,10 @@ def valid_only(savestr="struc"):
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
+    # change validation set to be inputgenE
+    ige=InputGenE()
+    validds=ige.get_valid_dataset()
+
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
     traindl = ChannelManager(traindl, param_bs, model=computer)
@@ -436,4 +439,4 @@ def valid_only(savestr="struc"):
 
 
 if __name__ == "__main__":
-    main()
+    valid_only()

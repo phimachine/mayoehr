@@ -49,6 +49,7 @@ class InputGenE(InputGen):
         np.random.seed(random_seed)
 
         self.valid=None
+        self.train_valid_split()
 
 
     def train_valid_split(self):
