@@ -401,7 +401,6 @@ def valid_only(savestr="struc"):
                    bs=param_bs)
 
     ig = InputGenD(verbose=verbose, debug=debug)
-    # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
     trainds, validds = train_valid_split(ig, split_fold=10)
     # change validation set to be inputgenE

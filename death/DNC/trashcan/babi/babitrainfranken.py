@@ -1,15 +1,15 @@
 # I decide to run my model on babi again to see if the convergen ce problem is with my model or dataset
 
+from death.DNC.trashcan.frankenstein import Frankenstein as DNC
 import torch
 import numpy
+import pdb
 from pathlib import Path
 import pickle
 import os
 from os.path import join, abspath
-from death.DNC.babi.babigen import PreGenData
+from death.DNC.trashcan.babi.babigen import PreGenData
 from torch.autograd import Variable
-import torch.nn as nn
-from torch.nn.modules import LSTM
 
 
 # task 10 of babi
@@ -118,22 +118,21 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim,
 
     with torch.no_grad if validate else dummy_context_mgr():
 
-        story_output=computer(input_data)
-        #
-        # story_output = Variable(torch.Tensor(batch_size, story_length, input_dim).cuda())
-        # # a single story
-        # for timestep in range(story_length):
-        #     # feed the batch into the machine
-        #     # Expected input dimension: (150, 27)
-        #     # output: (150,27)
-        #     batch_input_of_same_timestep = input_data[:, timestep, :]
-        #
-        #     # usually batch does not interfere with each other's logic
-        #     batch_output = computer(batch_input_of_same_timestep)
-        #     if (batch_output!=batch_output).any():
-        #         pdb.set_trace()
-        #         raise ValueError("nan is found in the batch output.")
-        #     story_output[:, timestep, :] = batch_output
+        story_output = Variable(torch.Tensor(batch_size, story_length, input_dim).cuda())
+        computer.new_sequence_reset()
+        # a single story
+        for timestep in range(story_length):
+            # feed the batch into the machine
+            # Expected input dimension: (150, 27)
+            # output: (150,27)
+            batch_input_of_same_timestep = input_data[:, timestep, :]
+
+            # usually batch does not interfere with each other's logic
+            batch_output = computer(batch_input_of_same_timestep)
+            if (batch_output!=batch_output).any():
+                pdb.set_trace()
+                raise ValueError("nan is found in the batch output.")
+            story_output[:, timestep, :] = batch_output
 
         target_output = target_output.view(-1)
         story_output = story_output.view(-1, input_dim)
@@ -160,7 +159,7 @@ def train(computer, optimizer, story_length, batch_size, pgd, input_dim, startin
             train_story_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim)
             print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
                   (epoch, batch, train_story_loss[0]))
-            running_loss += float(train_story_loss[0])
+            running_loss += train_story_loss
             val_freq = 16
             if batch % val_freq == val_freq - 1:
                 print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f' %
@@ -169,61 +168,44 @@ def train(computer, optimizer, story_length, batch_size, pgd, input_dim, startin
                 # also test the model
                 val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim, validate=False)
                 print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
-                      (epoch, batch, float(val_loss[0])))
+                      (epoch, batch, val_loss))
 
         save_model(computer, optimizer, epoch)
         print("model saved for epoch ", epoch)
 
-class lstmwrapper(nn.Module):
-    def __init__(self,input_size=47764, output_size=3620,hidden_size=128,num_layers=16,batch_first=True,
-                 dropout=True):
-        super(lstmwrapper, self).__init__()
-        self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
-                       batch_first=batch_first,dropout=dropout)
-        self.output=nn.Linear(hidden_size,output_size)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.lstm.reset_parameters()
-        self.output.reset_parameters()
-
-    def forward(self, input, hx=None):
-        output,statetuple=self.lstm(input,hx)
-        return self.output(output)
-
 
 def main():
-    with torch.cuda.device(1):
-        story_limit = 150
-        epoch_batches_count = 64
-        epochs_count = 1024
-        lr = 1e-1
-        optim = None
-        starting_epoch = -1
-        bs=32
-        pgd = PreGenData(bs)
+    story_limit = 150
+    epoch_batches_count = 64
+    epochs_count = 1024
+    lr = 1e-2
+    optim = None
+    starting_epoch = -1
+    bs=32
+    pgd = PreGenData(bs)
 
-        task_dir = os.path.dirname(abspath(__file__))
-        processed_data_dir = join(task_dir, 'data',"processed")
-        lexicon_dictionary=pickle.load( open(join(processed_data_dir, 'lexicon-dict.pkl'), 'rb'))
-        x=len(lexicon_dictionary)
+    task_dir = os.path.dirname(abspath(__file__))
+    processed_data_dir = join(task_dir, 'data',"processed")
+    lexicon_dictionary=pickle.load( open(join(processed_data_dir, 'lexicon-dict.pkl'), 'rb'))
+    x=len(lexicon_dictionary)
 
-        computer = lstmwrapper(input_size=x,output_size=x,hidden_size=256,num_layers=128,batch_first=True,
-                               dropout=True)
-        computer.reset_parameters()
 
-        # if load model
-        # computer, optim, starting_epoch = load_model(computer)
+    computer = DNC(x=x,v_t=x,bs=bs,W=64,L=64,R=32,h=256)
+    computer.reset_parameters()
 
-        computer = computer.cuda()
-        # if optim is None:
-        #     optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
-        # else:
-        print('use Adadelta optimizer with learning rate ', lr)
-        optimizer = torch.optim.SGD(computer.parameters(), lr=lr)
+    # if load model
+    # computer, optim, starting_epoch = load_model(computer)
 
-        # starting with the epoch after the loaded one
-        train(computer, optimizer, story_limit, bs, pgd, x, int(starting_epoch) + 1, epochs_count, epoch_batches_count)
+    computer = computer.cuda()
+    # somehow the loss always diverges. I do not understand why.
+    # if optim is None:
+    #     optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+    # else:
+    print('use Adadelta optimizer with learning rate ', lr)
+    optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+
+    # starting with the epoch after the loaded one
+    train(computer, optimizer, story_limit, bs, pgd, x, int(starting_epoch) + 1, epochs_count, epoch_batches_count)
 
 
 if __name__ == "__main__":

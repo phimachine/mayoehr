@@ -1,4 +1,4 @@
-from death.DNC.babi.babitrainfranken import *
+from death.DNC.trashcan.babi.babitrainfranken import *
 
 
 if __name__ == "__main__":

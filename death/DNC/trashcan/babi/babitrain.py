@@ -1,6 +1,6 @@
 # I decide to run my model on babi again to see if the convergen ce problem is with my model or dataset
 
-from death.DNC.trashcan.frankenstein import Frankenstein as DNC
+from death.DNC.trashcan.monster import MonsterDNC as DNC
 import torch
 import numpy
 import pdb
@@ -8,7 +8,7 @@ from pathlib import Path
 import pickle
 import os
 from os.path import join, abspath
-from death.DNC.babi.babigen import PreGenData
+from death.DNC.trashcan.babi.babigen import PreGenData
 from torch.autograd import Variable
 
 
@@ -100,7 +100,6 @@ def load_model_old(net):
 
 
 def run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim, validate=False):
-    optimizer.zero_grad()
     # to promote code reuse
     if not validate:
         input_data, target_output, critical_index = pgd.get_train()
@@ -178,7 +177,7 @@ def main():
     story_limit = 150
     epoch_batches_count = 64
     epochs_count = 1024
-    lr = 1e-2
+    lr = 1e-5
     optim = None
     starting_epoch = -1
     bs=32
@@ -194,15 +193,14 @@ def main():
     computer.reset_parameters()
 
     # if load model
-    # computer, optim, starting_epoch = load_model(computer)
+    computer, optim, starting_epoch = load_model(computer)
 
     computer = computer.cuda()
-    # somehow the loss always diverges. I do not understand why.
-    # if optim is None:
-    #     optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
-    # else:
-    print('use Adadelta optimizer with learning rate ', lr)
-    optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+    if optim is None:
+        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+    else:
+        print('use Adadelta optimizer with learning rate ', lr)
+        optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
 
     # starting with the epoch after the loaded one
     train(computer, optimizer, story_limit, bs, pgd, x, int(starting_epoch) + 1, epochs_count, epoch_batches_count)

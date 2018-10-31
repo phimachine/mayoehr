@@ -51,6 +51,9 @@ class InputGenE(InputGen):
         self.valid=None
         self.train_valid_split()
 
+        # the proportion of death records the last training set has
+        self.proportion=None
+
 
     def train_valid_split(self):
         # splits the whole set by id
@@ -86,6 +89,7 @@ class InputGenE(InputGen):
         new_no_death_length=len(self.train_no_death_id)//resample_rate
         new_no_death_id=permutation(self.train_no_death_id)
         new_no_death_id=new_no_death_id[:new_no_death_length]
+        self.proportion=len(self.train_death_id)/(len(self.train_death_id)+len(new_no_death_id))
         ids=np.concatenate((self.train_death_id,new_no_death_id))
         ids=permutation(ids)
         train=GenHelper(ids,self)

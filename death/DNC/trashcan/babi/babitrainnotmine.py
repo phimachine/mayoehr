@@ -1,28 +1,13 @@
-from dnc import DNC
-
 # I decide to run my model on babi again to see if the convergen ce problem is with my model or dataset
 
+from dnc import DNC
 import torch
 import numpy
-import death.DNC.archi.param as param
-import pdb
 from pathlib import Path
-import os
-from os.path import abspath
-import gc
-import time
-from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
 import pickle
-import numpy as np
-from shutil import rmtree
 import os
-from os import listdir, mkdir
-from os.path import join, isfile, isdir, dirname, basename, normpath, abspath, exists
-import subprocess
-import death.DNC.archi.param as param
-from threading import Thread
-import time
-from death.DNC.babi.babigen import PreGenData
+from os.path import join, abspath
+from death.DNC.trashcan.babi.babigen import PreGenData
 from torch.autograd import Variable
 
 
@@ -113,7 +98,7 @@ def load_model_old(net):
     return ret['epoch'], ret['optimizer']
 
 
-def run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim, validate=False):
+def run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim, mhx, validate=False):
     # to promote code reuse
     if not validate:
         input_data, target_output, critical_index = pgd.get_train()
@@ -131,21 +116,10 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim,
 
     with torch.no_grad if validate else dummy_context_mgr():
 
-        story_output = Variable(torch.Tensor(batch_size, story_length, input_dim).cuda())
-        computer.new_sequence_reset()
         # a single story
-        for timestep in range(story_length):
-            # feed the batch into the machine
-            # Expected input dimension: (150, 27)
-            # output: (150,27)
-            batch_input_of_same_timestep = input_data[:, timestep, :]
-
-            # usually batch does not interfere with each other's logic
-            batch_output = computer(batch_input_of_same_timestep)
-            if (batch_output!=batch_output).any():
-                pdb.set_trace()
-                raise ValueError("nan is found in the batch output.")
-            story_output[:, timestep, :] = batch_output
+        story_output, (_, mhx, _) = computer(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
+        if (story_output!=story_output).any():
+            raise ValueError("nan is found in the batch output.")
 
         target_output = target_output.view(-1)
         story_output = story_output.view(-1, input_dim)
@@ -159,16 +133,17 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim,
             story_loss.backward()
             optimizer.step()
 
-    return story_loss
+    return story_loss, mhx
 
 
 def train(computer, optimizer, story_length, batch_size, pgd, input_dim, starting_epoch, epochs_count, epoch_batches_count):
-    for epoch in range(starting_epoch, epochs_count):
+    mhx=None
 
+    for epoch in range(starting_epoch, epochs_count):
 
         for batch in range(epoch_batches_count):
 
-            train_story_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim)
+            train_story_loss, mhx = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim,mhx)
             print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
                   (epoch, batch, train_story_loss[0]))
             # keeping the running loss causes GPU memory leak.
@@ -178,7 +153,7 @@ def train(computer, optimizer, story_length, batch_size, pgd, input_dim, startin
             val_freq = 16
             if batch % val_freq == val_freq - 1:
                 # also test the model
-                val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim, validate=False)
+                val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim, mhx, validate=False)
                 print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
                       (epoch, batch, val_loss))
 
@@ -202,7 +177,7 @@ def main():
     x=len(lexicon_dictionary)
 
 
-    computer = DNC(x=x,v_t=x,bs=bs,W=64,L=64,R=32,h=256)
+    computer = DNC(x,x,num_layers=4,num_hidden_layers=4,cell_size=4,nr_cells=4,read_heads=4,gpu_id=0).cuda()
 
     # if load model
     # computer, optim, starting_epoch = load_model(computer)

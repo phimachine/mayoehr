@@ -1,6 +1,7 @@
+from dnc import DNC
+
 # I decide to run my model on babi again to see if the convergen ce problem is with my model or dataset
 
-from death.DNC.trashcan.monster import MonsterDNC as DNC
 import torch
 import numpy
 import pdb
@@ -8,7 +9,7 @@ from pathlib import Path
 import pickle
 import os
 from os.path import join, abspath
-from death.DNC.babi.babigen import PreGenData
+from death.DNC.trashcan.babi.babigen import PreGenData
 from torch.autograd import Variable
 
 
@@ -151,19 +152,18 @@ def run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim,
 def train(computer, optimizer, story_length, batch_size, pgd, input_dim, starting_epoch, epochs_count, epoch_batches_count):
     for epoch in range(starting_epoch, epochs_count):
 
-        running_loss = 0
 
         for batch in range(epoch_batches_count):
 
             train_story_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim)
             print("learning. epoch: %4d, batch number: %4d, training loss: %.4f" %
                   (epoch, batch, train_story_loss[0]))
-            running_loss += train_story_loss
+            # keeping the running loss causes GPU memory leak.
+            # reassignment of variables retain graph
+            # reassignment with 0 changes the internal value and does not seem to reinitiate the object?
+            # do not keep running loss. Not necessary anyway.
             val_freq = 16
             if batch % val_freq == val_freq - 1:
-                print('summary.  epoch: %4d, batch number: %4d, running loss: %.4f' %
-                      (epoch, batch, running_loss / val_freq))
-                running_loss = 0
                 # also test the model
                 val_loss = run_one_story(computer, optimizer, story_length, batch_size, pgd, input_dim, validate=False)
                 print('validate. epoch: %4d, batch number: %4d, validation loss: %.4f' %
@@ -177,8 +177,8 @@ def main():
     story_limit = 150
     epoch_batches_count = 64
     epochs_count = 1024
-    lr = 1e-5
-    optim = None
+    lr = 1e-11
+    optim = 1
     starting_epoch = -1
     bs=32
     pgd = PreGenData(bs)
@@ -190,10 +190,9 @@ def main():
 
 
     computer = DNC(x=x,v_t=x,bs=bs,W=64,L=64,R=32,h=256)
-    computer.reset_parameters()
 
     # if load model
-    computer, optim, starting_epoch = load_model(computer)
+    # computer, optim, starting_epoch = load_model(computer)
 
     computer = computer.cuda()
     if optim is None:

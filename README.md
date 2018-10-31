@@ -125,10 +125,9 @@ with no problem.
 The range of statistical models applicable to time series is limited.
 Some modification is due.
 
-### Validation redesign
-Turns out it's not easy to do validation. A lot of work is put in.
-We resampled the valid set,
-and we need to revert this change.
+### Validation redesign: Done.
+Validation is redesigned and curriculum learning is possible, but
+not a priority for now.
 
 ### Hyperparamter tuning
 Manual tuning is not possible. We should do grid search on base of
