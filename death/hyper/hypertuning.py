@@ -14,6 +14,21 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch.nn as nn
 import torch
+import datetime
+from death.DNC.batchDNC import BatchDNC as DNC
+
+
+def get_log_file():
+    timestring = str(datetime.datetime.now().time())
+    timestring.replace(" ", "_")
+    return "hyper_" + timestring
+
+def logprint(logfile, string, log_only=False):
+    if logprint is not None and logprint !=False:
+        with open(logfile, 'a') as handle:
+            handle.write(string)
+    if not log_only:
+        print(string)
 
 class HyperParameterTuner():
 
@@ -30,6 +45,10 @@ class HyperParameterTuner():
         self.best_validation=None
 
         self.mode = mode
+
+        self.num_workers=8
+        self.bs=128
+
         if self.mode == "BatchDNC":
             self.ig=InputGenE()
             trainds=self.ig.get_train_dataset()
@@ -39,18 +58,27 @@ class HyperParameterTuner():
             self.binary_criterion= nn.BCEWithLogitsLoss()
             self.optimizer_type=torch.optim.Adam
             self.lr=1e-3
+            self.parameters=OrderedDict()
+            self.parameters['h']=128
+            self.parameters['L']=4
+            self.parameters['W']=8
+            self.parameters['R']=4
+            self.parameters['N']=64
+
+            self.tune_one_param=self.tune_one_param_DNC
+
         else:
             raise ValueError("Not supported")
-
-
-        self.num_workers=8
-        self.bs=32
 
         # choose an efficient validation size here
         self.valid_records=256
         self.average_step_in_records=64
         # how many validations will be ignored before tuning begins
         self.ignore_valid=5
+
+        timestring=str(datetime.datetime.now().time())
+        timestring.replace(" ","_")
+        self.param_log=get_log_file()
 
 
     def tune(self):
@@ -59,57 +87,100 @@ class HyperParameterTuner():
         # the parameter is chosen greedily. If changing a parameter yields good results, then the same change is applied
         # again, until it does not improve, and then next parameter is chosen.
 
+        logprint(self.param_log, "Starting parameters:")
+        logprint(self.param_log, str(self.parameters))
+        logprint(self.param_log, "workers: "+str(self.num_workers)+", batch size:"+str(self.bs))
+
+        def greedily_tune(bigger, tune_streak, parameter):
+            changed=True
+            value=self.parameters[parameter]
+            while changed:
+                if bigger:
+                    value = value * 2
+                else:
+                    if value > 1:
+                        value = value / 2
+                    else:
+                        '''The parameter cannot be modified further'''
+                        break
+                self.parameters[parameter]=value
+                # The function below will modify self.parameters or self.best_parameters
+
+                changed = self.tune_one_param(bigger)
+                if changed:
+                    tune_streak += 1
+
+            return tune_streak
+
+        stable=False
+        while not stable:
+            stable=True
+            for parameter in self.parameters:
+                tune_streak=0
+
+                if np.random.random()>0.5:
+                    bigger=True
+                else:
+                    bigger=False
+
+                tune_streak=greedily_tune(bigger, tune_streak, parameter)
+
+                if tune_streak==0:
+                    # if the guessed direction did not lead to a better outcome,
+                    # try the other direction
+                    bigger = not bigger
+                    tune_streak=greedily_tune(bigger, tune_streak, parameter)
+
+                if tune_streak!=0:
+                    logprint(self.param_log,
+                             "Tuned parameter", parameter, "to be", self.parameters[parameter],"with", tune_streak,"tries")
+                    stable=False
+
+            # at this point, stable will only be False if every parameter has been probed in both directions and
+            # we have no improvement. This is the definition of pareto equilibrium.
 
 
-    def tune_one_param(self, parameter, bigger):
-        """
-        Tune one parameter
-        :param parameter: the parameter to be tuned
-        :param bigger: direction of change
-        :return:
-        Whether this change betters the result
-        The result
-        """
-
-        if self.mode=="BatchDNC":
-            return self.tune_one_param_DNC(parameter,bigger)
-
-    def tune_one_param_DNC(self, parameter, bigger):
+    def tune_one_param_DNC(self, bigger):
         """
         Tunes one parameter that is given
 
         Compare the performance of this parameter set with the best parameter set we have
         Iff better, replace
         :param parameter:
-        :param bigger:
-        :return: If the parameter if better
+        :param value:
+        :return: If the parameter is better
         """
 
         from death.post.channelmanager import ChannelManager
         # bs is a parameter dependent upon the parameter set, because of memory constraint
-        self.traincm = ChannelManager(self.traindl, self.getbs(), model=self.model)
-        self.validcm = ChannelManager(self.validdl, self.getbs(), model=self.model)
 
-        # modify the parameter
         if bigger:
-            self.parameters[parameter]*=2
+            self.bs/=2
         else:
-            if self.parameters!=1:
-                self.parameters[parameter]/=2
-            else:
-                return False
+            self.bs*=2
+
+        self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
+        self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
+
 
         # initialize with the current parameters
         self.model = self.init_DNC()
         self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
 
         self.run=self.run_DNC
+        # TODO I expect this function to be wrapped in a try catch clause, but I'm not sure which
+        # exception to catch yet for insufficient memory.
         best_validation=self.early_stopping()
         if best_validation>self.best_validation:
-            self.best_parameters=self.parameters
+            self.best_parameters=self.parameters.copy()
             return True
         else:
-            self.parameters=self.best_parameters
+            self.parameters=self.best_parameters.copy()
+            # if not improved, batch size needs to be reverted too
+            if bigger:
+                self.bs*=2
+            else:
+                self.bs/=2
             return False
 
     def early_stopping(self):
@@ -138,10 +209,6 @@ class HyperParameterTuner():
 
         return best_validation
 
-    def getbs(self):
-        pass
-
-
     def run_DNC(self):
         """
         Train the model for a few rounds and get one validation
@@ -149,8 +216,7 @@ class HyperParameterTuner():
         :return:
         """
 
-
-        # Validation size is determined by the mount of validation data points.
+        # Validation size is measured by the mount of validation data points.
         # Training size is measured in computation cycles.
         # This design discourages using huge parameters and very small batch size, which will certainly dominate
         # with limited computation resources.
@@ -210,24 +276,8 @@ class HyperParameterTuner():
         loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
         return loss
 
-
     def init_DNC(self):
-        model=None
-        return model
-
-
-    def init_parameters(self):
-        if self.mode=="BatchDNC":
-            return self.init_parameters_DNC()
-
-    def init_parameters_DNC(self):
-        self.parameters = OrderedDict([("x", 69505),
-                                       ("h", 128),
-                                       ("L", 4),
-                                       ("v_t", 5952),
-                                       ("W", 8),
-                                       ("R", 4),
-                                       ("N", 64)])
+        self.model=DNC(x=69505,v_t=5952,bs=self.bs, **self.parameters)
 
     def validate_DNC(self):
         val_batches=self.valid_records*self.average_step_in_records/self.bs
@@ -236,3 +286,7 @@ class HyperParameterTuner():
             training_losses.append(self.valid_one_step_DNC())
         return np.mean(training_losses)
 
+
+if __name__=="__main__":
+    ht=HyperParameterTuner()
+    ht.tune()

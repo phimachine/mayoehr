@@ -36,7 +36,6 @@ param_W = 8
 param_R = 4
 param_N = 64
 param_bs = 128
-param_reset = True
 
 
 class dummy_context_mgr():
