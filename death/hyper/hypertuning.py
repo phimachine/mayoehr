@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch
 import datetime
 from death.DNC.batchDNC import BatchDNC as DNC
+import pickle
 
 
 def get_log_file():
@@ -32,7 +33,7 @@ def logprint(logfile, string, log_only=False):
 
 class HyperParameterTuner():
 
-    def __init__(self, mode="BatchDNC"):
+    def __init__(self, mode="BatchDNC",load=False):
         # this is the set of the best parameters I have so far, or the one I'm testing
         self.parameters = {}
         # a copy of the parameters when it worked, in case exception handling needs it
@@ -42,7 +43,8 @@ class HyperParameterTuner():
         self.minimum_training_iterations = 2000
 
         self.best_parameters={}
-        self.best_validation=None
+        # needs to set up to be some value
+        self.best_validation=float('inf')
 
         self.mode = mode
 
@@ -80,6 +82,17 @@ class HyperParameterTuner():
         timestring.replace(" ","_")
         self.param_log=get_log_file()
 
+        if load:
+            self.load_best_param()
+
+    def save_best_param(self):
+        with open("best_parameters.pkl",'wb') as f:
+            pickle.dump((self.parameters,self.best_validation, self.bs), f)
+
+    def load_best_param(self):
+        with open('best_parameters.pkl','rb') as f:
+            self.parameters,self.best_validation, self.bs=pickle.load(f)
+
 
     def tune(self):
         # main function to be called
@@ -95,11 +108,12 @@ class HyperParameterTuner():
             changed=True
             value=self.parameters[parameter]
             while changed:
+                logprint(self.param_log,"Tuning "+str(parameter)+", original value is "+str(value))
                 if bigger:
                     value = value * 2
                 else:
                     if value > 1:
-                        value = value / 2
+                        value = value // 2
                     else:
                         '''The parameter cannot be modified further'''
                         break
@@ -155,24 +169,25 @@ class HyperParameterTuner():
         # bs is a parameter dependent upon the parameter set, because of memory constraint
 
         if bigger:
-            self.bs/=2
+            self.bs//=2
         else:
             self.bs*=2
 
-        self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
-        self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
-
 
         # initialize with the current parameters
-        self.model = self.init_DNC()
+        self.init_DNC()
+
+        self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
+        self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
         self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
 
         self.run=self.run_DNC
         # TODO I expect this function to be wrapped in a try catch clause, but I'm not sure which
         # exception to catch yet for insufficient memory.
         best_validation=self.early_stopping()
-        if best_validation>self.best_validation:
+        if best_validation<self.best_validation:
             self.best_parameters=self.parameters.copy()
+            self.save_best_param()
             return True
         else:
             self.parameters=self.best_parameters.copy()
@@ -222,17 +237,26 @@ class HyperParameterTuner():
         # with limited computation resources.
 
         # train cycle: how many times run_one_step_DNC will be called for every validation score
+        # e.g. 1000 training cycles with 128 batch size will lead to 128,000 time steps per validation access
         train_cycle=1000
         training_losses=[]
         for cycle in range(train_cycle):
-            train_step_loss=self.run_one_step_DNC()[0]
+            train_step_loss=self.run_one_step_DNC().data[0]
             training_losses.append(train_step_loss)
+
         # this is only for reference purposes
         average_training_loss=np.mean(training_losses)
         validation=self.validate_DNC()
+        logprint(self.param_log,"Validation: "+str(validation))
 
         return average_training_loss, validation
 
+    def validate_DNC(self):
+        val_batches=self.valid_records*self.average_step_in_records/self.bs
+        training_losses=[]
+        for batch in range(val_batches):
+            training_losses.append(self.valid_one_step_DNC().data[0])
+        return np.mean(training_losses)
 
     def run_one_step_DNC(self):
         self.model.train()
@@ -278,13 +302,9 @@ class HyperParameterTuner():
 
     def init_DNC(self):
         self.model=DNC(x=69505,v_t=5952,bs=self.bs, **self.parameters)
+        self.model=self.model.cuda()
 
-    def validate_DNC(self):
-        val_batches=self.valid_records*self.average_step_in_records/self.bs
-        training_losses=[]
-        for batch in range(val_batches):
-            training_losses.append(self.valid_one_step_DNC())
-        return np.mean(training_losses)
+
 
 
 if __name__=="__main__":
