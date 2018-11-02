@@ -22,7 +22,7 @@ import pickle
 def get_log_file():
     timestring = str(datetime.datetime.now().time())
     timestring.replace(" ", "_")
-    return "hyper_" + timestring
+    return "log/hyper_" + timestring
 
 def logprint(logfile, string, log_only=False):
     if logprint is not None and logprint !=False:
@@ -33,9 +33,17 @@ def logprint(logfile, string, log_only=False):
 
 class HyperParameterTuner():
 
+    """
+    Generic hyper parameter tuner with 2 based parameter space.
+    Search for pareto equilibrium.
+    Early stopping validation given 5 chances to increase.
+    """
+
     def __init__(self, mode="BatchDNC",load=False):
         # this is the set of the best parameters I have so far, or the one I'm testing
         self.parameters = {}
+        self.param_list=[]
+
         # a copy of the parameters when it worked, in case exception handling needs it
         self.best_parameters={}
 
@@ -44,12 +52,14 @@ class HyperParameterTuner():
 
         self.best_parameters={}
         # needs to set up to be some value
-        self.best_validation=float('inf')
+        self.best_validation=0.0030381380765902577
 
         self.mode = mode
 
-        self.num_workers=8
-        self.bs=128
+        self.num_workers=16
+        self.bs=256
+
+        self.last_tuned=None
 
         if self.mode == "BatchDNC":
             self.ig=InputGenE()
@@ -61,11 +71,13 @@ class HyperParameterTuner():
             self.optimizer_type=torch.optim.Adam
             self.lr=1e-3
             self.parameters=OrderedDict()
-            self.parameters['h']=128
+            self.parameters['h']=256
             self.parameters['L']=4
             self.parameters['W']=8
             self.parameters['R']=4
             self.parameters['N']=64
+            self.best_parameters=self.parameters.copy()
+            self.param_list=list(self.parameters)
 
             self.tune_one_param=self.tune_one_param_DNC
 
@@ -87,11 +99,11 @@ class HyperParameterTuner():
 
     def save_best_param(self):
         with open("best_parameters.pkl",'wb') as f:
-            pickle.dump((self.parameters,self.best_validation, self.bs), f)
+            pickle.dump((self.parameters,self.best_validation, self.bs, self.last_tuned), f)
 
     def load_best_param(self):
         with open('best_parameters.pkl','rb') as f:
-            self.parameters,self.best_validation, self.bs=pickle.load(f)
+            self.parameters,self.best_validation, self.bs, self.last_tuned=pickle.load(f)
 
 
     def tune(self):
@@ -108,7 +120,7 @@ class HyperParameterTuner():
             changed=True
             value=self.parameters[parameter]
             while changed:
-                logprint(self.param_log,"Tuning "+str(parameter)+", original value is "+str(value))
+                logprint(self.param_log, "Tuning " + str(parameter) + ", original: " + str(value)+" bigger: ", str(bigger))
                 if bigger:
                     value = value * 2
                 else:
@@ -129,10 +141,20 @@ class HyperParameterTuner():
         stable=False
         while not stable:
             stable=True
-            for parameter in self.parameters:
+
+            starting_param_index=self.last_tuned
+            if starting_param_index is None:
+                starting_param_index=0
+
+            param_index=starting_param_index
+            while True:
+                # go through all parameters starting with the one specified
+                parameter=self.param_list[param_index]
                 tune_streak=0
 
-                if np.random.random()>0.5:
+                # Try smaller first, because we are overfitting.
+                # Note that if smaller does not work, bigger is always tested.
+                if np.random.random()>0.3:
                     bigger=True
                 else:
                     bigger=False
@@ -147,8 +169,17 @@ class HyperParameterTuner():
 
                 if tune_streak!=0:
                     logprint(self.param_log,
-                             "Tuned parameter", parameter, "to be", self.parameters[parameter],"with", tune_streak,"tries")
+                             "Tuned parameter"+str(parameter)+"to be"+str(self.parameters[parameter])+"with"+str(tune_streak)+str("tries"))
                     stable=False
+
+                if param_index==len(self.param_list)-1:
+                    param_index=0
+                else:
+                    param_index+=1
+                self.last_tuned=param_index
+                if param_index==starting_param_index:
+                    break
+
 
             # at this point, stable will only be False if every parameter has been probed in both directions and
             # we have no improvement. This is the definition of pareto equilibrium.
@@ -160,6 +191,8 @@ class HyperParameterTuner():
 
         Compare the performance of this parameter set with the best parameter set we have
         Iff better, replace
+
+        Dataset and model will be recreated for every set of parameters
         :param parameter:
         :param value:
         :return: If the parameter is better
@@ -173,18 +206,32 @@ class HyperParameterTuner():
         else:
             self.bs*=2
 
+        try:
+            # initialize with the current parameters
+            self.init_DNC()
 
-        # initialize with the current parameters
-        self.init_DNC()
+            self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
+            self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
+            self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
 
-        self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
-        self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
-        self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
+            self.run=self.run_DNC
+            # TODO I expect this function to be wrapped in a try catch clause, but I'm not sure which
+            # exception to catch yet for insufficient memory.
+            best_validation=self.early_stopping()
+        except RuntimeError:
+            self.bs/=2
+            self.init_DNC()
 
-        self.run=self.run_DNC
-        # TODO I expect this function to be wrapped in a try catch clause, but I'm not sure which
-        # exception to catch yet for insufficient memory.
-        best_validation=self.early_stopping()
+            self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
+            self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
+            self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
+
+            self.run = self.run_DNC
+            best_validation=self.early_stopping()
+
+        # this is necessary to terminate workers so we don't run into spawn limit.
+        del self.traindl, self.validdl
+
         if best_validation<self.best_validation:
             self.best_parameters=self.parameters.copy()
             self.save_best_param()
@@ -199,8 +246,13 @@ class HyperParameterTuner():
             return False
 
     def early_stopping(self):
+        """
+        Use early stopping criterion to evaluate the parameter chosen.
+        :return: evaluation with validation of best performance before consistent increase
+        """
 
         best_validation=None
+        stopping=5
 
         # The first 5 validations will be thrown away
         for _ in range(self.ignore_valid):
@@ -212,14 +264,14 @@ class HyperParameterTuner():
         # if the current validation does not beat the best validation loss in 5 consecutive runs, then record the
         # second best_validation_loss and call it off
 
-        while counter!=5:
+        while counter!=stopping:
             train_loss, validation_loss= self.run()
             if validation_loss<best_validation:
                 best_validation=validation_loss
                 counter=0
-                print("Validation decreasing")
+                print("Validation down, best validation: "+str(best_validation))
             else:
-                print("Validation increasing")
+                print("Validation up, best validation: "+str(best_validation))
                 counter+=1
 
         return best_validation
@@ -238,12 +290,15 @@ class HyperParameterTuner():
 
         # train cycle: how many times run_one_step_DNC will be called for every validation score
         # e.g. 1000 training cycles with 128 batch size will lead to 128,000 time steps per validation access
-        train_cycle=1000
+
+        print_interval=100
+        train_cycle=128000//self.bs
         training_losses=[]
         for cycle in range(train_cycle):
             train_step_loss=self.run_one_step_DNC().data[0]
             training_losses.append(train_step_loss)
-
+            if cycle%print_interval==0:
+                logprint(self.param_log,"Internal cycle "+str(cycle)+"/"+str(train_cycle)+" with loss "+str(train_step_loss))
         # this is only for reference purposes
         average_training_loss=np.mean(training_losses)
         validation=self.validate_DNC()
@@ -252,7 +307,7 @@ class HyperParameterTuner():
         return average_training_loss, validation
 
     def validate_DNC(self):
-        val_batches=self.valid_records*self.average_step_in_records/self.bs
+        val_batches=self.valid_records*self.average_step_in_records//self.bs
         training_losses=[]
         for batch in range(val_batches):
             training_losses.append(self.valid_one_step_DNC().data[0])
@@ -305,8 +360,9 @@ class HyperParameterTuner():
         self.model=self.model.cuda()
 
 
-
+def main():
+    ht = HyperParameterTuner()
+    ht.tune()
 
 if __name__=="__main__":
-    ht=HyperParameterTuner()
-    ht.tune()
+    main()
