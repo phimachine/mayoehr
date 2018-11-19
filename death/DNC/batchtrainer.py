@@ -29,11 +29,11 @@ debug = True
 verbose=False
 
 param_x = 69505
-param_h = 128
+param_h = 64
 param_L = 4
 param_v_t = 5952
 param_W = 8
-param_R = 4
+param_R = 8
 param_N = 64
 param_bs = 128
 

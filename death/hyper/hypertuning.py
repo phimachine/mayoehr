@@ -52,7 +52,7 @@ class HyperParameterTuner():
 
         self.best_parameters={}
         # needs to set up to be some value
-        self.best_validation=0.0030381380765902577
+        self.best_validation=0.0024667
 
         self.mode = mode
 
@@ -71,10 +71,10 @@ class HyperParameterTuner():
             self.optimizer_type=torch.optim.Adam
             self.lr=1e-3
             self.parameters=OrderedDict()
-            self.parameters['h']=256
+            self.parameters['h']=64
             self.parameters['L']=4
             self.parameters['W']=8
-            self.parameters['R']=4
+            self.parameters['R']=8
             self.parameters['N']=64
             self.best_parameters=self.parameters.copy()
             self.param_list=list(self.parameters)
