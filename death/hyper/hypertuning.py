@@ -537,22 +537,36 @@ class HyperParameterTuner():
         target = Variable(target).cuda()
         loss_type = Variable(loss_type).cuda()
         self.model.assign_states_tuple(states_tuple)
-        output, states_tuple = self.model(input)
-        self.traincm.push_states(states_tuple)
 
-        time_to_event_output = output[:, 0]
-        cause_of_death_output = output[:, 1:]
-        time_to_event_target = target[:, 0]
-        cause_of_death_target = target[:, 1:]
+        try:
+            if self.debug:
+                for state in states_tuple:
+                    assert (state == state).all()
 
-        loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
-        loss.backward()
-        self.optimizer.step()
-        if self.debug:
-            if (loss.data[0]!=loss.data[0]):
-                print("HELLO")
-        return loss
+            output, states_tuple = self.model(input)
+            self.traincm.push_states(states_tuple)
+            if self.debug:
+                for state in states_tuple:
+                    assert (state == state).all()
 
+                assert (output == output).all()
+
+            time_to_event_output = output[:, 0]
+            cause_of_death_output = output[:, 1:]
+            time_to_event_target = target[:, 0]
+            cause_of_death_target = target[:, 1:]
+
+            loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
+            loss.backward()
+            self.optimizer.step()
+            if self.debug:
+                assert (loss.data[0]==loss.data[0])
+            return loss
+        except AssertionError:
+            for key, val in self.model.lstm._parameters.items():
+                if (val != val).any():
+                    print(key, val)
+            raise AssertionError
 
     def valid_one_step(self):
         self.model.eval()
@@ -562,31 +576,35 @@ class HyperParameterTuner():
         target = Variable(target).cuda()
         loss_type = Variable(loss_type).cuda()
         self.model.assign_states_tuple(states_tuple)
-        if self.debug:
-            for state in states_tuple:
-                if (state != state).any():
-                    print("state nan")
+
+        try:
+            if self.debug:
+                for state in states_tuple:
+                    assert (state == state).all()
 
 
-        output, states_tuple = self.model(input)
-        self.validcm.push_states(states_tuple)
-        if self.debug:
-            for state in states_tuple:
-                if (state!=state).any():
-                    print("state nan")
-            if (output!=output).any():
-                print("output nan")
+                output, states_tuple = self.model(input)
+                self.validcm.push_states(states_tuple)
+                if self.debug:
+                    for state in states_tuple:
+                        assert (state==state).all()
 
-        time_to_event_output = output[:, 0]
-        cause_of_death_output = output[:, 1:]
-        time_to_event_target = target[:, 0]
-        cause_of_death_target = target[:, 1:]
+                    assert (output==output).all()
 
-        loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
-        if self.debug:
-            if (loss.data[0]!=loss.data[0]):
-                print("loss nan")
-        return loss
+                time_to_event_output = output[:, 0]
+                cause_of_death_output = output[:, 1:]
+                time_to_event_target = target[:, 0]
+                cause_of_death_target = target[:, 1:]
+
+                loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
+                if self.debug:
+                    assert (loss.data[0]==loss.data[0])
+                return loss
+        except AssertionError:
+            for key, val in self.model.lstm._parameters.items():
+                if (val != val).any():
+                    print(key, val)
+            raise AssertionError
 
     # def init_DNC(self):
     #     self.model=DNC(x=69505,v_t=5952,bs=self.bs, **self.parameters)
