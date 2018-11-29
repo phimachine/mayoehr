@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch
 import datetime
 from death.DNC.batchDNC import BatchDNC as DNC
+from death.baseline.channelLSTM import ChannelLSTM
 import pickle
 
 
@@ -39,7 +40,7 @@ class HyperParameterTuner():
     Early stopping validation given 5 chances to increase.
     """
 
-    def __init__(self, mode="BatchDNC",load=False):
+    def __init__(self, mode="DNC",load=False):
         # this is the set of the best parameters I have so far, or the one I'm testing
         self.parameters = {}
         self.param_list=[]
@@ -57,11 +58,12 @@ class HyperParameterTuner():
         self.mode = mode
 
         self.num_workers=16
-        self.bs=256
 
         self.last_tuned=None
 
-        if self.mode == "BatchDNC":
+        self.debug=True
+
+        if self.mode == "DNC":
             self.ig=InputGenE()
             trainds=self.ig.get_train_dataset()
             validds=self.ig.get_valid_dataset()
@@ -70,6 +72,7 @@ class HyperParameterTuner():
             self.binary_criterion= nn.BCEWithLogitsLoss()
             self.optimizer_type=torch.optim.Adam
             self.lr=1e-3
+            self.bs = 256
             self.parameters=OrderedDict()
             self.parameters['h']=64
             self.parameters['L']=4
@@ -79,8 +82,25 @@ class HyperParameterTuner():
             self.best_parameters=self.parameters.copy()
             self.param_list=list(self.parameters)
 
-            self.tune_one_param=self.tune_one_param_DNC
+        elif self.mode == "LSTM":
+            self.ig=InputGenE()
+            self.bs=256
+            trainds=self.ig.get_train_dataset()
+            validds=self.ig.get_valid_dataset()
+            self.traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=self.num_workers)
+            self.validdl = DataLoader(dataset=validds, batch_size=1, num_workers=self.num_workers)
+            self.binary_criterion= nn.BCEWithLogitsLoss()
+            self.optimizer_type=torch.optim.Adam
+            self.lr=1e-2
+            self.parameters=OrderedDict()
+            self.parameters['h']=128
+            self.parameters['L']=32
 
+            self.best_parameters=self.parameters.copy()
+            self.param_list=list(self.parameters)
+
+        elif self.mode == "Tacotron":
+            pass
         else:
             raise ValueError("Not supported")
 
@@ -185,48 +205,96 @@ class HyperParameterTuner():
             # we have no improvement. This is the definition of pareto equilibrium.
 
 
-    def tune_one_param_DNC(self, bigger):
-        """
-        Tunes one parameter that is given
+    # def tune_one_param_DNC(self, bigger):
+    #     """
+    #     Tunes one parameter that is given
+    #
+    #     Compare the performance of this parameter set with the best parameter set we have
+    #     Iff better, replace
+    #
+    #     Dataset and model will be recreated for every set of parameters
+    #     :param parameter:
+    #     :param value:
+    #     :return: If the parameter is better
+    #     """
+    #
+    #     from death.post.channelmanager import ChannelManager
+    #     # bs is a parameter dependent upon the parameter set, because of memory constraint
+    #
+    #     if bigger:
+    #         self.bs//=2
+    #     else:
+    #         self.bs*=2
+    #
+    #     try:
+    #         # initialize with the current parameters
+    #         self.init_DNC()
+    #
+    #         self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
+    #         self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
+    #         self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
+    #
+    #         self.run=self.run_DNC
+    #         # TODO I expect this function to be wrapped in a try catch clause, but I'm not sure which
+    #         # exception to catch yet for insufficient memory.
+    #         best_validation=self.early_stopping()
+    #     except RuntimeError:
+    #         self.bs/=2
+    #         self.init_DNC()
+    #
+    #         self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
+    #         self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
+    #         self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
+    #
+    #         self.run = self.run_DNC
+    #         best_validation=self.early_stopping()
+    #
+    #     # this is necessary to terminate workers so we don't run into spawn limit.
+    #     del self.traindl, self.validdl
+    #
+    #     if best_validation<self.best_validation:
+    #         self.best_parameters=self.parameters.copy()
+    #         self.save_best_param()
+    #         return True
+    #     else:
+    #         self.parameters=self.best_parameters.copy()
+    #         # if not improved, batch size needs to be reverted too
+    #         if bigger:
+    #             self.bs*=2
+    #         else:
+    #             self.bs/=2
+    #         return False
 
-        Compare the performance of this parameter set with the best parameter set we have
-        Iff better, replace
-
-        Dataset and model will be recreated for every set of parameters
-        :param parameter:
-        :param value:
-        :return: If the parameter is better
-        """
-
-        from death.post.channelmanager import ChannelManager
-        # bs is a parameter dependent upon the parameter set, because of memory constraint
+    def tune_one_param(self,bigger):
+        if self.mode=="DNC":
+            from death.post.channelmanager import ChannelManager
+        else:
+            from death.baseline.lstmcm import ChannelManager
 
         if bigger:
-            self.bs//=2
+            self.bs //= 2
         else:
-            self.bs*=2
+            self.bs *= 2
 
         try:
             # initialize with the current parameters
-            self.init_DNC()
+            self.init()
 
             self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
             self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
             self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
 
-            self.run=self.run_DNC
             # TODO I expect this function to be wrapped in a try catch clause, but I'm not sure which
             # exception to catch yet for insufficient memory.
             best_validation=self.early_stopping()
         except RuntimeError:
             self.bs/=2
-            self.init_DNC()
+            self.init()
 
             self.traincm = ChannelManager(self.traindl, self.bs, model=self.model)
             self.validcm = ChannelManager(self.validdl, self.bs, model=self.model)
             self.optimizer = self.optimizer_type([i for i in self.model.parameters() if i.requires_grad], lr=self.lr)
 
-            self.run = self.run_DNC
             best_validation=self.early_stopping()
 
         # this is necessary to terminate workers so we don't run into spawn limit.
@@ -244,6 +312,7 @@ class HyperParameterTuner():
             else:
                 self.bs/=2
             return False
+
 
     def early_stopping(self):
         """
@@ -276,6 +345,82 @@ class HyperParameterTuner():
 
         return best_validation
 
+    def run(self):
+        """
+        Train the model for a few rounds and get one validation
+        :param model:
+        :return:
+        """
+
+        # Validation size is measured by the mount of validation data points.
+        # Training size is measured in computation cycles.
+        # This design discourages using huge parameters and very small batch size, which will certainly dominate
+        # with limited computation resources.
+
+        # train cycle: how many times run_one_step_DNC will be called for every validation score
+        # e.g. 1000 training cycles with 128 batch size will lead to 128,000 time steps per validation access
+
+        print_interval = 100
+        train_cycle = 128000 // self.bs
+        training_losses = []
+        for cycle in range(train_cycle):
+            train_step_loss = self.run_one_step().data[0]
+            training_losses.append(train_step_loss)
+            if cycle % print_interval == 0:
+                logprint(self.param_log,
+                         "Internal cycle " + str(cycle) + "/" + str(train_cycle) + " with loss " + str(train_step_loss))
+        # this is only for reference purposes
+        average_training_loss = np.mean(training_losses)
+        validation = self.validate()
+        logprint(self.param_log, "Validation: " + str(validation))
+
+        return average_training_loss, validation
+
+    def run_one_step(self):
+        self.model.train()
+        self.optimizer.zero_grad()
+        input, target, loss_type, states_tuple = next(self.traincm)
+        target = target.squeeze(1)
+        input = Variable(input).cuda()
+        target = Variable(target).cuda()
+        loss_type = Variable(loss_type).cuda()
+        self.model.assign_states_tuple(states_tuple)
+        output, states_tuple = self.model(input)
+        self.traincm.push_states(states_tuple)
+
+        time_to_event_output = output[:, 0]
+        cause_of_death_output = output[:, 1:]
+        time_to_event_target = target[:, 0]
+        cause_of_death_target = target[:, 1:]
+
+        loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
+        loss.backward()
+        self.optimizer.step()
+        return loss
+
+    # def run_one_step_DNC(self):
+    #     self.model.train()
+    #     self.optimizer.zero_grad()
+    #     input, target, loss_type, states_tuple = next(self.traincm)
+    #     target = target.squeeze(1)
+    #     input = Variable(input).cuda()
+    #     target = Variable(target).cuda()
+    #     loss_type = Variable(loss_type).cuda()
+    #     self.model.assign_states_tuple(states_tuple)
+    #     output, states_tuple = self.model(input)
+    #     self.traincm.push_states(states_tuple)
+    #
+    #     time_to_event_output = output[:, 0]
+    #     cause_of_death_output = output[:, 1:]
+    #     time_to_event_target = target[:, 0]
+    #     cause_of_death_target = target[:, 1:]
+    #
+    #     loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
+    #     loss.backward()
+    #     self.optimizer.step()
+    #     return loss
+
+
     def run_DNC(self):
         """
         Train the model for a few rounds and get one validation
@@ -306,14 +451,84 @@ class HyperParameterTuner():
 
         return average_training_loss, validation
 
-    def validate_DNC(self):
+    def run(self):
+
+        print_interval=100
+        train_cycle=128000//self.bs
+        training_losses=[]
+        for cycle in range(train_cycle):
+            train_step_loss=self.run_one_step().data[0]
+            assert (train_step_loss==train_step_loss)
+            training_losses.append(train_step_loss)
+            if cycle%print_interval==0:
+                logprint(self.param_log,"Internal cycle "+str(cycle)+"/"+str(train_cycle)+" with loss "+str(train_step_loss))
+        # this is only for reference purposes
+        average_training_loss=np.mean(training_losses)
+        validation=self.validate()
+        logprint(self.param_log,"Validation: "+str(validation))
+
+        return average_training_loss, validation
+
+    # def validate_DNC(self):
+    #     val_batches=self.valid_records*self.average_step_in_records//self.bs
+    #     training_losses=[]
+    #     for batch in range(val_batches):
+    #         training_losses.append(self.valid_one_step_DNC().data[0])
+    #     return np.mean(training_losses)
+
+
+    def validate(self):
         val_batches=self.valid_records*self.average_step_in_records//self.bs
         training_losses=[]
         for batch in range(val_batches):
-            training_losses.append(self.valid_one_step_DNC().data[0])
+            loss=self.valid_one_step().data[0]
+            training_losses.append(loss)
         return np.mean(training_losses)
 
-    def run_one_step_DNC(self):
+
+    # def run_one_step_DNC(self):
+    #     self.model.train()
+    #     self.optimizer.zero_grad()
+    #     input, target, loss_type, states_tuple = next(self.traincm)
+    #     target = target.squeeze(1)
+    #     input = Variable(input).cuda()
+    #     target = Variable(target).cuda()
+    #     loss_type = Variable(loss_type).cuda()
+    #     self.model.assign_states_tuple(states_tuple)
+    #     output, states_tuple = self.model(input)
+    #     self.traincm.push_states(states_tuple)
+    #
+    #     time_to_event_output = output[:, 0]
+    #     cause_of_death_output = output[:, 1:]
+    #     time_to_event_target = target[:, 0]
+    #     cause_of_death_target = target[:, 1:]
+    #
+    #     loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
+    #     loss.backward()
+    #     self.optimizer.step()
+    #     return loss
+    #
+    #
+    # def valid_one_step_DNC(self):
+    #     self.model.eval()
+    #     input, target, loss_type, states_tuple = next(self.traincm)
+    #     target = target.squeeze(1)
+    #     input = Variable(input).cuda()
+    #     target = Variable(target).cuda()
+    #     loss_type = Variable(loss_type).cuda()
+    #     self.model.assign_states_tuple(states_tuple)
+    #     output, states_tuple = self.model(input)
+    #     self.traincm.push_states(states_tuple)
+    #
+    #     time_to_event_output = output[:, 0]
+    #     cause_of_death_output = output[:, 1:]
+    #     time_to_event_target = target[:, 0]
+    #     cause_of_death_target = target[:, 1:]
+    #
+    #     loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
+    #     return loss
+
+    def run_one_step(self):
         self.model.train()
         self.optimizer.zero_grad()
         input, target, loss_type, states_tuple = next(self.traincm)
@@ -333,19 +548,34 @@ class HyperParameterTuner():
         loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
         loss.backward()
         self.optimizer.step()
+        if self.debug:
+            if (loss.data[0]!=loss.data[0]):
+                print("HELLO")
         return loss
 
 
-    def valid_one_step_DNC(self):
+    def valid_one_step(self):
         self.model.eval()
-        input, target, loss_type, states_tuple = next(self.traincm)
+        input, target, loss_type, states_tuple = next(self.validcm)
         target = target.squeeze(1)
         input = Variable(input).cuda()
         target = Variable(target).cuda()
         loss_type = Variable(loss_type).cuda()
         self.model.assign_states_tuple(states_tuple)
+        if self.debug:
+            for state in states_tuple:
+                if (state != state).any():
+                    print("state nan")
+
+
         output, states_tuple = self.model(input)
-        self.traincm.push_states(states_tuple)
+        self.validcm.push_states(states_tuple)
+        if self.debug:
+            for state in states_tuple:
+                if (state!=state).any():
+                    print("state nan")
+            if (output!=output).any():
+                print("output nan")
 
         time_to_event_output = output[:, 0]
         cause_of_death_output = output[:, 1:]
@@ -353,16 +583,26 @@ class HyperParameterTuner():
         cause_of_death_target = target[:, 1:]
 
         loss = self.binary_criterion(cause_of_death_output, cause_of_death_target)
+        if self.debug:
+            if (loss.data[0]!=loss.data[0]):
+                print("loss nan")
         return loss
 
-    def init_DNC(self):
-        self.model=DNC(x=69505,v_t=5952,bs=self.bs, **self.parameters)
+    # def init_DNC(self):
+    #     self.model=DNC(x=69505,v_t=5952,bs=self.bs, **self.parameters)
+    #     self.model=self.model.cuda()
+
+    def init(self):
+        if self.mode=="DNC":
+            self.model = DNC(x=69505, v_t=5952, bs=self.bs, **self.parameters)
+        else:
+            self.model=ChannelLSTM(hidden_size=self.parameters["h"], num_layers=self.parameters["L"])
         self.model=self.model.cuda()
 
 
-def main():
-    ht = HyperParameterTuner()
+def main(mode="DNC"):
+    ht = HyperParameterTuner(mode=mode)
     ht.tune()
 
 if __name__=="__main__":
-    main()
+    main(mode="LSTM")

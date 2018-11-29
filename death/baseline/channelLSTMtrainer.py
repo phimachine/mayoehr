@@ -15,7 +15,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
-from death.baseline.channelLSTM import channelLSTM
+from death.baseline.channelLSTM import ChannelLSTM
 from death.baseline.lstmcm import ChannelManager
 
 batch_size = 1
@@ -187,6 +187,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if i % val_interval == 0:
                 printloss = 0
                 for _ in range(val_batch):
+                    assert(printloss==printloss)
                     val_loss=valid_one_step(computer, valid, binary_criterion)
                     if val_loss is not None:
                         printloss += float(val_loss[0])
@@ -336,7 +337,7 @@ def validationonly():
     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
     print("Using", num_workers, "workers for validation set")
     # testing whether this LSTM works is basically a question whether
-    lstm = channelLSTM()
+    lstm = ChannelLSTM()
 
     # load model:
     print("loading model")
@@ -374,7 +375,7 @@ def main(load=False):
 
     num_workers = 16
     ig = InputGenD()
-    lstm=channelLSTM()
+    lstm=ChannelLSTM()
 
     trainds,validds=train_valid_split(ig,split_fold=10)
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)

@@ -298,7 +298,12 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         except ValueError:
             traceback.print_exc()
 
-def main(load=True, lr=1e-3, savestr="struc"):
+def main(load=True, lr=1e-4, savestr="lowlr"):
+    '''
+    0.004 is now the new best. But it's not much better. Is lr the problem?
+    '''
+
+
     '''
     training loss is around 0.0003
     validation loss is around 0.006, peak at 0.005 with early stopping

@@ -4,10 +4,10 @@ from torch.autograd import Variable
 import torch
 import pdb
 
-class channelLSTM(nn.Module):
+class ChannelLSTM(nn.Module):
     def __init__(self,input_size=69505, output_size=5952,hidden_size=128,num_layers=32,batch_first=True,
                  dropout=True):
-        super(channelLSTM, self).__init__()
+        super(ChannelLSTM, self).__init__()
         self.hidden_size=hidden_size
         self.num_layers=num_layers
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,

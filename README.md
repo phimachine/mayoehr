@@ -121,17 +121,8 @@ with no problem.
 
 
 ## Work
-### Statistical models baselines
-The range of statistical models applicable to time series is limited.
-Some modification is due.
-
-### Validation redesign: Done.
-Validation is redesigned and curriculum learning is possible, but
-not a priority for now.
-
-### Hyperparamter tuning
-Manual tuning is not possible. We should do grid search on base of
-2.
+### Curriculum learning
+Let's see the results before trying to do it. Takes around a week.
 
 ### Deep models benchmark unification
 For some deep models, a whole sequence is taken in before it's evaluated.

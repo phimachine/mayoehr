@@ -4,8 +4,8 @@
 # usually you do not need to modify anything in this script and pickling will be automatic
 # it will take a few minutes.
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import pickle
 import collections
