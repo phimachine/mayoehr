@@ -266,7 +266,7 @@ class ChannelManager():
 #             # StopIteration will occur for the shortest channel. Discarding rest of the channels.
 #             raise StopIteration()
 
-def train_valid_split(ds, split_fold=10, random_seed=12345):
+def train_valid_s(ds, split_fold=10, random_seed=12345):
     """
     This is a pytorch generic function that takes a data. Dataset object and splits it to validation and training
     efficiently.

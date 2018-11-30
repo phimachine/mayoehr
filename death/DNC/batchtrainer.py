@@ -9,9 +9,9 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.channelmanager import InputGenD, ChannelManager, train_valid_split
-from death.post.inputgen_planE import InputGenE
+from death.post.inputgen_planF import InputGenF
 from torch.utils.data import DataLoader
+from death.post.channelmanager import ChannelManager
 import torch.nn as nn
 from death.DNC.batchDNC import BatchDNC as DNC
 from torch.autograd import Variable
@@ -49,7 +49,7 @@ class dummy_context_mgr():
 def save_model(net, optim, epoch, iteration, savestr):
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    if not os.path.isdir(Path(task_dir) / "saves" / savestr):
+    if not os.path.exists(Path(task_dir) / "saves" / savestr):
         os.mkdir(Path(task_dir) / "saves" / savestr)
     pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/DNC_" + str(epoch) + "_" + str(iteration) + ".pkl")
     with pickle_file.open('wb') as fhand:
@@ -176,7 +176,8 @@ def logprint(logfile, string):
 
 failure=0
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
+          ig, validdl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr,
+          num_workers, logfile=False):
     """
 
     :param computer:
@@ -204,13 +205,17 @@ def train(computer, optimizer, real_criterion, binary_criterion,
 
     # erase the logfile
     if logfile:
-        open(logfile, 'w').close()
+        open(logfile, 'w+').close()
     global i
 
     for epoch in range(starting_epoch, total_epochs):
+        train=ig.get_train()
+        traindl = DataLoader(dataset=train, batch_size=1, num_workers=num_workers)
+        traincm = ChannelManager(traindl, param_bs, model=computer)
+
         # all these are batches
         for i in range(starting_iter, iter_per_epoch):
-            train_step_loss = run_one_step(computer, train, optimizer, binary_criterion)
+            train_step_loss = run_one_step(computer, traincm, optimizer, binary_criterion)
             if train_step_loss is not None:
                 printloss = float(train_step_loss[0])
             else:
@@ -227,7 +232,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if i % val_interval == 0:
                 printloss = 0
                 for _ in range(val_batch):
-                    val_loss=valid_one_step(computer, valid, binary_criterion)
+                    val_loss=valid_one_step(computer, validdl, binary_criterion)
                     if val_loss is not None:
                         printloss += float(val_loss[0])
                     else:
@@ -298,86 +303,6 @@ def forevermain(load=False, lr=1e-3, savestr="", reset=True, palette=False):
         except ValueError:
             traceback.print_exc()
 
-def main(load=True, lr=1e-4, savestr="lowlr"):
-    '''
-    0.004 is now the new best. But it's not much better. Is lr the problem?
-    '''
-
-
-    '''
-    training loss is around 0.0003
-    validation loss is around 0.006, peak at 0.005 with early stopping
-    still seems overfitting.
-    I ran the training for 10 epochs, which took around a week. The running loss keeps decreasing
-
-    epoch   train_loss   valid_loss
-    1       0.0018       0.005
-    2       0.0016       0.005
-    3       0.0012       0.005
-    ...
-    10      0.0004       0.006
-
-    The log is enclosed for analysis at DNC root folder.
-    The validation loss saturates after 10,000 training samples. It suggests inappropriate model or overfitting.
-
-    :param load:
-    :param lr:
-    :param savestr:
-    :return:
-    '''
-    total_epochs = 10
-    iter_per_epoch = 100000
-    lr = lr
-    optim = None
-    starting_epoch = 0
-    starting_iteration = 0
-    logfile = "log.txt"
-    num_workers = 8
-
-    print("Using", num_workers, "workers for training set")
-    computer = DNC(x=param_x,
-                   h=param_h,
-                   L=param_L,
-                   v_t=param_v_t,
-                   W=param_W,
-                   R=param_R,
-                   N=param_N,
-                   bs=param_bs)
-
-    ig = InputGenD(verbose=False)
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
-    validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
-    traindl = ChannelManager(traindl, param_bs, model=computer)
-    validdl = ChannelManager(validdl, param_bs, model=computer)
-
-    # load model:
-    if load:
-        print("loading model")
-        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch,
-                                                                         starting_iteration, savestr)
-
-    computer = computer.cuda()
-    if optim is None:
-        print("Using Adam with lr", lr)
-        optimizer = torch.optim.Adam([i for i in computer.parameters() if i.requires_grad], lr=lr)
-    else:
-        # print('use Adadelta optimizer with learning rate ', lr)
-        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
-        optimizer = optim
-
-    real_criterion = nn.SmoothL1Loss()
-    # time-wise sum, label-wise average.
-    binary_criterion = nn.BCEWithLogitsLoss()
-
-    # starting with the epoch after the loaded one
-
-    train(computer, optimizer, real_criterion, binary_criterion,
-          traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
-          logfile)
-
 
 def valid_only(savestr="struc"):
     '''
@@ -404,13 +329,10 @@ def valid_only(savestr="struc"):
                    N=param_N,
                    bs=param_bs)
 
-    ig = InputGenD(verbose=verbose, debug=debug)
-    # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
-    # change validation set to be inputgenE
-    ige=InputGenE()
-    validds=ige.get_valid_dataset()
-
+    ig = InputGenF(death_fold=0)
+    trainds = ig.get_train_dataset()
+    validds = ig.get_valid_dataset()
+    testds = ig.get_test_dataset()
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
     validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
     traindl = ChannelManager(traindl, param_bs, model=computer)
@@ -440,6 +362,97 @@ def valid_only(savestr="struc"):
           traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
+def main(savestr, load=True, lr=1e-4,curri=False):
+    '''
+    11/28
+    0.004 is now the new best. But it's not much better. Is lr the problem?
+
+    11/29
+    lr does not seem to be the problem
+    Changed background distribution. Loss is now around 0.001. Training loss is 10 times smaller.
+    '''
+
+
+    '''
+    training loss is around 0.0003
+    validation loss is around 0.006, peak at 0.005 with early stopping
+    still seems overfitting.
+    I ran the training for 10 epochs, which took around a week. The running loss keeps decreasing
+
+    epoch   train_loss   valid_loss
+    1       0.0018       0.005
+    2       0.0016       0.005
+    3       0.0012       0.005
+    ...
+    10      0.0004       0.006
+
+    The log is enclosed for analysis at DNC root folder.
+    The validation loss saturates after 10,000 training samples. It suggests inappropriate model or overfitting.
+
+    :param load:
+    :param lr:
+    :param savestr:
+    :return:
+    '''
+    total_epochs = 10
+    iter_per_epoch = 10000
+    lr = lr
+    print("Using lr=",lr)
+    optim = None
+    starting_epoch = 0
+    starting_iteration = 0
+    logfile = "log/"+savestr+"_log.txt"
+    num_workers = 8
+
+
+    print("Using", num_workers, "workers for training set")
+    computer = DNC(x=param_x,
+                   h=param_h,
+                   L=param_L,
+                   v_t=param_v_t,
+                   W=param_W,
+                   R=param_R,
+                   N=param_N,
+                   bs=param_bs)
+    if curri:
+        death_fold=5
+    else:
+        death_fold=0
+    ig = InputGenF(death_fold=death_fold,curriculum=curri)
+
+
+    validds = ig.get_valid()
+    testds = ig.get_test()
+    validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
+    validdl = ChannelManager(validdl, param_bs, model=computer)
+
+    # load model:
+    if load:
+        print("loading model")
+        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch,
+                                                                         starting_iteration, savestr)
+
+    computer = computer.cuda()
+    if optim is None:
+        print("Using Adam with lr", lr)
+        optimizer = torch.optim.Adam([i for i in computer.parameters() if i.requires_grad], lr=lr)
+    else:
+        # print('use Adadelta optimizer with learning rate ', lr)
+        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+        optimizer = optim
+
+    real_criterion = nn.SmoothL1Loss()
+    # time-wise sum, label-wise average.
+    binary_criterion = nn.BCEWithLogitsLoss()
+
+    # starting with the epoch after the loaded one
+
+    train(computer, optimizer, real_criterion, binary_criterion,
+          ig, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
+          num_workers, logfile)
+
+
+
 
 if __name__ == "__main__":
-    valid_only()
+    main(savestr="zerofold",curri=False)

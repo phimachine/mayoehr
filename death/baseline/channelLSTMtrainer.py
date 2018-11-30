@@ -5,7 +5,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planD import InputGenD, train_valid_split
+from death.post.inputgen_planF import InputGenF
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -206,73 +206,73 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 save_model(computer, optimizer, epoch, i, savestr)
                 print("model saved for epoch", epoch, "input", i)
 
-def train_obsolete(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
-    valid_iterator=iter(valid_dl)
-    print_interval=10
-    val_interval=200
-    save_interval=800
-    target_dim=None
-    rldmax_len=50
-    val_batch=100
-    running_loss_deque=deque(maxlen=rldmax_len)
-    if logfile:
-        open(logfile, 'w').close()
-
-    for epoch in range(starting_epoch, total_epochs):
-        for i, (input, target, loss_type) in enumerate(train):
-            i=starting_iter+i
-            if target_dim is None:
-                target_dim=target.shape[2]
-
-            if i < iter_per_epoch:
-                train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                   real_criterion, binary_criterion)
-                if train_story_loss is not None:
-                    printloss=float(train_story_loss[0])
-                else:
-                    raise ValueError("Why would story loss be None?")
-                running_loss_deque.appendleft(printloss)
-                if i % print_interval == 0:
-                    running_loss=np.mean(running_loss_deque)
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("learning.   count: %4d, training loss: %.10f \n" %
-                                         (i, printloss))
-                    print("learning.   count: %4d, training loss: %.10f" %
-                          (i, printloss))
-                    if i!=0:
-                        print("count: %4d, running loss: %.10f" % (i, running_loss))
-
-                if i % val_interval == 0:
-                    printloss=0
-                    for _ in range(val_batch):
-                        # we should consider running validation multiple times and average. TODO
-                        try:
-                            (input,target,loss_type)=next(valid_iterator)
-                        except StopIteration:
-                            valid_iterator=iter(valid_dl)
-                            (input,target,loss_type)=next(valid_iterator)
-
-                        val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                       real_criterion, binary_criterion, validate=True)
-                        if val_loss is not None:
-                            printloss += float(val_loss[0])
-                        else:
-                            raise ValueError ("Investigate this")
-                    printloss=printloss/val_batch
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("validation. count: %4d, val loss     : %.10f \n" %
-                                             (i, printloss))
-                    print("validation. count: %4d, val loss: %.10f" %
-                          (i, printloss))
-
-                if i % save_interval == 0:
-                    save_model(computer, optimizer, epoch, i)
-                    print("model saved for epoch", epoch, "input", i)
-            else:
-                break
+# def train_obsolete(computer, optimizer, real_criterion, binary_criterion,
+#           train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+#     valid_iterator=iter(valid_dl)
+#     print_interval=10
+#     val_interval=200
+#     save_interval=800
+#     target_dim=None
+#     rldmax_len=50
+#     val_batch=100
+#     running_loss_deque=deque(maxlen=rldmax_len)
+#     if logfile:
+#         open(logfile, 'w').close()
+#
+#     for epoch in range(starting_epoch, total_epochs):
+#         for i, (input, target, loss_type) in enumerate(train):
+#             i=starting_iter+i
+#             if target_dim is None:
+#                 target_dim=target.shape[2]
+#
+#             if i < iter_per_epoch:
+#                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+#                                                    real_criterion, binary_criterion)
+#                 if train_story_loss is not None:
+#                     printloss=float(train_story_loss[0])
+#                 else:
+#                     raise ValueError("Why would story loss be None?")
+#                 running_loss_deque.appendleft(printloss)
+#                 if i % print_interval == 0:
+#                     running_loss=np.mean(running_loss_deque)
+#                     if logfile:
+#                         with open(logfile, 'a') as handle:
+#                             handle.write("learning.   count: %4d, training loss: %.10f \n" %
+#                                          (i, printloss))
+#                     print("learning.   count: %4d, training loss: %.10f" %
+#                           (i, printloss))
+#                     if i!=0:
+#                         print("count: %4d, running loss: %.10f" % (i, running_loss))
+#
+#                 if i % val_interval == 0:
+#                     printloss=0
+#                     for _ in range(val_batch):
+#                         # we should consider running validation multiple times and average. TODO
+#                         try:
+#                             (input,target,loss_type)=next(valid_iterator)
+#                         except StopIteration:
+#                             valid_iterator=iter(valid_dl)
+#                             (input,target,loss_type)=next(valid_iterator)
+#
+#                         val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+#                                                        real_criterion, binary_criterion, validate=True)
+#                         if val_loss is not None:
+#                             printloss += float(val_loss[0])
+#                         else:
+#                             raise ValueError ("Investigate this")
+#                     printloss=printloss/val_batch
+#                     if logfile:
+#                         with open(logfile, 'a') as handle:
+#                             handle.write("validation. count: %4d, val loss     : %.10f \n" %
+#                                              (i, printloss))
+#                     print("validation. count: %4d, val loss: %.10f" %
+#                           (i, printloss))
+#
+#                 if i % save_interval == 0:
+#                     save_model(computer, optimizer, epoch, i)
+#                     print("model saved for epoch", epoch, "input", i)
+#             else:
+#                 break
 
 def valid(computer, optimizer, real_criterion, binary_criterion,
           train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
@@ -364,9 +364,16 @@ def validationonly():
 
 
 def main(load=False):
+    """
+    11/29
+    lr=1e-2
+    bottom loss 0.0004
+    val loss 0.002~0.001 afterwards, which is comparable to DNC
+    There are signs of sparse output, because sometimes the prediction is exactly correct.
+    """
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-2
+    lr = 1e-3
     optim = None
     starting_epoch = 0
     starting_iteration= 0
@@ -374,15 +381,16 @@ def main(load=False):
     param_bs=16
 
     num_workers = 16
-    ig = InputGenD()
     lstm=ChannelLSTM()
 
-    trainds,validds=train_valid_split(ig,split_fold=10)
+    ig = InputGenF(death_fold=0)
+    trainds = ig.get_train()
+    validds = ig.get_valid()
+    testds = ig.get_test()
     traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
-    validdl = DataLoader(dataset=validds, batch_size=1)
+    validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
     traindl = ChannelManager(traindl, param_bs, model=lstm)
     validdl = ChannelManager(validdl, param_bs, model=lstm)
-
 
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether

@@ -1,4 +1,4 @@
-from death.baseline.lstmtrainer import *
+from death.baseline.channelLSTMtrainer import *
 import os
 from shutil import copy
 import traceback
