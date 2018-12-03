@@ -1,71 +1,14 @@
-Debugging LSTM unstable with NAN. input clean. seems like it's caused by normal optimizing scheme.
-We need to implement curriculum learning. I cannot leave DNC performing worse than LSTM.
-We might need to run hypertuning on DNC again, because we used training set not validation set.
+Curriculum learning did not help.
+It turns out that the hyperparameter tuning condition was not very good. So I have to do it manually. It might work.
+Rather than worrying about backpropagation leaking, I should do the finaltest.py first. This requires some design, and
+I need to look at the input to figure out.
 
-ssh://m193194@infodev6:22/home/m193194/.conda/envs/jason2/bin/python -u /infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py --cmd-line --multiproc --qt-support=auto --client '0.0.0.0' --port 40931 --file /local2/tmp/pycharm_project_292/death/hyper/hypertuning.py
-pydev debugger: process 254342 is connecting
+The validation in tacotron seems arbitrarily low. There might be an issue.
+The output of tacotron is very hard to read.
 
-Connected to pydev debugger (build 181.5540.17)
-Loading dataframes from pickle file
-checking if there is nan in any of the dataframes
-Input Gen initiated
-Starting parameters:
-OrderedDict([('h', 128), ('L', 32)])
-workers: 16, batch size:256
-Internal cycle 0/1000 with loss 0.6935620307922363
-Internal cycle 100/1000 with loss 0.00406972412019968
-Internal cycle 200/1000 with loss 0.002705644117668271
-Internal cycle 300/1000 with loss 0.002613209653645754
-Internal cycle 400/1000 with loss 0.002607965376228094
-Internal cycle 500/1000 with loss 0.0026389502454549074
-Internal cycle 600/1000 with loss 0.003396544372662902
-Internal cycle 700/1000 with loss 0.002862944733351469
-Internal cycle 800/1000 with loss 0.0026367329992353916
-Internal cycle 900/1000 with loss 0.003121839603409171
-Validation: 0.001210271759191528
-Internal cycle 0/1000 with loss 0.002695422386750579
-Internal cycle 100/1000 with loss 0.002392266411334276
-weight_ih_l0 Parameter containing:
-1.00000e-02 *
- 5.6257 -1.8712 -1.8230  ...  -4.2897 -1.8188  4.6912
--4.3116  2.0396 -5.5220  ...   2.8986 -4.9074 -4.8448
- 5.7450  1.7408 -2.8288  ...  -2.6289 -4.0511  5.1314
-          ...             ⋱             ...
- 2.5592  1.2108  3.1217  ...   4.6197 -1.2415 -5.6863
- 3.2680  3.2732 -3.2863  ...   0.1610 -6.0356  2.2322
--0.3186 -0.5537 -1.8935  ...   4.7712 -2.6341  1.9854
-[torch.cuda.FloatTensor of size 1024x69505 (GPU 0)]
+LSTM does not load correctly. lstm.cuda() returns CUDA errors.
 
-Traceback (most recent call last):
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 550, in run_one_step
-    assert (state == state).all()
-AssertionError
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 1664, in <module>
-    main()
-  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 1658, in main
-    globals = debugger.run(setup['file'], None, None, is_module)
-  File "/infodev1/home/m193194/.pycharm_helpers/pydev/pydevd.py", line 1068, in run
-    pydev_imports.execfile(file, globals, locals)  # execute the script
-  File "/infodev1/home/m193194/.pycharm_helpers/pydev/_pydev_imps/_pydev_execfile.py", line 18, in execfile
-    exec(compile(contents+"\n", file, 'exec'), glob, loc)
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 626, in <module>
-    main(mode="LSTM")
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 623, in main
-    ht.tune()
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 182, in tune
-    tune_streak=greedily_tune(bigger, tune_streak, parameter)
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 155, in greedily_tune
-    changed = self.tune_one_param(bigger)
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 289, in tune_one_param
-    best_validation=self.early_stopping()
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 328, in early_stopping
-    train_loss, validation_loss= self.run()
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 460, in run
-    train_step_loss=self.run_one_step().data[0]
-  File "/local2/tmp/pycharm_project_292/death/hyper/hypertuning.py", line 569, in run_one_step
-    raise AssertionError
-AssertionError
+Because we are doing manual tuning right now, it would be beneficial to spawn multiple instances of the model and
+train with the same datastream. The reason for this is because data I/O seems to be the most time-consuming
+pipeline. This means log will be the only reference of training. Given model size of ~2000mb, running 5~8 instances
+should be reasonable.

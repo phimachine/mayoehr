@@ -120,6 +120,8 @@ class BatchDNC(nn.Module):
         self.last_read_vector=None
         self.not_first_t_flag=None
 
+        print(self.parameters())
+
 
     def init_states_each_channel(self):
         """
@@ -536,7 +538,7 @@ class BatchDNC(nn.Module):
                 test_simplex_bound(newtml.transpose(1, 2), 1)
             except ValueError:
                 traceback.print_exc()
-                print("precedence close to one?", precedence_weighting.sum() > 1)
+                print("precedence close to one?", self.precedence_weighting.sum() > 1)
                 raise
 
         expandf = self.not_first_t_flag.unsqueeze(2).expand(self.bs, self.N, self.N)

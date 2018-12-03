@@ -1,3 +1,3 @@
 from death.DNC.batchtrainer import main
 
-main(load=True,lr=1e-4, savestr="zerofold")
+main(load=False,lr=1e-3, savestr="small",curri=False)

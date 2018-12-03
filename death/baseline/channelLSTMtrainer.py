@@ -36,44 +36,41 @@ def save_model(net, optim, epoch, iteration, savestr):
     task_dir = os.path.dirname(abspath(__file__))
     if not os.path.isdir(Path(task_dir) / "saves" / savestr):
         os.mkdir(Path(task_dir) / "saves" / savestr)
-    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/DNC_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/lstm_" + str(epoch) + "_" + str(iteration) + ".pkl")
     with pickle_file.open('wb') as fhand:
         torch.save((net, optim, epoch, iteration), fhand)
     print('model saved at', pickle_file)
 
-def load_model(computer, optim, starting_epoch, starting_iteration):
+def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "lstmsaves"
+    save_dir = Path(task_dir) / "saves" / savestr
     highestepoch = 0
     highestiter = 0
     for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
+        try:
+            epoch = str(child).split("_")[3]
+            iteration = str(child).split("_")[4].split('.')[0]
+        except IndexError:
+            print(str(child))
         iteration = int(iteration)
         epoch = int(epoch)
         # some files are open but not written to yet.
         if child.stat().st_size > 20480:
-            if epoch > highestepoch or (iteration > highestiter and epoch==highestepoch):
+            if epoch > highestepoch or (iteration > highestiter and epoch == highestepoch):
                 highestepoch = epoch
                 highestiter = iteration
     if highestepoch == 0 and highestiter == 0:
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
-    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file = Path(task_dir).joinpath(
+        "saves/" + savestr + "/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
-    pickle_file = pickle_file.open('rb')
-    computer, optim, epoch, iteration = torch.load(pickle_file)
+    with pickle_file.open('rb') as pickle_file:
+        computer, optim, epoch, iteration = torch.load(pickle_file)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-    #
-    # for child in save_dir.iterdir():
-    #     epoch = str(child).split("_")[3].split('.')[0]
-    #     iteration = str(child).split("_")[4].split('.')[0]
-    #     if int(epoch) != highestepoch and int(iteration) != highestiter:
-    #         # TODO might have a bug here.
-    #         os.remove(child)
-    # print('Removed incomplete save file and all else.')
 
     return computer, optim, highestepoch, highestiter
+
 
 def salvage():
     # this function will pick up the last two highest epoch training and save them somewhere else,
@@ -363,7 +360,7 @@ def validationonly():
           traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 
-def main(load=False):
+def main(load=False,savestr="lstm"):
     """
     11/29
     lr=1e-2
@@ -373,11 +370,13 @@ def main(load=False):
     """
     total_epochs = 10
     iter_per_epoch = 100000
-    lr = 1e-3
+    lr = 1e-4
     optim = None
     starting_epoch = 0
     starting_iteration= 0
-    logfile = "log.txt"
+    logstring = str(datetime.datetime.now().time())
+    logstring.replace(" ", "_")
+    logfile = "log/"+savestr+"_"+logstring+".txt"
     param_bs=16
 
     num_workers = 16
@@ -398,7 +397,7 @@ def main(load=False):
     # load model:
     if load:
         print("loading model")
-        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
+        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration, savestr)
 
     lstm = lstm.cuda()
     if optim is None:
@@ -415,13 +414,13 @@ def main(load=False):
 
     train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
-          int(starting_iteration), iter_per_epoch, "cnlstm", logfile)
+          int(starting_iteration), iter_per_epoch, savestr, logfile)
 
 
 
 if __name__ == "__main__":
     # main(load=True
-    main()
+    main(load=True,savestr="cnlstm")
 
     '''
     Loss is around 0.004

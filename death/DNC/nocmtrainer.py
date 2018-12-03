@@ -1,5 +1,5 @@
 """
-Trainer E incorporates Channel(). It's a trainer for batch inputs.
+Not sure if backpropagation leaks. Train loss and validation loss never match.
 """
 
 import pandas as pd
@@ -20,6 +20,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
+from death.taco.collate import pad_collate
 
 
 batch_size = 1
@@ -29,12 +30,12 @@ debug = True
 verbose=False
 
 param_x = 69505
-param_h = 2 #64
-param_L = 2
+param_h = 16
+param_L = 4
 param_v_t = 5952
-param_W = 2 #8
-param_R = 2 #8
-param_N = 2 #64
+param_W = 4
+param_R = 4
+param_N = 16
 param_bs = 128
 
 import torch.multiprocessing
@@ -128,6 +129,25 @@ def salvage(savestr):
 
     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/salvage1.pkl')
 
+def run_one_patient(computer, input, target, loss_type, states_tuple, optimizer, binary_criterion):
+    computer.train()
+    optimizer.zero_grad()
+    target = target.squeeze(1)
+    input = Variable(input).cuda()
+    target = Variable(target).cuda()
+    loss_type = Variable(loss_type).cuda()
+    computer.assign_states_tuple(states_tuple)
+    output, states_tuple = computer(input)
+
+    time_to_event_output = output[:, 0]
+    cause_of_death_output = output[:, 1:]
+    time_to_event_target = target[:, 0]
+    cause_of_death_target = target[:, 1:]
+
+    loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+    loss.backward()
+    optimizer.step()
+    return loss
 
 def run_one_step(computer, channelmanager, optimizer, binary_criterion):
     computer.train()
@@ -366,14 +386,6 @@ def valid_only(savestr="struc"):
           logfile)
 
 def main(savestr, load=True, lr=1e-4,curri=False):
-    '''
-    11/28
-    0.004 is now the new best. But it's not much better. Is lr the problem?
-
-    11/29
-    lr does not seem to be the problem
-    Changed background distribution. Loss is now around 0.001. Training loss is 10 times smaller.
-    '''
 
     '''
     12/2
@@ -382,9 +394,7 @@ def main(savestr, load=True, lr=1e-4,curri=False):
     Because Channelmanager evaluates at every timestamp, backpropagation alters the weights at each step.
     Somehow, that can be signals of the final prediction, which is utilized in the next step's prediction.
     Backpropagation on each timesteps leaks the final label.
-    This is interesting. 
-    
-    Running loss typically at 0.0002. Validation loss at 0.0012.
+    This is interesting.
     '''
     total_epochs = 10
     iter_per_epoch = 10000
@@ -393,9 +403,7 @@ def main(savestr, load=True, lr=1e-4,curri=False):
     optim = None
     starting_epoch = 0
     starting_iteration = 0
-    logstring = str(datetime.datetime.now().time())
-    logstring.replace(" ", "_")
-    logfile = "log/"+savestr+"_"+logstring+".txt"
+    logfile = "log/"+savestr+"_log.txt"
     num_workers = 8
 
 
@@ -412,13 +420,12 @@ def main(savestr, load=True, lr=1e-4,curri=False):
         death_fold=5
     else:
         death_fold=0
-    ig = InputGenF(death_fold=death_fold,curriculum=curri)
 
-
+    ig = InputGenF(death_fold=0)
     validds = ig.get_valid()
-    testds = ig.get_test()
-    validdl = DataLoader(dataset=validds, batch_size=1, num_workers=num_workers)
-    validdl = ChannelManager(validdl, param_bs, model=computer)
+    trainds = ig.get_train()
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
 
     # load model:
     if load:

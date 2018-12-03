@@ -19,6 +19,8 @@ from death.DNC.batchDNC import BatchDNC as DNC
 from death.baseline.channelLSTM import ChannelLSTM
 import pickle
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 def get_log_file():
     timestring = str(datetime.datetime.now().time())

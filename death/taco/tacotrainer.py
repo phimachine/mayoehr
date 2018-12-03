@@ -8,7 +8,7 @@ import numpy as np
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planD import InputGenD, train_valid_split
+from death.post.inputgen_planF import InputGenF
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.taco.model import Tacotron
@@ -19,6 +19,7 @@ import traceback
 from collections import deque
 import datetime
 from death.taco.collate import pad_collate
+from death.DNC.batchtrainer import logprint
 
 global_exception_counter = 0
 i = None
@@ -207,11 +208,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     global global_exception_counter
     valid_iterator=iter(valid)
     print_interval = 10
-    val_interval = 50
-    save_interval = 300
+    val_interval = 250
+    save_interval = 250
     target_dim = None
     rldmax_len = 50
-    val_batch=10
+    val_batch=50
     running_loss_deque = deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
@@ -286,15 +287,18 @@ def main(load=False, lr=1e-3, savestr=""):
     optim = None
     starting_epoch = 0
     starting_iteration = 0
-    logfile = "log.txt"
+    
+    logstring = str(datetime.datetime.now().time())
+    logstring.replace(" ", "_")
+    logfile = "log/"+savestr+"_"+logstring+".txt"
 
     num_workers = 16
-    ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
-    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=4, collate_fn=pad_collate)
+    ig = InputGenF(death_fold=0)
+    validds = ig.get_valid()
+    trainds = ig.get_train()
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
+
     print("Using", num_workers, "workers for training set")
     computer = Tacotron()
 
@@ -325,7 +329,7 @@ def main(load=False, lr=1e-3, savestr=""):
 
 
 if __name__ == "__main__":
-    main(load=True)
+    main(load=True, savestr="zerofold")
 
 """
 Training was run for 10 hours, for 10 epochs.

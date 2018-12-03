@@ -1,3 +1,3 @@
 from death.taco.tacotrainer import main
 
-main(load=False)
+main(load=True, savestr="zerofold")
