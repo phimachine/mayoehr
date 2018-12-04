@@ -12,3 +12,11 @@ Because we are doing manual tuning right now, it would be beneficial to spawn mu
 train with the same datastream. The reason for this is because data I/O seems to be the most time-consuming
 pipeline. This means log will be the only reference of training. Given model size of ~2000mb, running 5~8 instances
 should be reasonable.
+
+
+
+DNC validation is at 0.0007. DNC running loss is around 0.0003. This is acceptable. I'm going to run with a slightly
+larger parameter set.
+Tacotron running at 0.0005. Validation method has high variance so I need something else.
+
+Channeled LSTM performs poorly.

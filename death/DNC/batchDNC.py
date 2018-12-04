@@ -120,8 +120,8 @@ class BatchDNC(nn.Module):
         self.last_read_vector=None
         self.not_first_t_flag=None
 
-        print(self.parameters())
-
+        for name, param in self.named_parameters():
+                print(name, param.data)
 
     def init_states_each_channel(self):
         """

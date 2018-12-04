@@ -85,37 +85,38 @@ class InputGen(Dataset, DFManager):
         input_dim_manual = []
         dimsize = 0
         for dfn in self.dfn:
-            df = getattr(self, dfn)
-            # get all columns and column dtypes, allocate depending on the dtypes
-            for colname, dtype in zip(df.dtypes.index, df.dtypes):
-                if colname == "rep_person_id" or self.is_date_column(colname):
-                    # no memory needed for these values.
-                    # either index that is ignored, or contained in the time series.
-                    if dfn == "demo" and self.is_date_column(colname):
-                        # then we are dealing with birth date
-                        input_dim_manual.append((dfn, colname, dimsize))
-                        # how many dimensions do you want for birth date?
-                        # My plan is to simply throw the age in as a float.
-                        dimsize += 1
-                else:
-                    dtn = dtype.name
-                    input_dim_manual.append((dfn, colname, dimsize))
-                    if self.verbose:
-                        print("accounting for", dfn, colname)
-                    if dtn == 'bool':
-                        dimsize += 1
-                    elif dtn == "category":
-                        dimsize += len(self.get_dict(dfn, colname))
-                    elif dtn == "object":
-                        dimsize += len(self.get_dict(dfn, colname))
-                    elif dtn == "float64":
-                        dimsize += 1
-                    elif dtn == "int64":
-                        dimsize += 1
-                    elif dtn == "datetime64[ns]":
-                        raise ValueError("No, I should not see this")
+            if dfn!="death":
+                df = getattr(self, dfn)
+                # get all columns and column dtypes, allocate depending on the dtypes
+                for colname, dtype in zip(df.dtypes.index, df.dtypes):
+                    if colname == "rep_person_id" or self.is_date_column(colname):
+                        # no memory needed for these values.
+                        # either index that is ignored, or contained in the time series.
+                        if dfn == "demo" and self.is_date_column(colname):
+                            # then we are dealing with birth date
+                            input_dim_manual.append((dfn, colname, dimsize))
+                            # how many dimensions do you want for birth date?
+                            # My plan is to simply throw the age in as a float.
+                            dimsize += 1
                     else:
-                        raise ValueError("Unaccounted for")
+                        dtn = dtype.name
+                        input_dim_manual.append((dfn, colname, dimsize))
+                        if self.verbose:
+                            print("accounting for", dfn, colname)
+                        if dtn == 'bool':
+                            dimsize += 1
+                        elif dtn == "category":
+                            dimsize += len(self.get_dict(dfn, colname))
+                        elif dtn == "object":
+                            dimsize += len(self.get_dict(dfn, colname))
+                        elif dtn == "float64":
+                            dimsize += 1
+                        elif dtn == "int64":
+                            dimsize += 1
+                        elif dtn == "datetime64[ns]":
+                            raise ValueError("No, I should not see this")
+                        else:
+                            raise ValueError("Unaccounted for")
 
         self.input_dim = dimsize
         self.input_dim_manual = input_dim_manual

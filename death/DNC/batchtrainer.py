@@ -29,12 +29,12 @@ debug = True
 verbose=False
 
 param_x = 69505
-param_h = 2 #64
+param_h = 4 #64
 param_L = 2
 param_v_t = 5952
 param_W = 2 #8
 param_R = 2 #8
-param_N = 2 #64
+param_N = 4 #64
 param_bs = 128
 
 import torch.multiprocessing
@@ -386,7 +386,20 @@ def main(savestr, load=True, lr=1e-4,curri=False):
     
     Running loss typically at 0.0002. Validation loss at 0.0012.
     '''
-    total_epochs = 10
+
+    '''
+    Running 0.0003. Validation 0.0007.
+    Parameters:
+    param_x = 69505
+    param_h = 2 #64
+    param_L = 2
+    param_v_t = 5952
+    param_W = 2 #8
+    param_R = 2 #8
+    param_N = 2 #64
+    param_bs = 128
+    '''
+    total_epochs = 3
     iter_per_epoch = 10000
     lr = lr
     print("Using lr=",lr)

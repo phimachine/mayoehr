@@ -5,7 +5,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planD import InputGenD, train_valid_split
+from death.post.inputgen_planF import InputGenF
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -15,6 +15,8 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
+from death.DNC.batchtrainer import logprint
+from death.taco.collate import pad_collate
 
 batch_size = 1
 
@@ -29,45 +31,43 @@ class dummy_context_mgr():
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-def save_model(net, optim, epoch, iteration):
+def save_model(net, optim, epoch, iteration, savestr):
     epoch = int(epoch)
     task_dir = os.path.dirname(abspath(__file__))
-    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(epoch) +  "_" + str(iteration) + ".pkl")
-    pickle_file = pickle_file.open('wb')
-    torch.save((net,  optim, epoch, iteration), pickle_file)
+    if not os.path.isdir(Path(task_dir) / "saves" / savestr):
+        os.mkdir(Path(task_dir) / "saves" / savestr)
+    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/lstmnorm_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    with pickle_file.open('wb') as fhand:
+        torch.save((net, optim, epoch, iteration), fhand)
     print('model saved at', pickle_file)
 
-def load_model(computer, optim, starting_epoch, starting_iteration):
+def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "lstmsaves"
+    save_dir = Path(task_dir) / "saves" / savestr
     highestepoch = 0
     highestiter = 0
     for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
+        try:
+            epoch = str(child).split("_")[3]
+            iteration = str(child).split("_")[4].split('.')[0]
+        except IndexError:
+            print(str(child))
         iteration = int(iteration)
         epoch = int(epoch)
         # some files are open but not written to yet.
         if child.stat().st_size > 20480:
-            if epoch > highestepoch or (iteration > highestiter and epoch==highestepoch):
+            if epoch > highestepoch or (iteration > highestiter and epoch == highestepoch):
                 highestepoch = epoch
                 highestiter = iteration
     if highestepoch == 0 and highestiter == 0:
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
-    pickle_file = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    pickle_file = Path(task_dir).joinpath(
+        "saves/" + savestr + "/lstmnorm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
-    pickle_file = pickle_file.open('rb')
-    computer, optim, epoch, iteration = torch.load(pickle_file)
+    with pickle_file.open('rb') as pickle_file:
+        computer, optim, epoch, iteration = torch.load(pickle_file)
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
-    #
-    # for child in save_dir.iterdir():
-    #     epoch = str(child).split("_")[3].split('.')[0]
-    #     iteration = str(child).split("_")[4].split('.')[0]
-    #     if int(epoch) != highestepoch and int(iteration) != highestiter:
-    #         # TODO might have a bug here.
-    #         os.remove(child)
-    # print('Removed incomplete save file and all else.')
 
     return computer, optim, highestepoch, highestiter
 
@@ -143,7 +143,7 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
     valid_iterator=iter(valid_dl)
     print_interval=10
     val_interval=200
@@ -171,14 +171,9 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 running_loss_deque.appendleft(printloss)
                 if i % print_interval == 0:
                     running_loss=np.mean(running_loss_deque)
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("learning.   count: %4d, training loss: %.10f \n" %
-                                         (i, printloss))
-                    print("learning.   count: %4d, training loss: %.10f" %
-                          (i, printloss))
-                    if i!=0:
-                        print("count: %4d, running loss: %.10f" % (i, running_loss))
+                    logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
+                             (i, printloss, running_loss))
+
 
                 if i % val_interval == 0:
                     printloss=0
@@ -197,15 +192,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                         else:
                             raise ValueError ("Investigate this")
                     printloss=printloss/val_batch
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("validation. count: %4d, val loss     : %.10f \n" %
-                                             (i, printloss))
-                    print("validation. count: %4d, val loss: %.10f" %
-                          (i, printloss))
+                    logprint(logfile, "validation. count: %4d, val loss     : %.10f" %
+                             (i, printloss))
 
                 if i % save_interval == 0:
-                    save_model(computer, optimizer, epoch, i)
+                    save_model(computer, optimizer, epoch, i, savestr)
                     print("model saved for epoch", epoch, "input", i)
             else:
                 break
@@ -233,7 +224,7 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapper(nn.Module):
-    def __init__(self,input_size=69505, output_size=5952,hidden_size=128,num_layers=16,batch_first=True,
+    def __init__(self,input_size=69505, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapper, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
@@ -291,22 +282,24 @@ def validationonly():
     valid(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
-def main(load=False):
-    total_epochs = 10
+def main(load=False,savestr="normallstm"):
+    total_epochs = 3
     iter_per_epoch = 100000
-    lr = 1e-2
+    lr = 1e-3
     optim = None
     starting_epoch = 0
     starting_iteration= 0
-    logfile = "log.txt"
+    logstring = str(datetime.datetime.now().time())
+    logstring.replace(" ", "_")
+    logfile = "log/"+savestr+"_"+logstring+".txt"
 
     num_workers = 16
-    ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds,validds=train_valid_split(ig,split_fold=10)
-    traindl = DataLoader(dataset=trainds, batch_size=1, num_workers=num_workers)
-    validdl = DataLoader(dataset=validds, batch_size=1)
+    ig = InputGenF(death_fold=0)
+    trainds = ig.get_train()
+    validds = ig.get_valid()
+    testds = ig.get_test()
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
 
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether
@@ -315,7 +308,7 @@ def main(load=False):
     # load model:
     if load:
         print("loading model")
-        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration)
+        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration, savestr)
 
     lstm = lstm.cuda()
     if optim is None:
@@ -332,7 +325,7 @@ def main(load=False):
 
     train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
-          int(starting_iteration), iter_per_epoch, logfile)
+          int(starting_iteration), iter_per_epoch, savestr, logfile)
 
 
 if __name__ == "__main__":
@@ -340,7 +333,6 @@ if __name__ == "__main__":
     main()
 
     '''
-    Loss is around 0.004
-    Validation set was exhausted. We should make a wrapper and reuse it.w
-    Hidden size 128, layer size 16
+    lr=1e-4 is extremely slow.
+    This is probably because I averaged the loss across the whole sequence? Why is this not a problem for Tacotron?
     '''

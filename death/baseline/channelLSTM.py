@@ -5,7 +5,7 @@ import torch
 import pdb
 
 class ChannelLSTM(nn.Module):
-    def __init__(self,input_size=69505, output_size=5952,hidden_size=128,num_layers=32,batch_first=True,
+    def __init__(self,input_size=69505, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
                  dropout=True):
         super(ChannelLSTM, self).__init__()
         self.hidden_size=hidden_size

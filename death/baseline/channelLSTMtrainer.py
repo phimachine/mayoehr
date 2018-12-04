@@ -17,6 +17,7 @@ from collections import deque
 import datetime
 from death.baseline.channelLSTM import ChannelLSTM
 from death.baseline.lstmcm import ChannelManager
+from death.DNC.batchtrainer import logprint
 
 batch_size = 1
 
@@ -144,11 +145,6 @@ def valid_one_step(computer, channelmanager, binary_criterion):
     return loss
 
 
-def logprint(logfile, string):
-    with open(logfile, 'a') as handle:
-        handle.write(string)
-    print(string)
-
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=True):
     print_interval = 100
@@ -160,9 +156,6 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     running_loss_deque = deque(maxlen=rldmax_len)
 
     # erase the logfile
-    if logfile:
-        logfile=str(datetime.datetime.now())
-
 
     for epoch in range(starting_epoch, total_epochs):
         # all these are batches
@@ -177,9 +170,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             running_loss_deque.appendleft(printloss)
             if i % print_interval == 0:
                 running_loss = np.mean(running_loss_deque)
-                if logfile:
-                    logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
-                                     (i, printloss, running_loss))
+                logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
+                                 (i, printloss, running_loss))
 
             if i % val_interval == 0:
                 printloss = 0
@@ -192,84 +184,13 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                         global failure
                         failure+=1
                 printloss = printloss / val_batch
-                if logfile:
-                    logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
-                                     (i, printloss))
-                else:
-                    print("validation. count: %4d, running loss: %.10f" %
-                          (i, printloss))
+                logprint(logfile,"validation. count: %4d, val loss     : %.10f" %
+                                 (i, printloss))
+
 
             if i % save_interval == 0:
                 save_model(computer, optimizer, epoch, i, savestr)
                 print("model saved for epoch", epoch, "input", i)
-
-# def train_obsolete(computer, optimizer, real_criterion, binary_criterion,
-#           train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
-#     valid_iterator=iter(valid_dl)
-#     print_interval=10
-#     val_interval=200
-#     save_interval=800
-#     target_dim=None
-#     rldmax_len=50
-#     val_batch=100
-#     running_loss_deque=deque(maxlen=rldmax_len)
-#     if logfile:
-#         open(logfile, 'w').close()
-#
-#     for epoch in range(starting_epoch, total_epochs):
-#         for i, (input, target, loss_type) in enumerate(train):
-#             i=starting_iter+i
-#             if target_dim is None:
-#                 target_dim=target.shape[2]
-#
-#             if i < iter_per_epoch:
-#                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-#                                                    real_criterion, binary_criterion)
-#                 if train_story_loss is not None:
-#                     printloss=float(train_story_loss[0])
-#                 else:
-#                     raise ValueError("Why would story loss be None?")
-#                 running_loss_deque.appendleft(printloss)
-#                 if i % print_interval == 0:
-#                     running_loss=np.mean(running_loss_deque)
-#                     if logfile:
-#                         with open(logfile, 'a') as handle:
-#                             handle.write("learning.   count: %4d, training loss: %.10f \n" %
-#                                          (i, printloss))
-#                     print("learning.   count: %4d, training loss: %.10f" %
-#                           (i, printloss))
-#                     if i!=0:
-#                         print("count: %4d, running loss: %.10f" % (i, running_loss))
-#
-#                 if i % val_interval == 0:
-#                     printloss=0
-#                     for _ in range(val_batch):
-#                         # we should consider running validation multiple times and average. TODO
-#                         try:
-#                             (input,target,loss_type)=next(valid_iterator)
-#                         except StopIteration:
-#                             valid_iterator=iter(valid_dl)
-#                             (input,target,loss_type)=next(valid_iterator)
-#
-#                         val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-#                                                        real_criterion, binary_criterion, validate=True)
-#                         if val_loss is not None:
-#                             printloss += float(val_loss[0])
-#                         else:
-#                             raise ValueError ("Investigate this")
-#                     printloss=printloss/val_batch
-#                     if logfile:
-#                         with open(logfile, 'a') as handle:
-#                             handle.write("validation. count: %4d, val loss     : %.10f \n" %
-#                                              (i, printloss))
-#                     print("validation. count: %4d, val loss: %.10f" %
-#                           (i, printloss))
-#
-#                 if i % save_interval == 0:
-#                     save_model(computer, optimizer, epoch, i)
-#                     print("model saved for epoch", epoch, "input", i)
-#             else:
-#                 break
 
 def valid(computer, optimizer, real_criterion, binary_criterion,
           train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
@@ -368,7 +289,15 @@ def main(load=False,savestr="lstm"):
     val loss 0.002~0.001 afterwards, which is comparable to DNC
     There are signs of sparse output, because sometimes the prediction is exactly correct.
     """
-    total_epochs = 10
+
+    '''
+    12/4
+    Validation ranges from 0.0003 to 0.0009
+    training loss 0.0003
+    Halving both parameters
+    '''
+
+    total_epochs = 3
     iter_per_epoch = 100000
     lr = 1e-4
     optim = None
@@ -415,6 +344,7 @@ def main(load=False,savestr="lstm"):
     train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
           int(starting_iteration), iter_per_epoch, savestr, logfile)
+
 
 
 
