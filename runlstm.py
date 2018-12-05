@@ -1,3 +1,3 @@
 from death.baseline.lstmtrainer import *
 
-main(load=False,savestr="normallstm")
+main(load=False,savestr="npadd")

@@ -215,7 +215,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     val_batch=50
     running_loss_deque = deque(maxlen=rldmax_len)
     if logfile:
-        open(logfile, 'w').close()
+        open(logfile, 'w+').close()
     global i
 
     for epoch in range(starting_epoch, total_epochs):

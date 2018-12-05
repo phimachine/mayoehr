@@ -5,7 +5,8 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planF import InputGenF
+from death.post.inputgen_planG import InputGenG, pad_collate
+from death.DNC.seqDNC import SeqDNC
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -16,10 +17,20 @@ import traceback
 from collections import deque
 import datetime
 from death.DNC.batchtrainer import logprint
-from death.taco.collate import pad_collate
+import pdb
 
 batch_size = 1
+param_x = 66529
+param_h = 64 #64
+param_L = 4 #4
+param_v_t = 5952
+param_W = 8 #8
+param_R = 8 #8
+param_N = 64 #64
+param_bs = 8
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 def sv(var):
     return var.data.cpu().numpy()
@@ -36,7 +47,7 @@ def save_model(net, optim, epoch, iteration, savestr):
     task_dir = os.path.dirname(abspath(__file__))
     if not os.path.isdir(Path(task_dir) / "saves" / savestr):
         os.mkdir(Path(task_dir) / "saves" / savestr)
-    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/lstmnorm_" + str(epoch) + "_" + str(iteration) + ".pkl")
+    pickle_file = Path(task_dir).joinpath("saves/" + savestr + "/seqDNC_" + str(epoch) + "_" + str(iteration) + ".pkl")
     with pickle_file.open('wb') as fhand:
         torch.save((net, optim, epoch, iteration), fhand)
     print('model saved at', pickle_file)
@@ -63,45 +74,45 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
     pickle_file = Path(task_dir).joinpath(
-        "saves/" + savestr + "/lstmnorm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+        "saves/" + savestr + "/seqDNC_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
     print("loading model at", pickle_file)
     with pickle_file.open('rb') as pickle_file:
         computer, optim, epoch, iteration = torch.load(pickle_file)
-    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
+    print('Loaded model at epoch ', highestepoch, 'iteration', iteration)
 
     return computer, optim, highestepoch, highestiter
 
-def salvage():
-    # this function will pick up the last two highest epoch training and save them somewhere else,
-    # this is to prevent unexpected data loss.
-    # We are working in a /tmp folder, and we write around 1Gb per minute.
-    # The loss of data is likely.
-
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "lstmsaves"
-    highestepoch = -1
-    secondhighestiter = -1
-    highestiter = -1
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
-        iteration = int(iteration)
-        epoch = int(epoch)
-        # some files are open but not written to yet.
-        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
-            highestepoch = epoch
-            highestiter = iteration
-    if highestepoch == -1 and highestiter == -1:
-        print("no file to salvage")
-        return
-    if secondhighestiter != -1:
-        pickle_file2 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
-        copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/lstmsalvage2.pkl")
-
-    pickle_file1 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-    copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
-
-    print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
+# def salvage():
+#     # this function will pick up the last two highest epoch training and save them somewhere else,
+#     # this is to prevent unexpected data loss.
+#     # We are working in a /tmp folder, and we write around 1Gb per minute.
+#     # The loss of data is likely.
+#
+#     task_dir = os.path.dirname(abspath(__file__))
+#     save_dir = Path(task_dir) / "lstmsaves"
+#     highestepoch = -1
+#     secondhighestiter = -1
+#     highestiter = -1
+#     for child in save_dir.iterdir():
+#         epoch = str(child).split("_")[3]
+#         iteration = str(child).split("_")[4].split('.')[0]
+#         iteration = int(iteration)
+#         epoch = int(epoch)
+#         # some files are open but not written to yet.
+#         if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
+#             highestepoch = epoch
+#             highestiter = iteration
+#     if highestepoch == -1 and highestiter == -1:
+#         print("no file to salvage")
+#         return
+#     if secondhighestiter != -1:
+#         pickle_file2 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+#         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/lstmsalvage2.pkl")
+#
+#     pickle_file1 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+#     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
+#
+#     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
 
 global_exception_counter=0
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
@@ -118,8 +129,9 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         # criterion does not need to be reinitiated for every story, because we are not using a mask
 
         patient_output=computer(input)
-        cause_of_death_output = patient_output[:, :, 1:]
-        cause_of_death_target = target[:, :, 1:]
+        cause_of_death_output = patient_output[:, 1:]
+        cause_of_death_target = target[:, 1:]
+        # pdb.set_trace()
         patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
@@ -146,7 +158,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
     valid_iterator=iter(valid_dl)
     print_interval=10
-    val_interval=200
+    val_interval=400
     save_interval=800
     target_dim=None
     rldmax_len=50
@@ -159,7 +171,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
             if target_dim is None:
-                target_dim=target.shape[2]
+                target_dim=target.shape[1]
 
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
@@ -223,86 +235,51 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
     print(np.mean(running_loss))
 
 
-class lstmwrapper(nn.Module):
-    def __init__(self,input_size=66529, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
-                 dropout=True):
-        super(lstmwrapper, self).__init__()
-        self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
-                       batch_first=batch_first,dropout=dropout)
-        self.output=nn.Linear(hidden_size,output_size)
-        self.reset_parameters()
+#
+# def validationonly():
+#     '''
+#     :return:
+#     '''
+#
+#     lr = 1e-2
+#     optim = None
+#     logfile = "vallog.txt"
+#
+#     num_workers = 8
+#     ig = InputGenD()
+#     # multiprocessing disabled, because socket request seems unstable.
+#     # performance should not be too bad?
+#     trainds, validds = train_valid_split(ig, split_fold=10)
+#     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
+#     print("Using", num_workers, "workers for validation set")
+#     computer=
+#
+#     # load model:
+#     print("loading model")
+#     lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0)
+#
+#     lstm = lstm.cuda()
+#     if optim is None:
+#         optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
+#     else:
+#         # print('use Adadelta optimizer with learning rate ', lr)
+#         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+#         optimizer = optim
+#
+#     real_criterion = nn.SmoothL1Loss()
+#     binary_criterion = nn.BCEWithLogitsLoss()
+#
+#     traindl=None
+#     total_epochs=None
+#     iter_per_epoch=None
+#
+#     # starting with the epoch after the loaded one
+#     valid(lstm, optimizer, real_criterion, binary_criterion,
+#           traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
-    def reset_parameters(self):
-        self.lstm.reset_parameters()
-        self.output.reset_parameters()
-
-    def forward(self, input, hx=None):
-        output,statetuple=self.lstm(input,hx)
-        return self.output(output)
-
-class lstmwrapper2(nn.Module):
-    def __init__(self,input_size=66529, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
-                 dropout=True):
-        super(lstmwrapper, self).__init__()
-        self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
-                       batch_first=batch_first,dropout=dropout)
-        self.output=nn.Linear(hidden_size,output_size)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.lstm.reset_parameters()
-        self.output.reset_parameters()
-
-    def forward(self, input, hx=None):
-        output,statetuple=self.lstm(input,hx)
-        return self.output(output)
-
-def validationonly():
-    '''
-    :return:
-    '''
-
-    lr = 1e-2
-    optim = None
-    logfile = "vallog.txt"
-
-    num_workers = 8
-    ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
-    validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
-    print("Using", num_workers, "workers for validation set")
-    # testing whether this LSTM works is basically a question whether
-    lstm = lstmwrapper()
-
-    # load model:
-    print("loading model")
-    lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0)
-
-    lstm = lstm.cuda()
-    if optim is None:
-        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
-    else:
-        # print('use Adadelta optimizer with learning rate ', lr)
-        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
-        optimizer = optim
-
-    real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss()
-
-    traindl=None
-    total_epochs=None
-    iter_per_epoch=None
-
-    # starting with the epoch after the loaded one
-    valid(lstm, optimizer, real_criterion, binary_criterion,
-          traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
-
-def main(load,savestr):
-    total_epochs = 3
+def main(load,savestr,lr=1e-3,curri=False):
+    total_epochs = 5
     iter_per_epoch = 100000
-    lr = 1e-3
     optim = None
     starting_epoch = 0
     starting_iteration= 0
@@ -311,25 +288,30 @@ def main(load,savestr):
     logfile = "log/"+savestr+"_"+logstring+".txt"
 
     num_workers = 16
-    ig = InputGenF(death_fold=0)
+    ig = InputGenG(death_fold=0,curriculum=curri)
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
-    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
-    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers//4, collate_fn=pad_collate)
 
     print("Using", num_workers, "workers for training set")
-    # testing whether this LSTM works is basically a question whether
-    lstm=lstmwrapper()
-
+    computer = SeqDNC(x=param_x,
+                   h=param_h,
+                   L=param_L,
+                   v_t=param_v_t,
+                   W=param_W,
+                   R=param_R,
+                   N=param_N,
+                   bs=param_bs)
     # load model:
     if load:
         print("loading model")
-        lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, starting_epoch, starting_iteration, savestr)
+        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch, starting_iteration, savestr)
 
-    lstm = lstm.cuda()
+    computer = computer.cuda()
     if optim is None:
-        optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
@@ -340,14 +322,15 @@ def main(load,savestr):
 
     # starting with the epoch after the loaded one
 
-    train(lstm, optimizer, real_criterion, binary_criterion,
+    train(computer, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
           int(starting_iteration), iter_per_epoch, savestr, logfile)
 
 
+
 if __name__ == "__main__":
     # main(load=True
-    main()
+    main(False,'lstmG')
 
     '''
     lr=1e-4 is extremely slow.

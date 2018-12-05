@@ -28,7 +28,7 @@ i = None
 debug = True
 verbose=False
 
-param_x = 69505
+param_x = 66529
 param_h = 4 #64
 param_L = 2
 param_v_t = 5952
@@ -85,7 +85,7 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     print("loading model at", pickle_file)
     with pickle_file.open('rb') as pickle_file:
         computer, optim, epoch, iteration = torch.load(pickle_file)
-    print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
+    print('Loaded model at epoch ', highestepoch, 'iteration', iteration)
 
     return computer, optim, highestepoch, highestiter
 
@@ -365,7 +365,7 @@ def valid_only(savestr="struc"):
           traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
           logfile)
 
-def main(savestr, load=True, lr=1e-4,curri=False):
+def main(savestr, load=False, lr=1e-4,curri=False):
     '''
     11/28
     0.004 is now the new best. But it's not much better. Is lr the problem?
@@ -399,6 +399,13 @@ def main(savestr, load=True, lr=1e-4,curri=False):
     param_N = 2 #64
     param_bs = 128
     '''
+
+    '''
+    slight increase in validation with increased h and N.
+    Running 0.0003, Validation 0.0008
+    '''
+    np.warnings.filterwarnings('ignore')
+
     total_epochs = 3
     iter_per_epoch = 10000
     lr = lr

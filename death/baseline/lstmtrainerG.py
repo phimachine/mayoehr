@@ -5,7 +5,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planF import InputGenF
+from death.post.inputgen_planG import InputGenG, pad_collate
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -16,7 +16,7 @@ import traceback
 from collections import deque
 import datetime
 from death.DNC.batchtrainer import logprint
-from death.taco.collate import pad_collate
+import pdb
 
 batch_size = 1
 
@@ -118,8 +118,9 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         # criterion does not need to be reinitiated for every story, because we are not using a mask
 
         patient_output=computer(input)
-        cause_of_death_output = patient_output[:, :, 1:]
-        cause_of_death_target = target[:, :, 1:]
+        cause_of_death_output = patient_output[:, 1:]
+        cause_of_death_target = target[:, 1:]
+        # pdb.set_trace()
         patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
@@ -159,7 +160,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
             if target_dim is None:
-                target_dim=target.shape[2]
+                target_dim=target.shape[1]
 
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
@@ -223,10 +224,10 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
     print(np.mean(running_loss))
 
 
-class lstmwrapper(nn.Module):
+class lstmwrapperG(nn.Module):
     def __init__(self,input_size=66529, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
                  dropout=True):
-        super(lstmwrapper, self).__init__()
+        super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)
         self.output=nn.Linear(hidden_size,output_size)
@@ -238,24 +239,13 @@ class lstmwrapper(nn.Module):
 
     def forward(self, input, hx=None):
         output,statetuple=self.lstm(input,hx)
-        return self.output(output)
+        output=self.output(output)
+        # (batch_size, seq_len, target_dim)
+        # pdb.set_trace()
+        output=output.sum(1)
+        return output
 
-class lstmwrapper2(nn.Module):
-    def __init__(self,input_size=66529, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
-                 dropout=True):
-        super(lstmwrapper, self).__init__()
-        self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
-                       batch_first=batch_first,dropout=dropout)
-        self.output=nn.Linear(hidden_size,output_size)
-        self.reset_parameters()
 
-    def reset_parameters(self):
-        self.lstm.reset_parameters()
-        self.output.reset_parameters()
-
-    def forward(self, input, hx=None):
-        output,statetuple=self.lstm(input,hx)
-        return self.output(output)
 
 def validationonly():
     '''
@@ -274,7 +264,7 @@ def validationonly():
     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
     print("Using", num_workers, "workers for validation set")
     # testing whether this LSTM works is basically a question whether
-    lstm = lstmwrapper()
+    lstm = lstmwrapperG()
 
     # load model:
     print("loading model")
@@ -311,7 +301,7 @@ def main(load,savestr):
     logfile = "log/"+savestr+"_"+logstring+".txt"
 
     num_workers = 16
-    ig = InputGenF(death_fold=0)
+    ig = InputGenG(death_fold=0)
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
@@ -320,7 +310,7 @@ def main(load,savestr):
 
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether
-    lstm=lstmwrapper()
+    lstm=lstmwrapperG()
 
     # load model:
     if load:
@@ -345,9 +335,10 @@ def main(load,savestr):
           int(starting_iteration), iter_per_epoch, savestr, logfile)
 
 
+
 if __name__ == "__main__":
     # main(load=True
-    main()
+    main(False,'lstmG')
 
     '''
     lr=1e-4 is extremely slow.

@@ -19,6 +19,7 @@ from pathlib import Path
 import pickle
 from torch.nn import LSTM
 from death.DNC.bnpy import BatchNorm1d
+import pdb
 debug = True
 
 def sv(var):
@@ -53,7 +54,7 @@ class BatchNorm(nn.Module):
 
         return output
 
-class BatchDNC(nn.Module):
+class SeqDNC(nn.Module):
     def __init__(self,
                  x,
                  h,
@@ -63,7 +64,7 @@ class BatchDNC(nn.Module):
                  R,
                  N,
                  bs):
-        super(BatchDNC, self).__init__()
+        super(SeqDNC, self).__init__()
 
         # debugging usages
         self.last_state_dict=None
@@ -120,53 +121,9 @@ class BatchDNC(nn.Module):
         self.last_read_vector=None
         self.not_first_t_flag=None
 
-        # for name, param in self.named_parameters():
-        #         print(name, param.data)
+        for name, param in self.named_parameters():
+                print(name, param.data.shape)
 
-    def init_states_each_channel(self):
-        """
-        This function will be used by the channel manager to initialize the hidden state for each channel (single batch)
-        I designed that the function needs to be put here together with the model, instead of CM, because CM should
-        be model agnostic, and hidden init is model dependent.
-
-        :return: state tuple for each channel, the channel manager will take care of the stacking of tensors.
-        """
-
-        '''CONTROLLER'''
-
-        '''MEMORY'''
-        # p, (N), should be simplex bound
-        precedence_weighting = Variable(torch.Tensor(1, self.N).cuda()).zero_()
-        # (N,N)
-        temporal_memory_linkage = Variable(torch.Tensor(1, self.N, self.N).cuda()).zero_()
-        # (N,W)
-        stdv = 1.0 / math.sqrt(self.W)
-        memory = Variable(torch.Tensor(1, self.N, self.W).cuda().uniform_(-stdv,stdv))
-        # (N, R).
-        last_read_weightings = Variable(torch.Tensor(1, self.N, self.R).cuda()).zero_()
-        # u_t, (N)
-        last_usage_vector = Variable(torch.Tensor(1, self.N).cuda()).zero_()
-        # store last write weightings for the calculation of usage vector
-        last_write_weighting = Variable(torch.Tensor(1, self.N).cuda()).zero_()
-
-        '''COMPUTER'''
-        # needs to be initialized, otherwise throw NAN on first forward pass
-        last_read_vector = Variable(torch.Tensor(1, self.W, self.R).cuda()).zero_()
-
-        '''Second pass initiaion purpose'''
-        not_first_t_flag = Variable(torch.Tensor(1, 1).cuda()).zero_().zero_()
-
-        '''LSTM states'''
-        # for lstm in self.RNN_list:
-        #     states_list+=lstm.init_states_each_channel()
-        h=Variable(torch.Tensor(self.L, 1, self.h)).zero_().cuda()
-        c=Variable(torch.Tensor(self.L, 1, self.h)).zero_().cuda()
-
-        states_tuple=(precedence_weighting, temporal_memory_linkage, memory,
-                     last_read_weightings, last_usage_vector,last_write_weighting,
-                     last_read_vector, not_first_t_flag, h, c)
-
-        return states_tuple
 
     def reset_parameters(self):
         # if debug:
@@ -186,6 +143,47 @@ class BatchDNC(nn.Module):
         '''Computer'''
         stdv = 1.0 / math.sqrt(self.v_t)
         self.W_r.data.uniform_(-stdv, stdv)
+
+
+    def init_states_tuple(self):
+        """
+        This function should be called at the beginning of each forward.
+        I intend to use an interface similar to PyTorch LSTM. When forward() receives a states_tuple to be None,
+        init_states will be called.
+        :return:
+        """
+
+        precedence_weighting = Variable(torch.Tensor(self.bs, self.N).cuda()).zero_()
+        # (N,N)
+        temporal_memory_linkage = Variable(torch.Tensor(self.bs, self.N, self.N).cuda()).zero_()
+        # (N,W)
+        stdv = 1.0 / math.sqrt(self.W)
+        memory = Variable(torch.Tensor(self.bs, self.N, self.W).cuda().uniform_(-stdv,stdv))
+        # (N, R).
+        last_read_weightings = Variable(torch.Tensor(self.bs, self.N, self.R).cuda()).zero_()
+        # u_t, (N)
+        last_usage_vector = Variable(torch.Tensor(self.bs, self.N).cuda()).zero_()
+        # store last write weightings for the calculation of usage vector
+        last_write_weighting = Variable(torch.Tensor(self.bs, self.N).cuda()).zero_()
+
+        '''COMPUTER'''
+        # needs to be initialized, otherwise throw NAN on first forward pass
+        last_read_vector = Variable(torch.Tensor(self.bs, self.W, self.R).cuda()).zero_()
+
+        '''Second pass initiaion purpose'''
+        not_first_t_flag = Variable(torch.Tensor(self.bs, 1).cuda()).zero_().zero_()
+
+        '''LSTM states'''
+        # for lstm in self.RNN_list:
+        #     states_list+=lstm.init_states_each_channel()
+        h=Variable(torch.Tensor(self.L, self.bs, self.h)).zero_().cuda()
+        c=Variable(torch.Tensor(self.L, self.bs, self.h)).zero_().cuda()
+
+        states_tuple=(precedence_weighting, temporal_memory_linkage, memory,
+                     last_read_weightings, last_usage_vector,last_write_weighting,
+                     last_read_vector, not_first_t_flag, h, c)
+
+        return states_tuple
 
     def assign_states_tuple(self,states_tuple):
         '''
@@ -208,39 +206,63 @@ class BatchDNC(nn.Module):
         #     i.assign_states_tuple(states_tuple[9+2*i:11+2*i])
 
 
-    def forward(self, input):
-        if (input!=input).any():
+    def forward(self, input, states=None):
+        """
+
+        :param input: (bs, seq_len, input_dim)
+        :param states:
+        :return:
+        """
+
+        if states is None:
+            states_tuple=self.init_states_tuple()
+
+        timesteps=input.size()[1]
+        yts=[]
+        for step in range(timesteps):
+            self.assign_states_tuple(states_tuple)
+            step_input=input[:,step,:].contiguous()
+            yt, states_tuple=self.forward_one_step(step_input)
+            yts.append(yt)
+
+        yts=torch.stack(yts,dim=0)
+        yts=torch.sum(yts,dim=0)
+        return yts
+
+
+    def forward_one_step(self, step_input):
+        if (step_input != step_input).any():
             raise ValueError("We have NAN in inputs")
 
         # dimension 42067 for all channels report NAN
         # train.mother.lab
-        # squeeze out time dimension
-        input=input.squeeze(1)
+        # should not be necessary, right?
+        # step_input = step_input.squeeze(1)
 
         # This part of the code has NAN problem
         # The reason is because batch normalization cannot be applied to a series of highly sparse
         # it's thus reasonable to change NAN to zero.
-        bnout=self.bn(input)
+        # pdb.set_trace()
+        bnout = self.bn(step_input)
         # if (bnout != bnout).any():
 
         # through this piece, it's clear that dimension 59105 is highly sparse and is causing problem
         # it's sensible to make it 0, because it's the original value
         # print("BN has produced NAN, Location at ", (bnout!=bnout).nonzero())
-        bnout[bnout!=bnout]=0
+        bnout[bnout != bnout] = 0
 
-        bnout=bnout.unsqueeze(1)
-
+        bnout = bnout.unsqueeze(1)
 
         input_x_t = torch.cat((bnout, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
-        if (input_x_t!=input_x_t).any():
+        if (input_x_t != input_x_t).any():
             raise ValueError("We have NAN in last read vector")
         '''Controller'''
-        _, st=self.controller(input_x_t)
-        if (input_x_t!=input_x_t).any():
+        _, st = self.controller(input_x_t)
+        if (input_x_t != input_x_t).any():
             raise ValueError("We have NAN in LSTM outputs")
-        h, c= st
+        h, c = st
         # was (num_layers, batch, hidden_size)
-        hidden=h.permute(1,0,2)
+        hidden = h.permute(1, 0, 2)
         flat_hidden = hidden.contiguous().view((self.bs, self.L * self.h))
         vt = torch.matmul(flat_hidden, self.W_y)
         interface_input = torch.matmul(flat_hidden, self.W_E)
@@ -298,7 +320,7 @@ class BatchDNC(nn.Module):
         # read modes [R,3]
         read_modes = interface_input[:, last_index:last_index + self.R * 3]
         read_modes = read_modes.contiguous().view(self.bs, self.R, 3)
-        read_modes = nn.functional.softmax(read_modes,dim=2)
+        read_modes = nn.functional.softmax(read_modes, dim=2)
 
         '''memory'''
         memory_retention = self.memory_retention(free_gates)
@@ -330,7 +352,7 @@ class BatchDNC(nn.Module):
         yt = vt + torch.matmul(read_vector.view(self.bs, self.W * self.R), self.W_r)
 
         # update the last weightings
-        self.last_read_vector=read_vector
+        self.last_read_vector = read_vector
         self.last_read_weightings = read_weightings
         self.last_write_weighting = write_weighting
 
@@ -340,9 +362,9 @@ class BatchDNC(nn.Module):
             if (yt != yt).any():
                 raise ValueError("nan is found.")
 
-        states_tuple=(self.precedence_weighting, self.temporal_memory_linkage, \
-                      self.memory, self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
-                      self.last_read_vector, self.not_first_t_flag, h, c)
+        states_tuple = (self.precedence_weighting, self.temporal_memory_linkage, \
+                        self.memory, self.last_read_weightings, self.last_usage_vector, self.last_write_weighting, \
+                        self.last_read_vector, self.not_first_t_flag, h, c)
 
         return yt, states_tuple
 
@@ -655,7 +677,7 @@ class Stock_LSTM(nn.Module):
         :param input_x: input and memory values
         :return:
         """
-        assert self.st is not None
+        assert (self.st is not None)
         o, st = self.LSTM(input_x, self.st)
         if (st[0]!=st[0]).any():
             with open("debug/lstm.pkl") as f:
@@ -671,66 +693,3 @@ class Stock_LSTM(nn.Module):
 
     def assign_states_tuple(self, states_tuple):
         self.st=states_tuple
-
-# the problem seems to be in the RNN Unit.
-# we exchange the RNN units and one has memory overflow, the other has convergence issues.
-#
-# class LSTM_Unit(nn.Module):
-#     """
-#     A single layer unit of LSTM
-#     """
-#
-#     def __init__(self, x, R, W, h, bs):
-#         super(LSTM_Unit, self).__init__()
-#
-#         self.x = x
-#         self.R = R
-#         self.W = W
-#         self.h = h
-#         self.bs = bs
-#
-#         self.W_input = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#         self.W_forget = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#         self.W_output = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#         self.W_state = nn.Linear(self.x + self.R * self.W + 2 * self.h, self.h)
-#
-#         self.old_state = Variable(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
-#
-#     def reset_parameters(self):
-#         for module in self.children():
-#             module.reset_parameters()
-#
-#     def forward(self, input_x, previous_time, previous_layer):
-#         # a hidden unit outputs a hidden output new_hidden.
-#         # state also changes, but it's hidden inside a hidden unit.
-#
-#         semicolon_input = torch.cat([input_x, previous_time, previous_layer], dim=1)
-#
-#         # 5 equations
-#         input_gate = torch.sigmoid(self.W_input(semicolon_input))
-#         forget_gate = torch.sigmoid(self.W_forget(semicolon_input))
-#         new_state = forget_gate * self.old_state + input_gate * \
-#                     torch.tanh(self.W_state(semicolon_input))
-#         output_gate = torch.sigmoid(self.W_output(semicolon_input))
-#         new_hidden = output_gate * torch.tanh(new_state)
-#         self.old_state = Parameter(new_state.data,requires_grad=False)
-#
-#         return new_hidden
-#
-#
-#     def reset_batch_channel(self,list_of_channels):
-#         raise NotImplementedError()
-#     #
-#     # def new_sequence_reset(self):
-#     #     raise DeprecationWarning("We no longer reset sequence together in all batch channels, this function deprecated")
-#     #
-#     #     self.W_input.weight.detach()
-#     #     self.W_input.bias.detach()
-#     #     self.W_output.weight.detach()
-#     #     self.W_output.bias.detach()
-#     #     self.W_forget.weight.detach()
-#     #     self.W_forget.bias.detach()
-#     #     self.W_state.weight.detach()
-#     #     self.W_state.bias.detach()
-#     #
-#     #     self.old_state = Parameter(torch.Tensor(self.bs, self.h).zero_().cuda(),requires_grad=False)
