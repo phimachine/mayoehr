@@ -171,6 +171,7 @@ def valid_one_step(computer, channelmanager, binary_criterion):
     return loss
 
 def logprint(logfile, string):
+    string=str(string)
     if logprint is not None and logprint !=False:
         with open(logfile, 'a') as handle:
             handle.write(string+'\n')

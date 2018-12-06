@@ -15,7 +15,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
-from death.DNC.batchtrainer import logprint
+from death.DNC.seqtrainer import logprint, datetime_filename
 import pdb
 
 batch_size = 1
@@ -156,6 +156,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     if logfile:
         open(logfile, 'w').close()
 
+    for name, param in computer.named_parameters():
+        logprint(logfile,name)
+        logprint(logfile,param.data.shape)
+
+
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
@@ -225,13 +230,16 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapperG(nn.Module):
-    def __init__(self,input_size=66529, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
+    def __init__(self,input_size=66529, output_size=5952,hidden_size=128,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)
         self.output=nn.Linear(hidden_size,output_size)
         self.reset_parameters()
+
+        for name, param in self.named_parameters():
+            print(name, param.data.shape)
 
     def reset_parameters(self):
         self.lstm.reset_parameters()
@@ -296,9 +304,8 @@ def main(load,savestr):
     optim = None
     starting_epoch = 0
     starting_iteration= 0
-    logstring = str(datetime.datetime.now().time())
-    logstring.replace(" ", "_")
-    logfile = "log/"+savestr+"_"+logstring+".txt"
+
+    logfile = "log/"+savestr+"_"+datetime_filename()+".txt"
 
     num_workers = 16
     ig = InputGenG(death_fold=0)
@@ -341,6 +348,9 @@ if __name__ == "__main__":
     main(False,'lstmG')
 
     '''
-    lr=1e-4 is extremely slow.
-    This is probably because I averaged the loss across the whole sequence? Why is this not a problem for Tacotron?
+    12/5
+    It converges before 6000 count.
+    The loss floats around 0.0006, best at 0.0005 around 4000 counts.
+    The parameter was accidentally set to have h=52, instead of 512. So this is actually a small parameter set.
+    But it should be around the right value. Timestep based LSTM has around 0.0006 too.
     '''

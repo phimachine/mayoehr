@@ -32,6 +32,9 @@ param_bs = 8
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+def datetime_filename():
+    return datetime.datetime.now().strftime("%m_%d_%X")
+
 def sv(var):
     return var.data.cpu().numpy()
 
@@ -167,6 +170,10 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     if logfile:
         open(logfile, 'w').close()
 
+    for name, param in computer.named_parameters():
+        logprint(logfile,name)
+        logprint(logfile,param.data.shape)
+
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
@@ -283,9 +290,7 @@ def main(load,savestr,lr=1e-3,curri=False):
     optim = None
     starting_epoch = 0
     starting_iteration= 0
-    logstring = str(datetime.datetime.now().time())
-    logstring.replace(" ", "_")
-    logfile = "log/"+savestr+"_"+logstring+".txt"
+    logfile = "log/"+savestr+"_"+datetime_filename()+".txt"
 
     num_workers = 16
     ig = InputGenG(death_fold=0,curriculum=curri)

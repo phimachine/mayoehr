@@ -1,3 +1,5 @@
 from death.baseline.lstmtrainerG import *
+import torch
 
-main(load=False,savestr="npadd")
+with torch.cuda.device(1):
+    main(load=True,savestr="npadd")

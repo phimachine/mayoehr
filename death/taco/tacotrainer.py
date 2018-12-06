@@ -8,7 +8,7 @@ import numpy as np
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planF import InputGenF
+from death.post.inputgen_planG import InputGenG, pad_collate
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from death.taco.model import Tacotron
@@ -18,8 +18,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
-from death.taco.collate import pad_collate
-from death.DNC.batchtrainer import logprint
+from death.DNC.seqtrainer import logprint, datetime_filename
 
 global_exception_counter = 0
 i = None
@@ -154,8 +153,8 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         # patient_output: (batch_size 1, time_length, output_dim ~4000)
         time_to_event_output = patient_output[:, 0]
         cause_of_death_output = patient_output[:, 1:]
-        time_to_event_target = target[:, 0, 0]
-        cause_of_death_target = target[:, 0, 1:]
+        time_to_event_target = target[:, 0]
+        cause_of_death_target = target[:, 1:]
 
 
         # this block will not work for batch input,
@@ -222,7 +221,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
         for i, (input, target, loss_type) in enumerate(train):
             i = starting_iter + i
             if target_dim is None:
-                target_dim = target.shape[2]
+                target_dim = target.shape[1]
 
             if i < iter_per_epoch:
                 train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
@@ -235,14 +234,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 running_loss_deque.appendleft(printloss)
                 if i % print_interval == 0:
                     running_loss = np.mean(running_loss_deque)
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("learning.   count: %4d, training loss: %.10f \n" %
-                                         (i, printloss))
-                    print("learning.   count: %4d, training loss: %.10f" %
-                          (i, printloss))
-                    if i != 0:
-                        print("count: %4d, running loss: %.10f" % (i, running_loss))
+                    logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
+                             (i, printloss, running_loss))
 
                 if i % val_interval == 0:
                     for _ in range(val_batch):
@@ -257,12 +250,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                         if val_loss is not None:
                             printloss += float(val_loss[0])
                     printloss=printloss/val_batch
-                    if logfile:
-                        with open(logfile, 'a') as handle:
-                            handle.write("validation. count: %4d, val loss     : %.10f \n" %
-                                         (i, printloss))
-                    print("validation. count: %4d, training loss: %.10f" %
-                          (i, printloss))
+                    logprint(logfile, "validation. count: %4d, val loss     : %.10f" %
+                             (i, printloss))
 
                 if i % save_interval == 0:
                     save_model(computer, optimizer, epoch, i, savestr)
@@ -287,13 +276,10 @@ def main(load=False, lr=1e-3, savestr=""):
     optim = None
     starting_epoch = 0
     starting_iteration = 0
-    
-    logstring = str(datetime.datetime.now().time())
-    logstring.replace(" ", "_")
-    logfile = "log/"+savestr+"_"+logstring+".txt"
+    logfile = "log/"+savestr+"_"+datetime_filename()+".txt"
 
     num_workers = 16
-    ig = InputGenF(death_fold=0)
+    ig = InputGenG(death_fold=0)
     validds = ig.get_valid()
     trainds = ig.get_train()
     validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
@@ -329,7 +315,7 @@ def main(load=False, lr=1e-3, savestr=""):
 
 
 if __name__ == "__main__":
-    main(load=True, savestr="zerofold")
+    main(load=True, savestr="taco")
 
 """
 Training was run for 10 hours, for 10 epochs.

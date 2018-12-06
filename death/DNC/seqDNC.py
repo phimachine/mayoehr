@@ -121,8 +121,6 @@ class SeqDNC(nn.Module):
         self.last_read_vector=None
         self.not_first_t_flag=None
 
-        for name, param in self.named_parameters():
-                print(name, param.data.shape)
 
 
     def reset_parameters(self):

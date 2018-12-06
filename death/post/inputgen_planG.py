@@ -14,12 +14,8 @@ import random
 from numpy.random import permutation
 import time
 import torch
+from multiprocessing.pool import ThreadPool as Pool
 
-# we can only assume that all deaths are recorded
-
-# torch integration reference: https://github.com/utkuozbulak/pytorch-custom-dataset-examples
-
-# This is the plan C.
 
 def get_timestep_location(earliest, dates):
     '''
@@ -489,7 +485,7 @@ class InputGenG(InputGen):
         no_death_rep_person_id=permutation(no_death_rep_person_id)
         valid_or_test_no_death_len=int(len(no_death_rep_person_id)*self.validation_test_proportion)
         self.valid_no_death_id=no_death_rep_person_id[:valid_or_test_no_death_len]
-        self.test_no_death_id=death_rep_person_id[valid_or_test_no_death_len:valid_or_test_no_death_len*2]
+        self.test_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len:valid_or_test_no_death_len*2]
         self.train_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len*2:]
 
     def get_valid(self):
@@ -601,6 +597,43 @@ def pad_sequence(sequences, batch_first=False, padding_value=0):
 
     return out_tensor
 
+class DatasetCacher(Dataset):
+
+    def __init__(self,id,dataset,path="/infodev1/rep/projects/jason/cache/"):
+        self.path=path
+        self.dataset=dataset
+        self.id=id
+
+    def cache_one(self,index):
+        point = self.dataset[index]
+        fname = self.path + self.id + "_" + str(index) + ".npz"
+        with open(fname, "wb+") as f:
+            np.savez(f, *point)
+        pickle_fname = self.path + self.id + "_" + str(index) + ".pkl"
+        with open(pickle_fname,"wb+") as f:
+            pickle.dump(point,f)
+
+    def cache_all(self,num_workers):
+        # cache does not cache the whole dataset object
+        # it caches the __getitem__ method only
+
+        dataset_len=len(self.dataset)
+        pool=Pool(num_workers)
+        for i in range(dataset_len):
+            pool.apply_async(self.cache_one, (i,))
+        pool.close()
+        pool.join()
+
+    def __getitem__(self, index):
+        fname = self.path + self.id + "_" + str(index) + ".npz"
+        with open(fname, "rb") as f:
+            item=np.load(f)
+            item=tuple(item.files)
+        return item
+
+    def __len__(self):
+        return len(self.dataset)
+
 def pad_collate(args):
     val=list(zip(*args))
     tensors=[[torch.from_numpy(arr) for arr in vv] for vv in val]
@@ -609,11 +642,36 @@ def pad_collate(args):
     padded[1]=padded[1].permute(1,0)
     return padded
 
-if __name__=="__main__":
-    ig=InputGenG()
+def cache_them():
+    ig=InputGenG(death_fold=0)
     ig.train_valid_test_split()
     valid=ig.get_valid()
+    valid_cacher=DatasetCacher("zerofold/valid",valid)
+    train=ig.get_train()
+    train_cacher=DatasetCacher("zerofold/train",train)
+    test=ig.get_test()
+    test_cacher=DatasetCacher("zerofold/test",test)
+
+    valid_cacher.cache_all(16)
+    train_cacher.cache_all(16)
+    test_cacher.cache_all(16)
+
+    print("Done")
+
+def main():
+    ig=InputGenG(death_fold=0)
+    ig.train_valid_test_split()
+    valid=ig.get_valid()
+    test=ig.get_test()
     train=ig.get_train()
     print(valid[100])
     print(train[192])
+    cacher=DatasetCacher("test/npz",valid)
+    for i in range(10):
+        cacher.cache_one(i)
+    print(cacher[55])
     print("Done")
+    print(cacher[2])
+
+if __name__=="__main__":
+    main()
