@@ -15,7 +15,7 @@ from numpy.random import permutation
 import time
 import torch
 from multiprocessing.pool import ThreadPool as Pool
-
+import os
 
 def get_timestep_location(earliest, dates):
     '''
@@ -374,7 +374,7 @@ class InputGen(Dataset, DFManager):
             print("get item finished")
         if (input != input).any():
             raise ValueError("NA FOUND")
-        return input.astype("float32"), target.astype("float32"), loss_type
+        return input.astype("float32"), target.astype("float32"), loss_type.astype("float32")
 
     def __len__(self):
         '''
@@ -599,19 +599,20 @@ def pad_sequence(sequences, batch_first=False, padding_value=0):
 
 class DatasetCacher(Dataset):
 
-    def __init__(self,id,dataset,path="/infodev1/rep/projects/jason/cache/"):
+    def __init__(self,id,dataset,max=None,path="/infodev1/rep/projects/jason/cache/"):
         self.path=path
         self.dataset=dataset
         self.id=id
+        self.max=max
 
     def cache_one(self,index):
-        point = self.dataset[index]
-        fname = self.path + self.id + "_" + str(index) + ".npz"
-        with open(fname, "wb+") as f:
-            np.savez(f, *point)
         pickle_fname = self.path + self.id + "_" + str(index) + ".pkl"
-        with open(pickle_fname,"wb+") as f:
-            pickle.dump(point,f)
+        # if the file does not exist or the file is extremely small
+        if not os.path.isfile(pickle_fname) or os.stat(pickle_fname).st_size<16:
+            item = self.dataset[index]
+            with open(pickle_fname,"wb+") as f:
+                pickle.dump(item,f)
+        return item
 
     def cache_all(self,num_workers):
         # cache does not cache the whole dataset object
@@ -624,12 +625,32 @@ class DatasetCacher(Dataset):
         pool.close()
         pool.join()
 
+    def cache_some(self,num_workers):
+        # cache does not cache the whole dataset object
+        # it caches the __getitem__ method only
+        assert (self.max is not None)
+        dataset_len=len(self.dataset)
+        if self.max >dataset_len:
+            self.max=dataset_len
+        pool=Pool(num_workers)
+        for i in range(self.max):
+            pool.apply_async(self.cache_one, (i,))
+        pool.close()
+        pool.join()
+
     def __getitem__(self, index):
-        fname = self.path + self.id + "_" + str(index) + ".npz"
-        with open(fname, "rb") as f:
-            item=np.load(f)
-            item=tuple(item.files)
-        return item
+
+        if self.max is None or index<self.max:
+            fname = self.path + self.id + "_" + str(index) + ".pkl"
+            try:
+                with open(fname, "rb") as f:
+                    item=pickle.load(f)
+                return item
+            except FileNotFoundError:
+                return self.cache_one(index)
+        else:
+            return self.cache_one(index)
+
 
     def __len__(self):
         return len(self.dataset)
@@ -658,7 +679,33 @@ def cache_them():
 
     print("Done")
 
-def main():
+def selective_cache():
+    ig=InputGenG(death_fold=0)
+    ig.train_valid_test_split()
+    train=ig.get_train()
+    train_cacher=DatasetCacher("zerofold/train",train,max=60000)
+    train_cacher.cache_some(16)
+    #
+    # valid=ig.get_valid()
+    # valid_cacher=DatasetCacher("zerofold/valid",valid, max=5000)
+    # valid_cacher.cache_some(16)
+    #
+    # test=ig.get_test()
+    # valid_cacher=DatasetCacher("zerofold/test",valid, max=5000)
+    # valid_cacher.cache_some(16)
+    print("Done")
+
+# def selective_cache_train_valid():
+#     ig=InputGenG(death_fold=0)
+#     ig.train_valid_test_split()
+#     valid=ig.get_valid()
+#     valid_cacher=DatasetCacher("zerofold/valid",valid)
+#     valid_cacher.cache_some(16,500)
+#
+#
+#     print("Done")
+
+def igtest():
     ig=InputGenG(death_fold=0)
     ig.train_valid_test_split()
     valid=ig.get_valid()
@@ -673,5 +720,12 @@ def main():
     print("Done")
     print(cacher[2])
 
+    for i in range(10):
+        input, target, l = cacher[i]
+        print(target[0])
+
+def main():
+    selective_cache()
+
 if __name__=="__main__":
-    main()
+    igtest()

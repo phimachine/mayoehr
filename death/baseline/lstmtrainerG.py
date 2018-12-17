@@ -109,12 +109,15 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
     global global_exception_counter
     patient_loss=None
     try:
+        if not validate:
+            computer.train()
+        else:
+            computer.eval()
         optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
 
         # we have no critical index, becuase critical index are those timesteps that
-        # DNC is required to produce outputs. This is not the case for our project.
         # criterion does not need to be reinitiated for every story, because we are not using a mask
 
         patient_output=computer(input)
@@ -230,7 +233,7 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapperG(nn.Module):
-    def __init__(self,input_size=66529, output_size=5952,hidden_size=128,num_layers=16,batch_first=True,
+    def __init__(self,input_size=66529, output_size=5952,hidden_size=32,num_layers=4,batch_first=True,
                  dropout=True):
         super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
@@ -350,7 +353,10 @@ if __name__ == "__main__":
     '''
     12/5
     It converges before 6000 count.
-    The loss floats around 0.0006, best at 0.0005 around 4000 counts.
+    Both losses floats around 0.0006, best at 0.0005 around 4000 counts.
     The parameter was accidentally set to have h=52, instead of 512. So this is actually a small parameter set.
     But it should be around the right value. Timestep based LSTM has around 0.0006 too.
+    The variance is quite high. Why? Same batch size with DNC.
+    The speed of convergence of LSTM is weaker than Tacotron and DNC too. This means I cannot lower the learning
+    rate to reduce the variance. LSTM is quite done.
     '''

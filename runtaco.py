@@ -1,5 +1,5 @@
-from death.taco.tacotrainer import main
+from death.taco.tacotrainer import *
 import torch
 
 with torch.cuda.device(0):
-    main(load=False, savestr="taco")
+    main(load=True, savestr="taco")

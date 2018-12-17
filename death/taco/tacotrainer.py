@@ -121,85 +121,44 @@ def salvage(savestr):
 def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
                     binary_criterion, validate=False):
     global global_exception_counter
-    global i
-    patient_loss = None
-    if debug:
-        if (input!=input).any():
-            raise ValueError("NA in input")
-        if (target!=target).any():
-            raise ValueError("NA in target")
+    patient_loss=None
     try:
+        if not validate:
+            computer.train()
+        else:
+            computer.eval()
         optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
 
         # we have no critical index, becuase critical index are those timesteps that
-        # DNC is required to produce outputs. This is not the case for our project.
         # criterion does not need to be reinitiated for every story, because we are not using a mask
 
         patient_output=computer(input)
-
-
-        # time_length = input.size()[1]
-        # # with torch.no_grad if validate else dummy_context_mgr():
-        # patient_output = Variable(torch.Tensor(1, time_length, target_dim)).cuda()
-        # for timestep in range(time_length):
-        #     # first colon is always size 1
-        #     feeding = input[:, timestep, :].unsqueeze(1)
-        #     output = computer(feeding)
-        #     assert not (output != output).any()
-        #     patient_output[0, timestep, :] = output
-
-        # patient_output: (batch_size 1, time_length, output_dim ~4000)
-        time_to_event_output = patient_output[:, 0]
         cause_of_death_output = patient_output[:, 1:]
-        time_to_event_target = target[:, 0]
         cause_of_death_target = target[:, 1:]
-
-
-        # this block will not work for batch input,
-        # you should modify it so that the loss evaluation is not determined by logic but function.
-        # def toe_loss_calc(real_criterion,time_to_event_output,time_to_event_target, patient_length):
-        #
-        # if loss_type[0] == 0:
-        #     # in record
-        #     toe_loss = real_criterion(time_to_event_output, time_to_event_target)
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
-        # else:
-        #     # not in record
-        #     # be careful with the sign, penalize when and only when positive
-        #     underestimation = time_to_event_target - time_to_event_output
-        #     underestimation = nn.functional.relu(underestimation)
-        #     toe_loss = real_criterion(underestimation, torch.zeros_like(underestimation).cuda())
-        #     cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
-        #     patient_loss = toe_loss/100 + cod_loss
-        # patient loss is always negative. Why?
-        patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+        # pdb.set_trace()
+        patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
 
         if not validate:
             patient_loss.backward()
             optimizer.step()
 
-        if global_exception_counter > -1:
-            global_exception_counter -= 1
+        if global_exception_counter>-1:
+            global_exception_counter-=1
     except ValueError:
         traceback.print_exc()
         print("Value Error reached")
         print(datetime.datetime.now().time())
-        global_exception_counter += 1
-        if global_exception_counter == 10:
-            save_model(computer, optimizer, epoch=0, iteration=np.random.randint(0, 1000), savestr="NA")
-            task_dir = os.path.dirname(abspath(__file__))
-            save_dir = Path(task_dir) / "saves" / "probleminput.pkl"
-            with save_dir.open('wb') as fhand:
-                pickle.dump(input,fhand)
+        global_exception_counter+=1
+        if global_exception_counter==10:
+            save_model(computer,optimizer,epoch=0,iteration=global_exception_counter)
             raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
         else:
-            print("we are at", i)
             pass
 
     return patient_loss
+
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
@@ -207,11 +166,11 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     global global_exception_counter
     valid_iterator=iter(valid)
     print_interval = 10
-    val_interval = 250
-    save_interval = 250
+    val_interval = 400
+    save_interval = 800
     target_dim = None
     rldmax_len = 50
-    val_batch=50
+    val_batch=100
     running_loss_deque = deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w+').close()
@@ -238,8 +197,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                              (i, printloss, running_loss))
 
                 if i % val_interval == 0:
+                    printloss = 0
                     for _ in range(val_batch):
-                        printloss = 0
                         try:
                             (input, target, loss_type) = next(valid_iterator)
                         except StopIteration:
@@ -260,6 +219,59 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 break
         starting_iter=0
 
+def valid_only(load=True, lr=1e-3, savestr=""):
+    lr = lr
+    optim = None
+    starting_epoch = 0
+    starting_iteration = 0
+    logfile = "log/"+savestr+"_"+datetime_filename()+".txt"
+    target_dim=None
+
+    num_workers = 16
+    ig = InputGenG()
+    validds = ig.get_valid()
+    valid = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
+    valid_iterator=iter(valid)
+
+    print("Using", num_workers, "workers for training set")
+    computer = Tacotron()
+
+    # load model:
+    if load:
+        print("loading model")
+        computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, starting_epoch,
+                                                                         starting_iteration, savestr)
+
+    computer = computer.cuda()
+    if optim is None:
+        print("Using Adam with lr", lr)
+        optimizer = torch.optim.Adam([i for i in computer.parameters() if i.requires_grad], lr=lr)
+    else:
+        # print('use Adadelta optimizer with learning rate ', lr)
+        # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
+        optimizer = optim
+
+    real_criterion = nn.SmoothL1Loss()
+    # time-wise sum, label-wise average.
+    binary_criterion = nn.BCEWithLogitsLoss()
+
+    val_batch=500
+    printloss = 0
+    for _ in range(val_batch):
+        try:
+            (input, target, loss_type) = next(valid_iterator)
+        except StopIteration:
+            valid_iterator = iter(valid)
+            (input, target, loss_type) = next(valid_iterator)
+        if target_dim is None:
+            target_dim = target.shape[1]
+        val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
+                                   real_criterion, binary_criterion, validate=True)
+        if val_loss is not None:
+            printloss += float(val_loss[0])
+    printloss = printloss / val_batch
+    logprint(logfile, "validation. count: %4d, val loss     : %.10f" %
+             (val_batch, printloss))
 
 def forevermain(load=False, lr=1e-3, savestr=""):
     print("Will run main() forever in a loop.")
@@ -279,7 +291,7 @@ def main(load=False, lr=1e-3, savestr=""):
     logfile = "log/"+savestr+"_"+datetime_filename()+".txt"
 
     num_workers = 16
-    ig = InputGenG(death_fold=0)
+    ig = InputGenG()
     validds = ig.get_valid()
     trainds = ig.get_train()
     validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
@@ -315,7 +327,7 @@ def main(load=False, lr=1e-3, savestr=""):
 
 
 if __name__ == "__main__":
-    main(load=True, savestr="taco")
+    valid_only(load=True, savestr="taco")
 
 """
 Training was run for 10 hours, for 10 epochs.
@@ -323,3 +335,10 @@ The performance however, is not so good. In the end the moving average loss is a
 within 10 minutes. What does it mean? Wrong model again? Does not seem like any information is extracted.
 If you give it literally anything with a backprop, this is what you're gonna get.
 """
+
+'''
+0.0004722830 is the validation with 500 batch
+0.00055 is LSTM
+0.00030 is DNC
+DNC > Tacotron > LSTM
+'''
