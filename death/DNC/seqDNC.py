@@ -107,7 +107,8 @@ class SeqDNC(nn.Module):
         '''COMPUTER'''
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
         # print("Using 0.4.1 PyTorch BatchNorm1d")
-        self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
+        # self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
+        self.bn = nn.BatchNorm1d(self.x, momentum=0)
         self.reset_parameters()
 
         '''States'''
@@ -653,7 +654,7 @@ class SeqDNC(nn.Module):
 
 class Stock_LSTM(nn.Module):
     """
-    I prefer using this Stock LSTM for numerical stability. The performance, however, is inferior.
+    I prefer using this Stock LSTM for numerical stability.
     """
     def __init__(self, x, R, W, h, L, v_t):
         super(Stock_LSTM, self).__init__()

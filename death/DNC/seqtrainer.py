@@ -82,8 +82,12 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     if highestepoch == 0 and highestiter == 0:
         print("nothing to load")
         return computer, optim, starting_epoch, starting_iteration
-    pickle_file = Path(task_dir).joinpath(
-        "saves/" + savestr + "/seqDNC_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    if starting_epoch==0 and starting_iteration==0:
+        pickle_file = Path(task_dir).joinpath(
+            "saves/" + savestr + "/seqDNC_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+    else:
+        pickle_file = Path(task_dir).joinpath(
+            "saves/" + savestr + "/seqDNC_" + str(starting_epoch) + "_" + str(starting_iteration) + ".pkl")
     print("loading model at", pickle_file)
     with pickle_file.open('rb') as pickle_file:
         computer, optim, epoch, iteration = torch.load(pickle_file)
@@ -101,9 +105,9 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
     try:
         if not validate:
             computer.train()
+            optimizer.zero_grad()
         else:
             computer.eval()
-        optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
 
@@ -201,33 +205,14 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 break
 
 
-def valid(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
-    running_loss = []
-    target_dim = None
-    valid_iterator = iter(valid_dl)
+def validationonly(savestr, epoch=0, iteration=0):
+    """
 
-    for i in valid_iterator:
-        input, target, loss_type = next(valid_iterator)
-        val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                   real_criterion, binary_criterion, validate=True)
-        if val_loss is not None:
-            printloss = float(val_loss[0])
-            running_loss.append((printloss))
-        if logfile:
-            with open(logfile, 'a') as handle:
-                handle.write("validation. count: %4d, val loss     : %.10f \n" %
-                             (i, printloss))
-        print("validation. count: %4d, val loss: %.10f" %
-              (i, printloss))
-    print(np.mean(running_loss))
-
-
-
-def validationonly(savestr):
-    '''
+    :param savestr:
+    :param epoch: default to 0 if loading the highest model
+    :param iteration: ditto
     :return:
-    '''
+    """
 
     lr = 1e-3
     optim = None
@@ -239,6 +224,8 @@ def validationonly(savestr):
     # performance should not be too bad?
     validds=ig.get_valid()
     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=param_bs, collate_fn=pad_collate)
+    valid_iterator=iter(validdl)
+
     print("Using", num_workers, "workers for validation set")
     computer = SeqDNC(x=param_x,
                       h=param_h,
@@ -250,21 +237,30 @@ def validationonly(savestr):
                       bs=param_bs)
     # load model:
     print("loading model")
-    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, 0, 0, savestr)
+    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, epoch, iteration, savestr)
 
     computer = computer.cuda()
-    optimizer=None
 
     real_criterion = nn.SmoothL1Loss()
     binary_criterion = nn.BCEWithLogitsLoss()
 
-    traindl=None
-    total_epochs=None
-    iter_per_epoch=None
-
     # starting with the epoch after the loaded one
-    valid(computer, optimizer, real_criterion, binary_criterion,
-          traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
+    running_loss=[]
+    valid_batches=500
+    for i in range(valid_batches):
+        input, target, loss_type = next(valid_iterator)
+        val_loss = run_one_patient(computer, input, target, None, None, loss_type,
+                                   real_criterion, binary_criterion, validate=True)
+        if val_loss is not None:
+            printloss = float(val_loss[0])
+            running_loss.append((printloss))
+        if logfile:
+            with open(logfile, 'a') as handle:
+                handle.write("validation. count: %4d, val loss     : %.10f \n" %
+                             (i, printloss))
+        print("validation. count: %4d, val loss: %.10f" %
+              (i, printloss))
+    print(np.mean(running_loss))
 
 def main(load, savestr='default', lr=1e-3, curri=False):
     """
@@ -284,7 +280,7 @@ def main(load, savestr='default', lr=1e-3, curri=False):
     logfile = "log/" + savestr + "_" + datetime_filename() + ".txt"
 
     num_workers = 16
-    ig = InputGenG()
+    ig = InputGenH()
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
@@ -330,7 +326,7 @@ def main(load, savestr='default', lr=1e-3, curri=False):
 if __name__ == "__main__":
     # main(load=True
     #main(False)
-    validationonly("retrain")
+    validationonly("seqdnc", 0, 6400)
 
 
     """

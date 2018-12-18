@@ -447,7 +447,7 @@ class GenHelper(Dataset):
 
 
 class InputGenG(InputGen):
-    def __init__(self, death_fold=5, curriculum=False, validation_test_proportion=0.1, random_seed=54321):
+    def __init__(self, death_fold=0, curriculum=False, validation_test_proportion=0.1, random_seed=54321):
         verbose = False
         debug = True
         super(InputGenG, self).__init__(verbose=verbose, debug=debug)
