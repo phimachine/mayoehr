@@ -1,8 +1,5 @@
 This is a code repository for all-mortality prediction.
 
-This is a private repository. If you encounter this repository anywhere, please contact me through email: hu.yaojie@mayo.edu
-
-
 ## Data pre processing with R
 
 Note: all codes have been converted to ICD9 standard, mainly in order to reduce the dimensions.
