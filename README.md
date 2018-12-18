@@ -1,6 +1,6 @@
 # mayoehr
 
-This is a research repository for my project at Mayo. I work with Che Ngufor, 
+This is a research repository for my project at Mayo Clinic. I work with Che Ngufor, 
 my PI, and David Chen.
 
 The dataset that I use consists of electronic health records (EHR) collected
