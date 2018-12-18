@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planG import InputGenG, pad_collate
+from death.post.inputgen_planH import InputGenH
 from death.DNC.seqDNC import SeqDNC
 from torch.utils.data import DataLoader
 import torch.nn as nn
@@ -19,14 +20,13 @@ import datetime
 from death.DNC.batchtrainer import logprint
 import pdb
 
-batch_size = 1
 param_x = 66529
-param_h = 128  # 64
-param_L = 8  # 4
+param_h = 64  # 64
+param_L = 4  # 4
 param_v_t = 5952
-param_W = 16  # 8
-param_R = 16  # 8
-param_N = 128  # 64
+param_W = 8  # 8
+param_R = 8  # 8
+param_N = 64  # 64
 param_bs = 8
 
 import torch.multiprocessing
@@ -90,39 +90,6 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     print('Loaded model at epoch ', highestepoch, 'iteration', iteration)
 
     return computer, optim, highestepoch, highestiter
-
-
-# def salvage():
-#     # this function will pick up the last two highest epoch training and save them somewhere else,
-#     # this is to prevent unexpected data loss.
-#     # We are working in a /tmp folder, and we write around 1Gb per minute.
-#     # The loss of data is likely.
-#
-#     task_dir = os.path.dirname(abspath(__file__))
-#     save_dir = Path(task_dir) / "lstmsaves"
-#     highestepoch = -1
-#     secondhighestiter = -1
-#     highestiter = -1
-#     for child in save_dir.iterdir():
-#         epoch = str(child).split("_")[3]
-#         iteration = str(child).split("_")[4].split('.')[0]
-#         iteration = int(iteration)
-#         epoch = int(epoch)
-#         # some files are open but not written to yet.
-#         if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
-#             highestepoch = epoch
-#             highestiter = iteration
-#     if highestepoch == -1 and highestiter == -1:
-#         print("no file to salvage")
-#         return
-#     if secondhighestiter != -1:
-#         pickle_file2 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
-#         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/lstmsalvage2.pkl")
-#
-#     pickle_file1 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-#     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
-#
-#     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
 
 global_exception_counter = 0
 
@@ -223,6 +190,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                         else:
                             raise ValueError("Investigate this")
                     printloss = printloss / val_batch
+                    # TODO this validation is not printing correctly. Way too big.
                     logprint(logfile, "validation. count: %4d, val loss     : %.10f" %
                              (i, printloss))
 
@@ -255,47 +223,48 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
     print(np.mean(running_loss))
 
 
-#
-# def validationonly():
-#     '''
-#     :return:
-#     '''
-#
-#     lr = 1e-2
-#     optim = None
-#     logfile = "vallog.txt"
-#
-#     num_workers = 8
-#     ig = InputGenD()
-#     # multiprocessing disabled, because socket request seems unstable.
-#     # performance should not be too bad?
-#     trainds, validds = train_valid_split(ig, split_fold=10)
-#     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
-#     print("Using", num_workers, "workers for validation set")
-#     computer=
-#
-#     # load model:
-#     print("loading model")
-#     lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0)
-#
-#     lstm = lstm.cuda()
-#     if optim is None:
-#         optimizer = torch.optim.Adam(lstm.parameters(), lr=lr)
-#     else:
-#         # print('use Adadelta optimizer with learning rate ', lr)
-#         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
-#         optimizer = optim
-#
-#     real_criterion = nn.SmoothL1Loss()
-#     binary_criterion = nn.BCEWithLogitsLoss()
-#
-#     traindl=None
-#     total_epochs=None
-#     iter_per_epoch=None
-#
-#     # starting with the epoch after the loaded one
-#     valid(lstm, optimizer, real_criterion, binary_criterion,
-#           traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
+
+def validationonly(savestr):
+    '''
+    :return:
+    '''
+
+    lr = 1e-3
+    optim = None
+    logfile = "vallog.txt"
+
+    num_workers = 8
+    ig = InputGenH()
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
+    validds=ig.get_valid()
+    validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=param_bs, collate_fn=pad_collate)
+    print("Using", num_workers, "workers for validation set")
+    computer = SeqDNC(x=param_x,
+                      h=param_h,
+                      L=param_L,
+                      v_t=param_v_t,
+                      W=param_W,
+                      R=param_R,
+                      N=param_N,
+                      bs=param_bs)
+    # load model:
+    print("loading model")
+    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, 0, 0, savestr)
+
+    computer = computer.cuda()
+    optimizer=None
+
+    real_criterion = nn.SmoothL1Loss()
+    binary_criterion = nn.BCEWithLogitsLoss()
+
+    traindl=None
+    total_epochs=None
+    iter_per_epoch=None
+
+    # starting with the epoch after the loaded one
+    valid(computer, optimizer, real_criterion, binary_criterion,
+          traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
 def main(load, savestr='default', lr=1e-3, curri=False):
     """
@@ -344,6 +313,9 @@ def main(load, savestr='default', lr=1e-3, curri=False):
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
         optimizer = optim
+        for group in optimizer.param_groups:
+            print("Currently using a learing rate of ", group["lr"])
+
 
     real_criterion = nn.SmoothL1Loss()
     binary_criterion = nn.BCEWithLogitsLoss()
@@ -357,7 +329,8 @@ def main(load, savestr='default', lr=1e-3, curri=False):
 
 if __name__ == "__main__":
     # main(load=True
-    main(False)
+    #main(False)
+    validationonly("retrain")
 
 
     """
@@ -376,4 +349,11 @@ if __name__ == "__main__":
     It was reached pretty early too.
     Variance of both results cannot be identified with my eyes. 
     The next step is to increase parameter set and lower lr, train for a long time.
+    """
+
+    """
+    12/17
+    Loading /infodev1 bottlenecks. Not sure.
+    Lost the log. Somehow validation has problems. Training becomes very slow. What's happening? 
+    I did not change anything. Sync?
     """

@@ -294,8 +294,8 @@ def main(load=False, lr=1e-3, savestr=""):
     ig = InputGenG()
     validds = ig.get_valid()
     trainds = ig.get_train()
-    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
-    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
 
     print("Using", num_workers, "workers for training set")
     computer = Tacotron()
@@ -314,6 +314,8 @@ def main(load=False, lr=1e-3, savestr=""):
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
         optimizer = optim
+        for group in optimizer.param_groups:
+            print("Currently using a learing rate of ", group["lr"])
 
     real_criterion = nn.SmoothL1Loss()
     # time-wise sum, label-wise average.
@@ -327,7 +329,7 @@ def main(load=False, lr=1e-3, savestr=""):
 
 
 if __name__ == "__main__":
-    valid_only(load=True, savestr="taco")
+    main(load=True, savestr="taco")
 
 """
 Training was run for 10 hours, for 10 epochs.

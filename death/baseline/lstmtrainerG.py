@@ -233,7 +233,7 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapperG(nn.Module):
-    def __init__(self,input_size=66529, output_size=5952,hidden_size=32,num_layers=4,batch_first=True,
+    def __init__(self,input_size=66529, output_size=5952,hidden_size=128,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
@@ -258,7 +258,7 @@ class lstmwrapperG(nn.Module):
 
 
 
-def validationonly():
+def validationonly(savestr):
     '''
     :return:
     '''
@@ -267,19 +267,19 @@ def validationonly():
     optim = None
     logfile = "vallog.txt"
 
-    num_workers = 8
-    ig = InputGenD()
-    # multiprocessing disabled, because socket request seems unstable.
-    # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
-    validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
+    num_workers = 16
+    ig = InputGenG(death_fold=0)
+    trainds = ig.get_train()
+    validds = ig.get_valid()
+    testds = ig.get_test()
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
     print("Using", num_workers, "workers for validation set")
     # testing whether this LSTM works is basically a question whether
     lstm = lstmwrapperG()
 
     # load model:
     print("loading model")
-    lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0)
+    lstm, optim, starting_epoch, starting_iteration = load_model(lstm, optim, 0, 0, savestr)
 
     lstm = lstm.cuda()
     if optim is None:
@@ -300,10 +300,9 @@ def validationonly():
     valid(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
 
-def main(load,savestr):
+def main(load,savestr,lr = 1e-3):
     total_epochs = 3
     iter_per_epoch = 100000
-    lr = 1e-3
     optim = None
     starting_epoch = 0
     starting_iteration= 0
@@ -315,8 +314,8 @@ def main(load,savestr):
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
-    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
-    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
 
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether
@@ -334,6 +333,8 @@ def main(load,savestr):
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)
         optimizer = optim
+        for group in optimizer.param_groups:
+            print("Currently using a learing rate of ", group["lr"])
 
     real_criterion = nn.SmoothL1Loss()
     binary_criterion = nn.BCEWithLogitsLoss()
@@ -348,7 +349,9 @@ def main(load,savestr):
 
 if __name__ == "__main__":
     # main(load=True
-    main(False,'lstmG')
+    # main(False,'lstmG')
+    with torch.cuda.device(0):
+        validationonly('lowlr')
 
     '''
     12/5
@@ -359,4 +362,10 @@ if __name__ == "__main__":
     The variance is quite high. Why? Same batch size with DNC.
     The speed of convergence of LSTM is weaker than Tacotron and DNC too. This means I cannot lower the learning
     rate to reduce the variance. LSTM is quite done.
+    '''
+
+    '''
+    12/17
+    trying lower lr and see if that would help.
+    Adam has adaptive learning rate. I do not think it helped. The training log is still very fluctulant.
     '''

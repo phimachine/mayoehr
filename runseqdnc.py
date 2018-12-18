@@ -3,4 +3,4 @@ import torch
 
 with torch.cuda.device(1):
 
-    main(load=False,lr=1e-3, savestr="highpara",curri=False)
+    main(load=True,lr=1e-3, savestr="retrain",curri=False)

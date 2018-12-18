@@ -599,7 +599,7 @@ def pad_sequence(sequences, batch_first=False, padding_value=0):
 
 class DatasetCacher(Dataset):
 
-    def __init__(self,id,dataset,max=None,path="/infodev1/rep/projects/jason/cache/"):
+    def __init__(self,id,dataset,max=None,path="/local2/tmp/jasondata/"):
         self.path=path
         self.dataset=dataset
         self.id=id
@@ -683,16 +683,16 @@ def selective_cache():
     ig=InputGenG(death_fold=0)
     ig.train_valid_test_split()
     train=ig.get_train()
-    train_cacher=DatasetCacher("zerofold/train",train,max=60000)
+    train_cacher=DatasetCacher("zerofold/train",train,max=50000)
+    # train_cacher.cache_one(2)
     train_cacher.cache_some(16)
-    #
-    # valid=ig.get_valid()
-    # valid_cacher=DatasetCacher("zerofold/valid",valid, max=5000)
-    # valid_cacher.cache_some(16)
-    #
-    # test=ig.get_test()
-    # valid_cacher=DatasetCacher("zerofold/test",valid, max=5000)
-    # valid_cacher.cache_some(16)
+    valid=ig.get_valid()
+    valid_cacher=DatasetCacher("zerofold/valid",valid, max=5000)
+    valid_cacher.cache_some(16)
+
+    test=ig.get_test()
+    test_cacher=DatasetCacher("zerofold/test",test, max=5000)
+    test_cacher.cache_some(16)
     print("Done")
 
 # def selective_cache_train_valid():
@@ -728,4 +728,4 @@ def main():
     selective_cache()
 
 if __name__=="__main__":
-    igtest()
+    selective_cache()

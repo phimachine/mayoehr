@@ -125,16 +125,16 @@ class MelDecoder(nn.Module):
         else:
             # [GO] Frame
             prev_output = Variable(torch.zeros(memory.shape[0], hp.decoder_output_dim)).cuda()
-
+            #(8, 256)
             for i in range(hp.max_iters):
                 prev_output = self.prenet(prev_output)
-                prev_output = prev_output[:,:,0]
+                # prev_output = prev_output[:,:,0]
                 prev_output, attn_hidden, gru1_hidden, gru2_hidden = self.attn_decoder(prev_output, memory,
                                                                                          attn_hidden=attn_hidden,
                                                                                          gru1_hidden=gru1_hidden,
                                                                                          gru2_hidden=gru2_hidden)
                 outputs.append(prev_output)
-                prev_output = prev_output[:, :, -1].unsqueeze(2)
+                prev_output = prev_output[:, :, -1]#.unsqueeze(2)
 
             outputs = torch.cat(outputs, 2)
 
