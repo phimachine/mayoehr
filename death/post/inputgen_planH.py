@@ -5,6 +5,8 @@
 # InputGenH is very rigid. It does not allow any __init__() parameters, because almost any change would require
 # recaching the whole InputGenG dataset.
 
+# 1/2
+# underlying label
 
 from death.post.inputgen_planG import *
 
@@ -12,17 +14,34 @@ class InputGenH():
 
     def __init__(self):
         self.dspath="/local2/tmp/jasondata/zerofold/"
-        self.inputgenG=InputGenG(death_fold=0)
-        print("G initiated")
+        self.inputgenG=None
+        print("H initiated")
 
     def get_valid(self):
-        return DatasetCacher(id="valid", dataset=self.inputgenG.get_valid(), path=self.dspath, max=5000)
+        return DatasetCacher(id="valid", dataset=None, len=24742, path=self.dspath, max=5000)
 
     def get_test(self):
-        return DatasetCacher(id="test", dataset=self.inputgenG.get_test(), path=self.dspath,max=5000)
+        return DatasetCacher(id="test", dataset=None, len=24742, path=self.dspath,max=5000)
 
     def get_train(self):
-        return DatasetCacher(id="train", dataset=self.inputgenG.get_train(), path=self.dspath, max=50000)
+        return DatasetCacher(id="train", dataset=None, len=197944, path=self.dspath, max=50000)
+#
+#
+# class InputGenH():
+#
+#     def __init__(self):
+#         self.dspath="/local2/tmp/jasondata/zerofold/"
+#         self.inputgenG=InputGenG(death_fold=0)
+#         print("G initiated")
+#
+#     def get_valid(self):
+#         return DatasetCacher(id="valid", dataset=self.inputgenG.get_valid(), path=self.dspath, max=5000)
+#
+#     def get_test(self):
+#         return DatasetCacher(id="test", dataset=self.inputgenG.get_test(), path=self.dspath,max=5000)
+#
+#     def get_train(self):
+#         return DatasetCacher(id="train", dataset=self.inputgenG.get_train(), path=self.dspath, max=50000)
 
 
 def target_investigation():

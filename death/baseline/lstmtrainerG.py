@@ -5,7 +5,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planG import InputGenG, pad_collate
+from death.post.inputgen_planH import InputGenH, pad_collate
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -17,6 +17,8 @@ from collections import deque
 import datetime
 from death.DNC.seqtrainer import logprint, datetime_filename
 import pdb
+from death.final.losses import TOELoss
+from death.final.killtime import out_of_time
 
 batch_size = 1
 
@@ -70,52 +72,49 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
     print('Loaded model at epoch ', highestepoch, 'iteartion', iteration)
 
     return computer, optim, highestepoch, highestiter
-
-def salvage():
-    # this function will pick up the last two highest epoch training and save them somewhere else,
-    # this is to prevent unexpected data loss.
-    # We are working in a /tmp folder, and we write around 1Gb per minute.
-    # The loss of data is likely.
-
-    task_dir = os.path.dirname(abspath(__file__))
-    save_dir = Path(task_dir) / "lstmsaves"
-    highestepoch = -1
-    secondhighestiter = -1
-    highestiter = -1
-    for child in save_dir.iterdir():
-        epoch = str(child).split("_")[3]
-        iteration = str(child).split("_")[4].split('.')[0]
-        iteration = int(iteration)
-        epoch = int(epoch)
-        # some files are open but not written to yet.
-        if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
-            highestepoch = epoch
-            highestiter = iteration
-    if highestepoch == -1 and highestiter == -1:
-        print("no file to salvage")
-        return
-    if secondhighestiter != -1:
-        pickle_file2 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
-        copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/lstmsalvage2.pkl")
-
-    pickle_file1 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
-    copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
-
-    print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
+#
+# def salvage():
+#     # this function will pick up the last two highest epoch training and save them somewhere else,
+#     # this is to prevent unexpected data loss.
+#     # We are working in a /tmp folder, and we write around 1Gb per minute.
+#     # The loss of data is likely.
+#
+#     task_dir = os.path.dirname(abspath(__file__))
+#     save_dir = Path(task_dir) / "lstmsaves"
+#     highestepoch = -1
+#     secondhighestiter = -1
+#     highestiter = -1
+#     for child in save_dir.iterdir():
+#         epoch = str(child).split("_")[3]
+#         iteration = str(child).split("_")[4].split('.')[0]
+#         iteration = int(iteration)
+#         epoch = int(epoch)
+#         # some files are open but not written to yet.
+#         if epoch > highestepoch and iteration > highestiter and child.stat().st_size > 20480:
+#             highestepoch = epoch
+#             highestiter = iteration
+#     if highestepoch == -1 and highestiter == -1:
+#         print("no file to salvage")
+#         return
+#     if secondhighestiter != -1:
+#         pickle_file2 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(secondhighestiter) + ".pkl")
+#         copy(pickle_file2, "/infodev1/rep/projects/jason/pickle/lstmsalvage2.pkl")
+#
+#     pickle_file1 = Path(task_dir).joinpath("lstmsaves/lstm_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+#     copy(pickle_file1, "/infodev1/rep/projects/jason/pickle/salvage1.pkl")
+#
+#     print('salvaged, we can start again with /infodev1/rep/projects/jason/pickle/lstmsalvage1.pkl')
 
 global_exception_counter=0
-def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
-                    binary_criterion, validate=False):
+def run_one_patient(computer, input, target, optimizer, loss_type, real_criterion,
+                    binary_criterion, beta, validate=False):
     global global_exception_counter
     patient_loss=None
     try:
-        if not validate:
-            computer.train()
-        else:
-            computer.eval()
         optimizer.zero_grad()
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
+        loss_type = Variable(torch.Tensor(loss_type).cuda())
 
         # we have no critical index, becuase critical index are those timesteps that
         # criterion does not need to be reinitiated for every story, because we are not using a mask
@@ -124,10 +123,16 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         cause_of_death_output = patient_output[:, 1:]
         cause_of_death_target = target[:, 1:]
         # pdb.set_trace()
-        patient_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
+        cod_loss= binary_criterion(cause_of_death_output, cause_of_death_target)
+
+        toe_output=patient_output[:,0]
+        toe_target=target[:,0]
+        toe_loss=real_criterion(toe_output,toe_target,loss_type)
+
+        total_loss=cod_loss+beta*toe_loss
 
         if not validate:
-            patient_loss.backward()
+            total_loss.backward()
             optimizer.step()
 
         if global_exception_counter>-1:
@@ -143,19 +148,20 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         else:
             pass
 
-    return patient_loss
+    return float(cod_loss.data), float(toe_loss.data)
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
-    valid_iterator=iter(valid_dl)
+          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, beta, logfile=False):
+    valid_iterator=iter(valid)
     print_interval=10
     val_interval=200
-    save_interval=800
+    save_interval=1000
     target_dim=None
     rldmax_len=50
     val_batch=100
-    running_loss_deque=deque(maxlen=rldmax_len)
+    running_cod_loss=deque(maxlen=rldmax_len)
+    running_toe_loss=deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
 
@@ -167,42 +173,39 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
-            if target_dim is None:
-                target_dim=target.shape[1]
+            out_of_time()
 
             if i < iter_per_epoch:
-                train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                   real_criterion, binary_criterion)
-                if train_story_loss is not None:
-                    printloss=float(train_story_loss[0])
-                else:
-                    raise ValueError("Why would story loss be None?")
-                running_loss_deque.appendleft(printloss)
+                cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
+                                                   real_criterion, binary_criterion, beta)
+                running_cod_loss.appendleft(cod_loss)
+                running_toe_loss.appendleft(toe_loss)
                 if i % print_interval == 0:
-                    running_loss=np.mean(running_loss_deque)
-                    logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
-                             (i, printloss, running_loss))
+                    running_cod=np.mean(running_cod_loss)
+                    running_toe=np.mean(running_toe_loss)
+                    logprint(logfile, "batch %4d. batch cod: %.5f, toe: %.5f, total: %.5f. running cod: %.5f, toe: %.5f, total: %.5f" %
+                             (i, cod_loss, toe_loss, cod_loss+toe_loss, running_cod, running_toe, running_cod+beta*running_toe))
 
 
                 if i % val_interval == 0:
-                    printloss=0
+                    total_cod=0
+                    total_toe=0
                     for _ in range(val_batch):
                         # we should consider running validation multiple times and average. TODO
                         try:
                             (input,target,loss_type)=next(valid_iterator)
                         except StopIteration:
-                            valid_iterator=iter(valid_dl)
+                            valid_iterator=iter(valid)
                             (input,target,loss_type)=next(valid_iterator)
 
-                        val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                       real_criterion, binary_criterion, validate=True)
-                        if val_loss is not None:
-                            printloss += float(val_loss[0])
-                        else:
-                            raise ValueError ("Investigate this")
-                    printloss=printloss/val_batch
-                    logprint(logfile, "validation. count: %4d, val loss     : %.10f" %
-                             (i, printloss))
+                        cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
+                                                       real_criterion, binary_criterion, beta, validate=True)
+                        total_cod+=cod_loss
+                        total_toe+=toe_loss
+                    total_cod=total_cod/val_batch
+                    total_toe=total_toe/val_batch
+                    logprint(logfile, "validation. cod: %.10f, toe: %.10f, total: %.10f" %
+                             (total_cod, total_toe, total_cod+beta*total_toe))
 
                 if i % save_interval == 0:
                     save_model(computer, optimizer, epoch, i, savestr)
@@ -210,8 +213,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             else:
                 break
 
-def valid(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, logfile=False):
+def validate(computer, optimizer, real_criterion, binary_criterion,
+             train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, beta, logfile=False):
     running_loss=[]
     target_dim=None
     valid_iterator=iter(valid_dl)
@@ -238,6 +241,7 @@ class lstmwrapperG(nn.Module):
         super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)
+        self.bn = nn.BatchNorm1d(input_size)
         self.output=nn.Linear(hidden_size,output_size)
         self.reset_parameters()
 
@@ -249,6 +253,10 @@ class lstmwrapperG(nn.Module):
         self.output.reset_parameters()
 
     def forward(self, input, hx=None):
+        input=input.permute(0,2,1).contiguous()
+        bnout=self.bn(input)
+        bnout[(bnout != bnout).detach()] = 0
+        input=bnout.permute(0,2,1).contiguous()
         output,statetuple=self.lstm(input,hx)
         output=self.output(output)
         # (batch_size, seq_len, target_dim)
@@ -267,8 +275,8 @@ def validationonly(savestr):
     optim = None
     logfile = "vallog.txt"
 
-    num_workers = 16
-    ig = InputGenG(death_fold=0)
+    num_workers = 8
+    ig = InputGenH()
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
@@ -297,24 +305,24 @@ def validationonly(savestr):
     iter_per_epoch=None
 
     # starting with the epoch after the loaded one
-    valid(lstm, optimizer, real_criterion, binary_criterion,
-          traindl, validdl, int(starting_epoch), total_epochs,int(starting_iteration), iter_per_epoch, logfile)
+    validate(lstm, optimizer, real_criterion, binary_criterion,
+             traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, logfile)
 
-def main(load,savestr,lr = 1e-3):
-    total_epochs = 3
-    iter_per_epoch = 100000
+def main(load,savestr,lr = 1e-3, beta=1e-3):
+    total_epochs = 1
+    iter_per_epoch = 2019
     optim = None
     starting_epoch = 0
     starting_iteration= 0
 
-    logfile = "log/"+savestr+"_"+datetime_filename()+".txt"
+    logfile = "log/lstm_"+savestr+"_"+datetime_filename()+".txt"
 
-    num_workers = 16
-    ig = InputGenG(death_fold=0)
+    num_workers = 8
+    ig = InputGenH()
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
-    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//2, collate_fn=pad_collate)
     traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
 
     print("Using", num_workers, "workers for training set")
@@ -336,14 +344,14 @@ def main(load,savestr,lr = 1e-3):
         for group in optimizer.param_groups:
             print("Currently using a learing rate of ", group["lr"])
 
-    real_criterion = nn.SmoothL1Loss()
+    real_criterion = TOELoss()
     binary_criterion = nn.BCEWithLogitsLoss()
 
     # starting with the epoch after the loaded one
 
     train(lstm, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
-          int(starting_iteration), iter_per_epoch, savestr, logfile)
+          int(starting_iteration), iter_per_epoch, savestr, beta, logfile)
 
 
 
@@ -369,3 +377,8 @@ if __name__ == "__main__":
     trying lower lr and see if that would help.
     Adam has adaptive learning rate. I do not think it helped. The training log is still very fluctulant.
     '''
+
+    """
+    12/20
+    Validation is always NAN. why?
+    """

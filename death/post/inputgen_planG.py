@@ -16,6 +16,8 @@ import time
 import torch
 from multiprocessing.pool import ThreadPool as Pool
 import os
+import traceback
+
 
 def get_timestep_location(earliest, dates):
     '''
@@ -534,6 +536,23 @@ class InputGenG(InputGen):
         else:
             self.death_fold-=1
 
+    def pickle_death_code_count(self):
+        # this function calculates the death structure codes's frequency
+        # for a code, number_of_negatives/number_of_positives will weigh the positive binary cross entropy
+        # this allows me to sample more points on the ROC
+
+        dic=self.death_code_dict
+        weights=np.zeros((len(dic)))
+        for row in self.death["code"]:
+            code=row
+            while code!="":
+                weights[dic[code]]+=1
+                code=code[:-1]
+
+        with open("/infodev1/rep/projects/jason/pickle/dcc.pkl", "wb+") as f:
+            pickle.dump(weights,f)
+
+
     def __getitem__(self, item):
         raise NotImplementedError("Do not call this function")
 
@@ -599,11 +618,12 @@ def pad_sequence(sequences, batch_first=False, padding_value=0):
 
 class DatasetCacher(Dataset):
 
-    def __init__(self,id,dataset,max=None,path="/local2/tmp/jasondata/"):
+    def __init__(self,id,dataset,len=None,max=None,path="/local2/tmp/jasondata/"):
         self.path=path
         self.dataset=dataset
         self.id=id
         self.max=max
+        self.len=len
 
     def cache_one(self,index):
         pickle_fname = self.path + self.id + "_" + str(index) + ".pkl"
@@ -612,7 +632,16 @@ class DatasetCacher(Dataset):
             item = self.dataset[index]
             with open(pickle_fname,"wb+") as f:
                 pickle.dump(item,f)
-        return item
+            return item
+        else:
+            fname = self.path + self.id + "_" + str(index) + ".pkl"
+            try:
+                with open(fname, "rb") as f:
+                    item = pickle.load(f)
+                return item
+            except FileNotFoundError:
+                traceback.print_exc()
+                print("This line should never be reached")
 
     def cache_all(self,num_workers):
         # cache does not cache the whole dataset object
@@ -638,22 +667,34 @@ class DatasetCacher(Dataset):
         pool.close()
         pool.join()
 
+    # def __getitem__(self, index):
+    #
+    #     if self.max is None or index<self.max:
+    #         fname = self.path + self.id + "_" + str(index) + ".pkl"
+    #         try:
+    #             with open(fname, "rb") as f:
+    #                 item=pickle.load(f)
+    #             return item
+    #         except FileNotFoundError:
+    #             return self.cache_one(index)
+    #     else:
+    #         return self.cache_one(index)
+
     def __getitem__(self, index):
 
-        if self.max is None or index<self.max:
-            fname = self.path + self.id + "_" + str(index) + ".pkl"
-            try:
-                with open(fname, "rb") as f:
-                    item=pickle.load(f)
-                return item
-            except FileNotFoundError:
-                return self.cache_one(index)
-        else:
-            return self.cache_one(index)
-
+        fname = self.path + self.id + "_" + str(index) + ".pkl"
+        try:
+            with open(fname, "rb") as f:
+                item=pickle.load(f)
+            return item
+        except FileNotFoundError:
+            raise
 
     def __len__(self):
-        return len(self.dataset)
+        if self.len is None:
+            return len(self.dataset)
+        else:
+            return self.len
 
 def pad_collate(args):
     val=list(zip(*args))
@@ -728,4 +769,5 @@ def main():
     selective_cache()
 
 if __name__=="__main__":
-    selective_cache()
+    ig=InputGenG()
+    ig.pickle_death_code_count()

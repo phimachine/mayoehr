@@ -45,13 +45,18 @@ class Encoder(nn.Module):
         """
         super(Encoder, self).__init__()
         # no embeddings
+        self.bn = nn.BatchNorm1d(hp.input_size)
         self.lin=nn.Linear(input_size,embedding_size)
         self.prenet = Prenet(embedding_size, hp.hidden_size * 2, hp.hidden_size)
         self.cbhg = CBHG(hp.hidden_size, projection_size=256)
 
     def forward(self, input_):
-
-        input_ = torch.transpose(self.lin(input_),1,2)
+        # TODO need to add bn here. See permute and transpose.
+        input_=torch.transpose(input_,1,2).contiguous()
+        bnout=self.bn(input_)
+        bnout=torch.transpose(bnout,1,2)
+        # input_=self.lin(bnout)
+        input_ = torch.transpose(self.lin(bnout),1,2)
         # starting from here, the time dim is 2
         prenet = self.prenet(input_)
         memory = self.cbhg(prenet)

@@ -62,8 +62,7 @@ class SeqDNC(nn.Module):
                  v_t,
                  W,
                  R,
-                 N,
-                 bs):
+                 N):
         super(SeqDNC, self).__init__()
 
         # debugging usages
@@ -93,7 +92,7 @@ class SeqDNC(nn.Module):
         # Total memory address count
         # Total memory block (N, W)
         self.N = N
-        self.bs = bs
+        self.bs = None
         self.E_t = W * R + 3 * W + 5 * R + 3
 
         '''CONTROLLER'''
@@ -108,7 +107,7 @@ class SeqDNC(nn.Module):
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
         # print("Using 0.4.1 PyTorch BatchNorm1d")
         # self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
-        self.bn = nn.BatchNorm1d(self.x, momentum=0)
+        self.bn = nn.BatchNorm1d(self.x)
         self.reset_parameters()
 
         '''States'''
@@ -212,6 +211,7 @@ class SeqDNC(nn.Module):
         :param states:
         :return:
         """
+        self.bs=input.shape[0]
 
         if states is None:
             states_tuple=self.init_states_tuple()
@@ -248,7 +248,7 @@ class SeqDNC(nn.Module):
         # through this piece, it's clear that dimension 59105 is highly sparse and is causing problem
         # it's sensible to make it 0, because it's the original value
         # print("BN has produced NAN, Location at ", (bnout!=bnout).nonzero())
-        bnout[bnout != bnout] = 0
+        bnout[(bnout != bnout).detach()] = 0
 
         bnout = bnout.unsqueeze(1)
 

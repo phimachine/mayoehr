@@ -262,7 +262,7 @@ class DFManager(object):
 
         return self.code_into_dic_structurally(word[:-1], dic, n)
 
-    def bar_separated_dictionary(self, df_name, col_name, save=True, skip=True):
+    def bar_separated_dictionary(self, df_name, col_name, save=False, skip=True):
         '''
 
         :param df_name:
@@ -310,7 +310,7 @@ class DFManager(object):
 
         return dic
 
-    def no_bar_dictionary(self, df_name, col_name, save=True, skip=True):
+    def no_bar_dictionary(self, df_name, col_name, save=False, skip=True):
 
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
         print("save to path:", savepath)
@@ -356,9 +356,10 @@ def repickle():
     '''
 
     dfs = DFManager()
-    dfs.load_raw(save=True)
-    # dfs.load_pickle()
-    dfs.make_dictionary(verbose=True,save=True,skip=False)
+    # dfs.load_raw(save=False)
+    dfs.load_pickle()
+    # dfs.make_dictionary(verbose=True,save=False,skip=False)
+    dfs.no_bar_dictionary("death","code",save=False)
     print("end script")
 
 

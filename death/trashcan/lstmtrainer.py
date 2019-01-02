@@ -230,6 +230,7 @@ class lstmwrapper(nn.Module):
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)
         self.output=nn.Linear(hidden_size,output_size)
+        self.bn = nn.BatchNorm1d(input_size)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -237,6 +238,7 @@ class lstmwrapper(nn.Module):
         self.output.reset_parameters()
 
     def forward(self, input, hx=None):
+        input=self.bn(input)
         output,statetuple=self.lstm(input,hx)
         return self.output(output)
 
@@ -267,10 +269,11 @@ def validationonly():
     logfile = "vallog.txt"
 
     num_workers = 8
-    ig = InputGenD()
+    ig = InputGenH()
     # multiprocessing disabled, because socket request seems unstable.
     # performance should not be too bad?
-    trainds, validds = train_valid_split(ig, split_fold=10)
+    trainds = ig.get_train()
+    validds = ig.get_valid()
     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=1)
     print("Using", num_workers, "workers for validation set")
     # testing whether this LSTM works is basically a question whether
@@ -310,11 +313,10 @@ def main(load,savestr):
     logstring.replace(" ", "_")
     logfile = "log/"+savestr+"_"+logstring+".txt"
 
-    num_workers = 16
+    num_workers = 8
     ig = InputGenF(death_fold=0)
     trainds = ig.get_train()
     validds = ig.get_valid()
-    testds = ig.get_test()
     validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
     traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate)
 

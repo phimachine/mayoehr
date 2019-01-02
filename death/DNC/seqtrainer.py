@@ -19,6 +19,8 @@ from collections import deque
 import datetime
 from death.DNC.batchtrainer import logprint
 import pdb
+from death.final.losses import TOELoss
+from death.final.killtime import out_of_time
 
 param_x = 66529
 param_h = 64  # 64
@@ -98,18 +100,16 @@ def load_model(computer, optim, starting_epoch, starting_iteration, savestr):
 global_exception_counter = 0
 
 
-def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, real_criterion,
-                    binary_criterion, validate=False):
+def run_one_patient(computer, input, target, optimizer, loss_type, real_criterion,
+                    binary_criterion, beta, validate=False):
     global global_exception_counter
     patient_loss = None
     try:
-        if not validate:
-            computer.train()
-            optimizer.zero_grad()
-        else:
-            computer.eval()
+        optimizer.zero_grad()
+
         input = Variable(torch.Tensor(input).cuda())
         target = Variable(torch.Tensor(target).cuda())
+        loss_type = Variable(torch.Tensor(loss_type).cuda())
 
         # we have no critical index, becuase critical index are those timesteps that
         # DNC is required to produce outputs. This is not the case for our project.
@@ -119,10 +119,16 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         cause_of_death_output = patient_output[:, 1:]
         cause_of_death_target = target[:, 1:]
         # pdb.set_trace()
-        patient_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+        cod_loss = binary_criterion(cause_of_death_output, cause_of_death_target)
+
+        toe_output=patient_output[:,0]
+        toe_target=target[:,0]
+        toe_loss=real_criterion(toe_output,toe_target,loss_type)
+
+        total_loss=cod_loss+beta*toe_loss
 
         if not validate:
-            patient_loss.backward()
+            total_loss.backward()
             optimizer.step()
 
         if global_exception_counter > -1:
@@ -138,19 +144,20 @@ def run_one_patient(computer, input, target, target_dim, optimizer, loss_type, r
         else:
             pass
 
-    return patient_loss
+    return float(cod_loss.data), float(toe_loss.data)
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, logfile=False):
+          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, beta, logfile=False):
     valid_iterator = iter(valid_dl)
     print_interval = 10
     val_interval = 400
-    save_interval = 800
+    save_interval = 1000
     target_dim = None
     rldmax_len = 50
     val_batch = 100
-    running_loss_deque = deque(maxlen=rldmax_len)
+    running_cod_loss=deque(maxlen=rldmax_len)
+    running_toe_loss=deque(maxlen=rldmax_len)
     if logfile:
         open(logfile, 'w').close()
 
@@ -161,24 +168,28 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
             i = starting_iter + i
+            out_of_time()
+
             if target_dim is None:
                 target_dim = target.shape[1]
 
             if i < iter_per_epoch:
-                train_story_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                   real_criterion, binary_criterion)
-                if train_story_loss is not None:
-                    printloss = float(train_story_loss[0])
-                else:
-                    raise ValueError("Why would story loss be None?")
-                running_loss_deque.appendleft(printloss)
+                cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
+                                                   real_criterion, binary_criterion, beta)
+                total_loss=cod_loss+toe_loss
+                running_cod_loss.appendleft(cod_loss)
+                running_toe_loss.appendleft(toe_loss)
                 if i % print_interval == 0:
-                    running_loss = np.mean(running_loss_deque)
-                    logprint(logfile, "learning.   count: %4d, training loss: %.10f, running loss: %.10f" %
-                             (i, printloss, running_loss))
+                    running_cod=np.mean(running_cod_loss)
+                    running_toe=np.mean(running_toe_loss)
+                    logprint(logfile,
+                             "batch %4d. batch cod: %.5f, toe: %.5f, total: %.5f. running cod: %.5f, toe: %.5f, total: %.5f" %
+                             (i, cod_loss, toe_loss, cod_loss + toe_loss, running_cod, running_toe,
+                              running_cod + beta*running_toe))
 
                 if i % val_interval == 0:
-                    printloss = 0
+                    total_cod=0
+                    total_toe=0
                     for _ in range(val_batch):
                         # we should consider running validation multiple times and average. TODO
                         try:
@@ -187,16 +198,16 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                             valid_iterator = iter(valid_dl)
                             (input, target, loss_type) = next(valid_iterator)
 
-                        val_loss = run_one_patient(computer, input, target, target_dim, optimizer, loss_type,
-                                                   real_criterion, binary_criterion, validate=True)
-                        if val_loss is not None:
-                            printloss += float(val_loss[0])
-                        else:
-                            raise ValueError("Investigate this")
-                    printloss = printloss / val_batch
+                        cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
+                                                   real_criterion, binary_criterion, beta, validate=True)
+                        total_cod+=cod_loss
+                        total_toe+=toe_loss
+                    total_cod=total_cod/val_batch
+                    total_toe=total_toe/val_batch
                     # TODO this validation is not printing correctly. Way too big.
-                    logprint(logfile, "validation. count: %4d, val loss     : %.10f" %
-                             (i, printloss))
+                    logprint(logfile, "validation. cod: %.10f, toe: %.10f, total: %.10f" %
+                             (total_cod, total_toe, total_cod + beta*total_toe))
+
 
                 if i % save_interval == 0:
                     save_model(computer, optimizer, epoch, i, savestr)
@@ -205,7 +216,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 break
 
 
-def validationonly(savestr, epoch=0, iteration=0):
+def validationonly(savestr, beta, epoch=0, iteration=0):
     """
 
     :param savestr:
@@ -250,7 +261,7 @@ def validationonly(savestr, epoch=0, iteration=0):
     for i in range(valid_batches):
         input, target, loss_type = next(valid_iterator)
         val_loss = run_one_patient(computer, input, target, None, None, loss_type,
-                                   real_criterion, binary_criterion, validate=True)
+                                   real_criterion, binary_criterion, beta, validate=True)
         if val_loss is not None:
             printloss = float(val_loss[0])
             running_loss.append((printloss))
@@ -262,7 +273,7 @@ def validationonly(savestr, epoch=0, iteration=0):
               (i, printloss))
     print(np.mean(running_loss))
 
-def main(load, savestr='default', lr=1e-3, curri=False):
+def main(load, savestr='default', lr=1e-3, beta=0.01):
     """
     :param load:
     :param savestr:
@@ -272,20 +283,19 @@ def main(load, savestr='default', lr=1e-3, curri=False):
     """
 
 
-    total_epochs = 5
-    iter_per_epoch = 100000
+    total_epochs = 1
+    iter_per_epoch = 2019
     optim = None
     starting_epoch = 0
     starting_iteration = 0
-    logfile = "log/" + savestr + "_" + datetime_filename() + ".txt"
+    logfile = "log/dnc_" + savestr + "_" + datetime_filename() + ".txt"
 
-    num_workers = 16
+    num_workers = 8
     ig = InputGenH()
     trainds = ig.get_train()
     validds = ig.get_valid()
-    testds = ig.get_test()
-    traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate)
-    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate)
+    traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
+    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate,pin_memory=True)
 
     print("Using", num_workers, "workers for training set")
     computer = SeqDNC(x=param_x,
@@ -294,8 +304,7 @@ def main(load, savestr='default', lr=1e-3, curri=False):
                       v_t=param_v_t,
                       W=param_W,
                       R=param_R,
-                      N=param_N,
-                      bs=param_bs)
+                      N=param_N)
     # load model:
     if load:
         print("loading model")
@@ -312,21 +321,26 @@ def main(load, savestr='default', lr=1e-3, curri=False):
         for group in optimizer.param_groups:
             print("Currently using a learing rate of ", group["lr"])
 
+    with open("/infodev1/rep/projects/jason/pickle/dcc.pkl","rb") as f:
+        # loaded here is a vector where v_i is the number of times death label i has occured
+        weights=pickle.load(f)
+    negs=59652-weights
+    weights[weights<4]=3
+    weights=negs/weights
 
-    real_criterion = nn.SmoothL1Loss()
-    binary_criterion = nn.BCEWithLogitsLoss()
-
+    real_criterion = TOELoss()
+    # this parameter does not appear in PyTorch 0.3.1
+    # binary_criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
-          int(starting_iteration), iter_per_epoch, savestr, logfile)
+          int(starting_iteration), iter_per_epoch, savestr, beta, logfile)
 
 
 if __name__ == "__main__":
     # main(load=True
-    #main(False)
-    validationonly("seqdnc", 0, 6400)
+    main(False)
 
 
     """
@@ -352,4 +366,17 @@ if __name__ == "__main__":
     Loading /infodev1 bottlenecks. Not sure.
     Lost the log. Somehow validation has problems. Training becomes very slow. What's happening? 
     I did not change anything. Sync?
+    """
+
+    """
+    12/20
+    It is a batchnorm problem. See the last commit message.
+    """
+
+
+    """
+    12/21
+    Beta is too low.
+    Maybe training two models separately is better?
+    See if adding a last output layer would help. I assume so.
     """
