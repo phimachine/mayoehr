@@ -440,16 +440,23 @@ class GenHelper(Dataset):
 
         self.ids=ids
         self.ig=ig
+        self.small_target=ig.small_target
 
     def __getitem__(self, index):
-        return self.ig.get_by_id(self.ids[index])
+
+        ret_val = self.ig.get_by_id(self.ids[index])
+        if self.small_target:
+            st=ret_val[1][:2976]
+            return ret_val[0], st, ret_val[2]
+        else:
+            return ret_val
 
     def __len__(self):
         return len(self.ids)
 
 
 class InputGenG(InputGen):
-    def __init__(self, death_fold=0, curriculum=False, validation_test_proportion=0.1, random_seed=54321):
+    def __init__(self, death_fold=0, curriculum=False, validation_test_proportion=0.1, random_seed=54321,small_target=False):
         verbose = False
         debug = True
         super(InputGenG, self).__init__(verbose=verbose, debug=debug)
@@ -473,6 +480,7 @@ class InputGenG(InputGen):
         else:
             print("Not using curriculum learning")
 
+        self.small_target=small_target
 
     def train_valid_test_split(self):
         # splits the whole set by id
@@ -616,85 +624,6 @@ def pad_sequence(sequences, batch_first=False, padding_value=0):
 
     return out_tensor
 
-class DatasetCacher(Dataset):
-
-    def __init__(self,id,dataset,len=None,max=None,path="/local2/tmp/jasondata/"):
-        self.path=path
-        self.dataset=dataset
-        self.id=id
-        self.max=max
-        self.len=len
-
-    def cache_one(self,index):
-        pickle_fname = self.path + self.id + "_" + str(index) + ".pkl"
-        # if the file does not exist or the file is extremely small
-        if not os.path.isfile(pickle_fname) or os.stat(pickle_fname).st_size<16:
-            item = self.dataset[index]
-            with open(pickle_fname,"wb+") as f:
-                pickle.dump(item,f)
-            return item
-        else:
-            fname = self.path + self.id + "_" + str(index) + ".pkl"
-            try:
-                with open(fname, "rb") as f:
-                    item = pickle.load(f)
-                return item
-            except FileNotFoundError:
-                traceback.print_exc()
-                print("This line should never be reached")
-
-    def cache_all(self,num_workers):
-        # cache does not cache the whole dataset object
-        # it caches the __getitem__ method only
-
-        dataset_len=len(self.dataset)
-        pool=Pool(num_workers)
-        for i in range(dataset_len):
-            pool.apply_async(self.cache_one, (i,))
-        pool.close()
-        pool.join()
-
-    def cache_some(self,num_workers):
-        # cache does not cache the whole dataset object
-        # it caches the __getitem__ method only
-        assert (self.max is not None)
-        dataset_len=len(self.dataset)
-        if self.max >dataset_len:
-            self.max=dataset_len
-        pool=Pool(num_workers)
-        for i in range(self.max):
-            pool.apply_async(self.cache_one, (i,))
-        pool.close()
-        pool.join()
-
-    # def __getitem__(self, index):
-    #
-    #     if self.max is None or index<self.max:
-    #         fname = self.path + self.id + "_" + str(index) + ".pkl"
-    #         try:
-    #             with open(fname, "rb") as f:
-    #                 item=pickle.load(f)
-    #             return item
-    #         except FileNotFoundError:
-    #             return self.cache_one(index)
-    #     else:
-    #         return self.cache_one(index)
-
-    def __getitem__(self, index):
-
-        fname = self.path + self.id + "_" + str(index) + ".pkl"
-        try:
-            with open(fname, "rb") as f:
-                item=pickle.load(f)
-            return item
-        except FileNotFoundError:
-            raise
-
-    def __len__(self):
-        if self.len is None:
-            return len(self.dataset)
-        else:
-            return self.len
 
 def pad_collate(args):
     val=list(zip(*args))
@@ -703,38 +632,6 @@ def pad_collate(args):
     padded[0]=padded[0].permute(1,0,2)
     padded[1]=padded[1].permute(1,0)
     return padded
-
-def cache_them():
-    ig=InputGenG(death_fold=0)
-    ig.train_valid_test_split()
-    valid=ig.get_valid()
-    valid_cacher=DatasetCacher("zerofold/valid",valid)
-    train=ig.get_train()
-    train_cacher=DatasetCacher("zerofold/train",train)
-    test=ig.get_test()
-    test_cacher=DatasetCacher("zerofold/test",test)
-
-    valid_cacher.cache_all(16)
-    train_cacher.cache_all(16)
-    test_cacher.cache_all(16)
-
-    print("Done")
-
-def selective_cache():
-    ig=InputGenG(death_fold=0)
-    ig.train_valid_test_split()
-    train=ig.get_train()
-    train_cacher=DatasetCacher("zerofold/train",train,max=50000)
-    # train_cacher.cache_one(2)
-    train_cacher.cache_some(16)
-    valid=ig.get_valid()
-    valid_cacher=DatasetCacher("zerofold/valid",valid, max=5000)
-    valid_cacher.cache_some(16)
-
-    test=ig.get_test()
-    test_cacher=DatasetCacher("zerofold/test",test, max=5000)
-    test_cacher.cache_some(16)
-    print("Done")
 
 # def selective_cache_train_valid():
 #     ig=InputGenG(death_fold=0)

@@ -1,9 +1,6 @@
-# final test loads all models and run the test dataset
-
-# Reviewed InputGen. I think this design works:
-# For cn models, the model reads the whole sequence, and only the prediction at the last timestep will be evaluated
-# For sequence models, the model reads the whole sequence, and the prediction loss will be averaged
-# Besides loss, other metrics should be collected.
+# because loading all models together causes out-of-memory error, I need to load them and test them one by one
+# all of the metrics take into consideration structural codes.
+# For code A1234, the machine needs to predict all.
 
 from death.post.inputgen_planH import InputGenH, pad_collate
 import os
@@ -15,6 +12,7 @@ from torch.utils.data import DataLoader
 from death.final.losses import *
 from death.final.metrics import *
 
+import torch
 
 def load_models(savestr, model_design_name):
     """
@@ -51,11 +49,11 @@ def load_models(savestr, model_design_name):
 
         return computer, optim, highestepoch, highestiter
 
-    dnc=load_model(savestr[0],model_design_name[0],"DNC")[0]
-    lstm=load_model(savestr[1],model_design_name[1],"baseline")[0]
-    tacotron=load_model(savestr[2],model_design_name[2],"taco")[0]
+    # need to make sure the outer scope releases the memory
+    yield load_model(savestr[0],model_design_name[0],"DNC")[0]
+    yield load_model(savestr[1],model_design_name[1],"baseline")[0]
+    yield load_model(savestr[2],model_design_name[2],"taco")[0]
 
-    return dnc, tacotron, lstm
 
 def run_one_patient(computer, input, target, loss_type, beta):
     """
@@ -92,67 +90,54 @@ def run_one_patient(computer, input, target, loss_type, beta):
 
     # metrics
     cause_of_death_output_sig=torch.nn.functional.sigmoid(cause_of_death_output)
-    sen=sensitivity(cause_of_death_output_sig,cause_of_death_target)
-    spe=specificity(cause_of_death_output_sig,cause_of_death_target)
-    f1=f1score(cause_of_death_output_sig,cause_of_death_target)
-    prec=precision(cause_of_death_output_sig,cause_of_death_target)
-    return loss, sen, spe, f1, prec
+    # sen=sensitivity(cause_of_death_output_sig,cause_of_death_target)
+    # spe=specificity(cause_of_death_output_sig,cause_of_death_target)
+    # f1=f1score(cause_of_death_output_sig,cause_of_death_target)
+    # prec=precision(cause_of_death_output_sig,cause_of_death_target)
+    return float(loss.data), cause_of_death_output_sig.data, cause_of_death_target.data
+
 
 
 def loss_compare(savestr=("5toe","5toe","3toe"), model_design_name=("seqDNC", "lstmnorm", "taco")):
-
     logfile = "log/final_" + datetime_filename() + ".txt"
+    models = load_models(savestr=savestr, model_design_name=model_design_name)
 
-    num_workers = 16
-    ig = InputGenH()
-    validds = ig.get_valid()
-    valid = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
-    valid_iterator=iter(valid)
+    for mdn in model_design_name:
+        bs=8
+        num_workers = 8
+        ig = InputGenH()
+        # use validation for the moment
+        validds = ig.get_valid()
+        valid = DataLoader(dataset=validds, batch_size=bs, num_workers=num_workers, collate_fn=pad_collate)
+        valid_iterator=iter(valid)
+        model=next(models)
+        model=model.cuda()
+        loss=0
 
-    print("Using", num_workers, "workers for training set")
-    dnc, tacotron, lstm = load_models(savestr=savestr,model_design_name=model_design_name)
+        val_batch=25
+        oo=torch.zeros((val_batch*bs,5951))
+        tt=torch.zeros((val_batch*bs,5951))
+        for i in range(val_batch):
+            (input, target, loss_type) = next(valid_iterator)
+            dl = run_one_patient(model, input, target, loss_type, 1e-5)
+            if dl is not None:
+                loss += dl[0]
 
-    # load model:
-    dnc = dnc.cuda()
-    tacotron=tacotron.cuda()
-    lstm=lstm.cuda()
-
-    dnc_loss=0
-    tacotron_loss=0
-    lstm_loss=0
-
-    dnc_metrics=[0]*4
-    tacotron_metrics=[0]*4
-    lstm_metrics=[0]*4
-
-    val_batch=10
-    for _ in range(val_batch):
-        (input, target, loss_type) = next(valid_iterator)
-        dl = run_one_patient(dnc, input, target, loss_type, 1e-5)
-        tl = run_one_patient(tacotron,input,target,loss_type, 1e-5)
-        ll = run_one_patient(lstm,input,target,loss_type, 1e-5)
-        if dl is not None:
-            dnc_loss += float(dl[0].data)
-            tacotron_loss+=float(tl[0].data)
-            lstm_loss+=float(ll[0].data)
-
-            for i in range(4):
-                dnc_metrics[i]+=dl[i]
-                tacotron_metrics[i]+=tl[i]
-                lstm_metrics[i]+=ll[i]
-        else:
-            raise ValueError("val_loss is none")
-
-    dnc_loss = dnc_loss / val_batch
-    tacotron_loss = tacotron_loss / val_batch
-    lstm_loss = lstm_loss / val_batch
-    logprint(logfile, "DNC. loss     : %.7f, sensitivity: %.5f, specificity: %.5f, f1: %5f, precision: %.5f" %
-             (val_batch, dnc_loss, *dnc_metrics))
-    logprint(logfile, "Tacotron. loss: %.7f, sensitivity: %.5f, specificity: %.5f, f1: %5f, precision: %.5f" %
-             (val_batch, tacotron_loss, *tacotron_metrics))
-    logprint(logfile, "LSTM. loss    : %.7f, sensitivity: %.5f, specificity: %.5f, f1: %5f, precision: %.5f" %
-             (val_batch, lstm_loss, *lstm_metrics))
-
+                oo[i*8:i*8+8,:]=dl[1]
+                tt[i*8:i*8+8,:]=dl[2]
+            else:
+                raise ValueError("val_loss is none")
+        loss=loss/val_batch
+        # averaging the metrics is not the correct approach.
+        # we need to concatenate all results to calculate the metrics.
+        sen=sensitivity(oo,tt)
+        spe=specificity(oo,tt)
+        f1=f1score(oo,tt)
+        prec=precision(oo,tt)
+        acc=accuracy(oo,tt)
+        logprint(logfile, "%s. loss     : %.7f, sensitivity: %.5f, specificity: %.5f, precision: %.5f, f1: %.5f, accuracy: %.5f" %
+                 (mdn, loss, sen, spe, prec, f1, acc))
+        # del model
 
 
 if __name__ == '__main__':

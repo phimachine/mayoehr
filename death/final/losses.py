@@ -34,7 +34,7 @@ class TOELoss(nn.Module):
         :return:
         '''
 
-        # for toe, all targets are postiive values
+        # for toe, all targets are positive values
         # positive for overestimate
         # negative for underestimate
         diff=input-target
@@ -57,6 +57,29 @@ class TOELoss(nn.Module):
             return loss.mean()
         else:
             return loss.sum()
+
+class WeightedBCELLoss(nn.Module):
+    """
+    Binary Cross Entropy with Logits Loss with positive weights
+    Custom made for PyTorch 0.3.1
+    Most parameters are ignored to be default
+    """
+    def __init__(self,pos_weight=None):
+        super(WeightedBCELLoss, self).__init__()
+        self.pos_weight=pos_weight
+
+    def forward(self, input, target):
+        input=torch.clamp(input,min=1e-8,max=1-1e-8)
+        info=F.logsigmoid(input)
+        if self.pos_weight is not None:
+            pos_loss=info*target*self.pos_weight
+        else:
+            pos_loss=info*target
+
+        neginfo=torch.log(1-F.sigmoid(input))
+        neg_loss=neginfo*(1-target)
+
+        return torch.mean(-(pos_loss+neg_loss))
 
 def test_toe_loss():
     input=Variable(torch.Tensor([0,1,2,3,4,5,6,7,8,9]))

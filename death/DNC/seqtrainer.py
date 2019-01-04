@@ -19,17 +19,20 @@ from collections import deque
 import datetime
 from death.DNC.batchtrainer import logprint
 import pdb
-from death.final.losses import TOELoss
+from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
 
 param_x = 66529
 param_h = 64  # 64
 param_L = 4  # 4
-param_v_t = 5952
+param_v_t = 2976 # 5952
 param_W = 8  # 8
 param_R = 8  # 8
 param_N = 64  # 64
 param_bs = 8
+# this is the empirical saturation level when positive weights are not used.
+saturation=20000
+val_bat_cons=800
 
 import torch.multiprocessing
 
@@ -152,10 +155,10 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     valid_iterator = iter(valid_dl)
     print_interval = 10
     val_interval = 400
-    save_interval = 1000
+    save_interval = int(8000/param_bs)
     target_dim = None
     rldmax_len = 50
-    val_batch = 100
+    val_batch = int(val_bat_cons/param_bs)
     running_cod_loss=deque(maxlen=rldmax_len)
     running_toe_loss=deque(maxlen=rldmax_len)
     if logfile:
@@ -284,14 +287,15 @@ def main(load, savestr='default', lr=1e-3, beta=0.01):
 
 
     total_epochs = 1
-    iter_per_epoch = 2019
+    iter_per_epoch = int(saturation/param_bs)
     optim = None
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log/dnc_" + savestr + "_" + datetime_filename() + ".txt"
 
-    num_workers = 8
-    ig = InputGenH()
+    num_workers = 16
+    # ig=InputGenG(small_target=True)
+    ig = InputGenH(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
@@ -321,16 +325,19 @@ def main(load, savestr='default', lr=1e-3, beta=0.01):
         for group in optimizer.param_groups:
             print("Currently using a learing rate of ", group["lr"])
 
+    # creating the positive_weights
     with open("/infodev1/rep/projects/jason/pickle/dcc.pkl","rb") as f:
         # loaded here is a vector where v_i is the number of times death label i has occured
         weights=pickle.load(f)
     negs=59652-weights
     weights[weights<4]=3
     weights=negs/weights
+    weights=torch.from_numpy(weights).float().cuda()
+    weights=Variable(weights,requires_grad=False)
 
     real_criterion = TOELoss()
     # this parameter does not appear in PyTorch 0.3.1
-    # binary_criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
+    binary_criterion = WeightedBCELLoss(pos_weight=weights)
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
@@ -339,9 +346,7 @@ def main(load, savestr='default', lr=1e-3, beta=0.01):
 
 
 if __name__ == "__main__":
-    # main(load=True
     main(False)
-
 
     """
     12/6
