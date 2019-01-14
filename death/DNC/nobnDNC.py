@@ -107,7 +107,6 @@ class SeqDNC(nn.Module):
         self.W_r = Parameter(torch.Tensor(self.W * self.R, self.v_t).cuda())
         # print("Using 0.4.1 PyTorch BatchNorm1d")
         # self.bn = nn.BatchNorm1d(self.x, eps=1e-3, momentum=1e-10, affine=False)
-        self.bn = nn.BatchNorm1d(self.x)
         self.reset_parameters()
 
         '''States'''
@@ -225,34 +224,34 @@ class SeqDNC(nn.Module):
             yts.append(yt)
 
         yts=torch.stack(yts,dim=0)
-        yts=torch.max(yts,dim=0)[0]
+        yts=torch.sum(yts,dim=0)
         return yts
 
 
     def forward_one_step(self, step_input):
         if (step_input != step_input).any():
             raise ValueError("We have NAN in inputs")
-
-        # dimension 42067 for all channels report NAN
-        # train.mother.lab
-        # should not be necessary, right?
+        #
+        # # dimension 42067 for all channels report NAN
+        # # train.mother.lab
+        # # should not be necessary, right?
         # step_input = step_input.squeeze(1)
-
-        # This part of the code has NAN problem
-        # The reason is because batch normalization cannot be applied to a series of highly sparse
-        # it's thus reasonable to change NAN to zero.
-        # pdb.set_trace()
-        bnout = self.bn(step_input)
-        # if (bnout != bnout).any():
-
-        # through this piece, it's clear that dimension 59105 is highly sparse and is causing problem
-        # it's sensible to make it 0, because it's the original value
-        # print("BN has produced NAN, Location at ", (bnout!=bnout).nonzero())
-        bnout[(bnout != bnout).detach()] = 0
-
-        bnout = bnout.unsqueeze(1)
-
-        input_x_t = torch.cat((bnout, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
+        #
+        # # This part of the code has NAN problem
+        # # The reason is because batch normalization cannot be applied to a series of highly sparse
+        # # it's thus reasonable to change NAN to zero.
+        # # pdb.set_trace()
+        # bnout = self.bn(step_input)
+        # # if (bnout != bnout).any():
+        # #
+        # # # through this piece, it's clear that dimension 59105 is highly sparse and is causing problem
+        # # # it's sensible to make it 0, because it's the original value
+        # # # print("BN has produced NAN, Location at ", (bnout!=bnout).nonzero())
+        # bnout[(bnout != bnout).detach()] = 0
+        #
+        # bnout = bnout.unsqueeze(1)
+        step_input=step_input.unsqueeze(1)
+        input_x_t = torch.cat((step_input, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
         if (input_x_t != input_x_t).any():
             raise ValueError("We have NAN in last read vector")
         '''Controller'''
@@ -679,9 +678,9 @@ class Stock_LSTM(nn.Module):
         assert (self.st is not None)
         o, st = self.LSTM(input_x, self.st)
         if (st[0]!=st[0]).any():
-            with open("debug/lstm.pkl") as f:
+            with open("debug/lstm.pkl","rb+") as f:
                 pickle.dump(self, f)
-            with open("debug/lstm.pkl") as f:
+            with open("debug/lstm.pkl","rb+") as f:
                 pickle.dump(input_x, f)
             raise ("LSTM produced a NAN, objects dumped.")
         return self.last(o), st

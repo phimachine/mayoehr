@@ -7,7 +7,7 @@ import os
 from os.path import abspath
 from death.post.inputgen_planG import InputGenG, pad_collate
 from death.post.inputgen_planH import InputGenH
-from death.DNC.seqDNC import SeqDNC
+from death.DNC.nobnDNC import SeqDNC
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -22,7 +22,7 @@ import pdb
 from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
 
-param_x = 54764
+param_x = 66529
 param_h = 64  # 64
 param_L = 4  # 4
 param_v_t = 2976 # 5952
@@ -31,8 +31,7 @@ param_R = 8  # 8
 param_N = 64  # 64
 param_bs = 8
 # this is the empirical saturation level when positive weights are not used.
-# with lower lr, saturation can be higher
-saturation=200000
+saturation=20000
 val_bat_cons=800
 
 import torch.multiprocessing
@@ -152,7 +151,7 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, beta, logfile=False, kill_time=True):
+          train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, beta, logfile=False):
     valid_iterator = iter(valid_dl)
     print_interval = 10
     val_interval = 400
@@ -172,8 +171,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
             i = starting_iter + i
-            if kill_time:
-                out_of_time()
+            out_of_time()
 
             if target_dim is None:
                 target_dim = target.shape[1]
@@ -278,7 +276,7 @@ def validationonly(savestr, beta, epoch=0, iteration=0):
               (i, printloss))
     print(np.mean(running_loss))
 
-def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
+def main(load, savestr='default', lr=1e-3, beta=0.01):
     """
     :param load:
     :param savestr:
@@ -295,13 +293,13 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
     starting_iteration = 0
     logfile = "log/dnc_" + savestr + "_" + datetime_filename() + ".txt"
 
-    num_workers = 8
-    ig=InputGenG(small_target=True)
-    # ig = InputGenH(small_target=True)
+    num_workers = 16
+    # ig=InputGenG(small_target=True)
+    ig = InputGenH(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
-    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
+    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate,pin_memory=True)
 
     print("Using", num_workers, "workers for training set")
     computer = SeqDNC(x=param_x,
@@ -339,58 +337,18 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
 
     real_criterion = TOELoss()
     # this parameter does not appear in PyTorch 0.3.1
-    # binary_criterion = WeightedBCELLoss(pos_weight=None)
-    binary_criterion= nn.BCEWithLogitsLoss()
+    binary_criterion = WeightedBCELLoss(pos_weight=weights)
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs,
-          int(starting_iteration), iter_per_epoch, savestr, beta, logfile, kill_time)
+          int(starting_iteration), iter_per_epoch, savestr, beta, logfile)
 
 
 if __name__ == "__main__":
     main(False)
 
     """
-    12/6
-    0.0003 validation at around 8000 batches, equal to the running loss.
-    Note that after 400 batches, it's already around 0.0004. This is important, because that allows me to use early stopping.
-    Interesting. Now I vary the hyperparameter for more tests. Try radically decrease.
-    Increase of parameter size might work in favor, because overfitting is not a severe issue.
-    Small variance means I can probably lower the learning rate and feed with more data.
-    """
-
-    """
-    12/7
-    0.0004 is the average validation for a smaller parameter size. No batch validation reached below 0.0003.
-    For old parameter set, it happened 3 or 4 times. Pretty significant.
-    It was reached pretty early too.
-    Variance of both results cannot be identified with my eyes. 
-    The next step is to increase parameter set and lower lr, train for a long time.
-    """
-
-    """
-    12/17
-    Loading /infodev1 bottlenecks. Not sure.
-    Lost the log. Somehow validation has problems. Training becomes very slow. What's happening? 
-    I did not change anything. Sync?
-    """
-
-    """
-    12/20
-    It is a batchnorm problem. See the last commit message.
-    """
-
-
-    """
-    12/21
-    Beta is too low.
-    Maybe training two models separately is better?
-    See if adding a last output layer would help. I assume so.
-    """
-
-
-    """
-    1/4
-    loss won't go down. WHY!?
+    1/7
+    This file has nan problem
     """

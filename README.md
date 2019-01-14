@@ -169,10 +169,13 @@ with no problem.
 
 
 ## Work
-### Final test
-It's time to have the final test on all models. Not only loss will be collected, but
-also various statistics, such as F-1.
+### Redesign time series
+Start with birth, instead of the first record. Normalize all sequence length.
 
-### Time-to-event label
-Time-to-event label was not previously required for prediction, because cause-of-death
-label was difficult enough to deal with. Now should be a good time to introduce it.
+### Positive weights?
+My implementation of weighted by class binary cross entorpy loss has back-propagation 
+problems.
+
+### Only mortality
+Setting the population to patients with known mortality records is more
+reasonable than setting population to be the whole REP. 

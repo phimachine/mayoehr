@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planH import InputGenH, pad_collate
+from death.post.inputgen_planG import InputGenG
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -17,10 +18,8 @@ from collections import deque
 import datetime
 from death.DNC.seqtrainer import logprint, datetime_filename
 import pdb
-from death.final.losses import TOELoss
+from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
-
-batch_size = 1
 
 
 def sv(var):
@@ -236,7 +235,7 @@ def validate(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapperG(nn.Module):
-    def __init__(self,input_size=66529, output_size=5952,hidden_size=128,num_layers=16,batch_first=True,
+    def __init__(self,input_size=54764, output_size=2976,hidden_size=128,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
@@ -261,7 +260,8 @@ class lstmwrapperG(nn.Module):
         output=self.output(output)
         # (batch_size, seq_len, target_dim)
         # pdb.set_trace()
-        output=output.sum(1)
+        # output=output.sum(1)
+        output=output.max(1)[0]
         return output
 
 
@@ -317,8 +317,8 @@ def main(load,savestr,lr = 1e-3, beta=1e-3):
 
     logfile = "log/lstm_"+savestr+"_"+datetime_filename()+".txt"
 
-    num_workers = 8
-    ig = InputGenH()
+    num_workers = 16
+    ig = InputGenG(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
@@ -345,8 +345,19 @@ def main(load,savestr,lr = 1e-3, beta=1e-3):
             print("Currently using a learing rate of ", group["lr"])
 
     real_criterion = TOELoss()
-    binary_criterion = nn.BCEWithLogitsLoss()
 
+    # creating the positive_weights
+    with open("/infodev1/rep/projects/jason/pickle/dcc.pkl","rb") as f:
+        # loaded here is a vector where v_i is the number of times death label i has occured
+        weights=pickle.load(f)
+    negs=59652-weights
+    weights[weights<4]=3
+    weights=negs/weights
+    weights=torch.from_numpy(weights).float().cuda()
+    weights=Variable(weights)
+
+    # binary_criterion = WeightedBCELLoss(pos_weight=weights)
+    binary_criterion = nn.BCEWithLogitsLoss()
     # starting with the epoch after the loaded one
 
     train(lstm, optimizer, real_criterion, binary_criterion,
@@ -358,8 +369,7 @@ def main(load,savestr,lr = 1e-3, beta=1e-3):
 if __name__ == "__main__":
     # main(load=True
     # main(False,'lstmG')
-    with torch.cuda.device(0):
-        validationonly('lowlr')
+    pass
 
     '''
     12/5
