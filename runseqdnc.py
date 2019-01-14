@@ -4,5 +4,5 @@ from death.final.killtime import *
 import multiprocessing
 import time
 if __name__=='__main__':
-    with torch.cuda.device(0):
-        main(load=False,lr=0.001,savestr="poswei",beta=1e-5)
+    with torch.cuda.device(1):
+        main(load=False,lr=1e-3,savestr="poswei",beta=1e-5, kill_time=False)

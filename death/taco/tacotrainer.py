@@ -19,8 +19,9 @@ import traceback
 from collections import deque
 import datetime
 from death.DNC.seqtrainer import logprint, datetime_filename
-from death.final.losses import TOELoss
+from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
+
 
 global_exception_counter = 0
 i = None
@@ -167,7 +168,8 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
-          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, beta, logfile=False):
+          train, valid, starting_epoch, total_epochs, starting_iter, iter_per_epoch,
+          savestr, beta, logfile=False, kill_time=True):
     global global_exception_counter
     valid_iterator=iter(valid)
     print_interval = 10
@@ -184,7 +186,8 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
             i = starting_iter + i
-            out_of_time()
+            if kill_time:
+                out_of_time()
 
             if i < iter_per_epoch:
                 cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
@@ -287,7 +290,7 @@ def forevermain(load=False, lr=1e-3, savestr=""):
         except ValueError:
             traceback.print_exc()
 
-def main(load=False, lr=1e-3, beta=1e-3, savestr=""):
+def main(load=False, lr=1e-3, beta=1e-3, savestr="", kill_time=True):
     total_epochs = 1
     iter_per_epoch = 2019
     lr = lr
@@ -297,7 +300,7 @@ def main(load=False, lr=1e-3, beta=1e-3, savestr=""):
     logfile = "log/taco_"+savestr+"_"+datetime_filename()+".txt"
 
     num_workers = 16
-    ig = InputGenH()
+    ig = InputGenH(small_target=True)
     validds = ig.get_valid()
     trainds = ig.get_train()
     validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate,pin_memory=True)
@@ -323,15 +326,23 @@ def main(load=False, lr=1e-3, beta=1e-3, savestr=""):
         for group in optimizer.param_groups:
             print("Currently using a learing rate of ", group["lr"])
 
-    real_criterion = TOELoss()
-    # time-wise sum, label-wise average.
-    binary_criterion = nn.BCEWithLogitsLoss()
-
+    # creating the positive_weights
+    with open("/infodev1/rep/projects/jason/pickle/dcc.pkl","rb") as f:
+        # loaded here is a vector where v_i is the number of times death label i has occured
+        weights=pickle.load(f)
+    negs=59652-weights
+    weights[weights<4]=3
+    weights=negs/weights
+    weights=torch.from_numpy(weights).float().cuda()
+    weights=Variable(weights)
+    binary_criterion = WeightedBCELLoss(pos_weight=weights)
     # starting with the epoch after the loaded one
+
+    real_criterion = TOELoss()
 
     train(computer, optimizer, real_criterion, binary_criterion,
           traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, savestr,
-          beta, logfile)
+          beta, logfile, kill_time)
 
 
 if __name__ == "__main__":

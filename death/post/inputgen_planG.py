@@ -667,4 +667,4 @@ def main():
 
 if __name__=="__main__":
     ig=InputGenG()
-    ig.pickle_death_code_count()
+    print("hello")
