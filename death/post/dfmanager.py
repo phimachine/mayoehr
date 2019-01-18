@@ -31,15 +31,21 @@ class DFManager(object):
         # they contain possible human errors, and must be kept prestine
 
         # do not contain all columns of the datasets
+
+        # moved lab loinc code, because it's actually categories
         self.categories = [("demo", "educ_level"), ("dhos", "hosp_adm_source"), ("dhos", "hosp_disch_disp"),
                            ("ahos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
-                           ("lab", "lab_abn_flag"), ("demo", "race"), ("serv", "SRV_LOCATION"),
+                           ("lab", "lab_abn_flag"),("lab", "lab_loinc_code"), ("demo", "race"), ("serv", "SRV_LOCATION"),
                            ("serv", "srv_admit_type"),
                            ("serv", "srv_admit_src"), ("serv", "srv_disch_stat")]
-        self.bar_separated = [("dia", "dx_codes"), ("dhos", "dx_codes"),("ahos", "dx_codes"),
-                              ("pres", "med_ingr_rxnorm_code")]
-        self.no_bar = self.categories + [("death", "code"), ("lab", "lab_loinc_code"), ("serv", "srv_px_code"),
-                                         ("surg", "collapsed_px_code")]
+
+        self.bar_separated_categories=[("pres", "med_ingr_rxnorm_code")]
+        self.bar_separated_i9=[("dia", "dx_codes"), ("dhos", "dx_codes"), ("ahos", "dx_codes")]
+        self.bar_separated = self.bar_separated_i9 + self.bar_separated_categories
+        # where did you get this collapsed px code?
+
+        self.no_bar_i9=[("death", "code"), ("serv", "srv_px_code"), ("surg", "collapsed_px_code")]
+        self.no_bar = self.categories + self.no_bar_i9
 
 
         self.dtypes = collections.OrderedDict()
@@ -188,7 +194,8 @@ class DFManager(object):
     def load_pickle(self, verbose=False):
         try:
             # load df
-            print("Loading dataframes from pickle file")
+            if verbose:
+                print("Loading dataframes from pickle file")
             with open("/infodev1/rep/projects/jason/pickle/pddfs.pkl", 'rb') as f:
                 self.death, self.demo, self.dia, self.ahos, self.dhos, self.lab, self.pres, \
                 self.serv, self.surg, self.vital = pickle.load(f)
@@ -234,15 +241,26 @@ class DFManager(object):
 
         print("file loaded, making dictionaries")
 
-        for df, col in self.bar_separated:
+        for df, col in self.bar_separated_i9:
             if verbose:
                 print("generating dictionary on bar separated " + df + " " + col)
-            self.bar_separated_dictionary(df, col, save=save, skip=skip)
+            self.bar_separated_i9_dictionary(df, col, save=save, skip=skip)
 
-        for df, col in self.no_bar:
+        for df, col in self.bar_separated_categories:
+            if verbose:
+                print("generating dictionary on bar separated " + df + " " + col)
+            self.bar_separated_cate_dictionary(df, col, save=save, skip=skip)
+
+        for df, col in self.no_bar_i9:
             if verbose:
                 print("generating dictionary on no bar " + df + " " + col)
-            self.no_bar_dictionary(df, col, save=save, skip=skip)
+            self.no_bar_i9_dictionary(df, col, save=save, skip=skip)
+
+        for df, col in self.categories:
+            if verbose:
+                print("generating dictionary on categories " + df + " " + col)
+            self.category_dictionary(df,col,save=save,skip=skip)
+
 
     def code_into_dic_structurally(self, word, dic, n):
         """
@@ -253,7 +271,7 @@ class DFManager(object):
         :param n:
         :return:
         """
-        if word =="" or word=="empty":
+        if word =="" or word=="empty" or word=="None" or word=="none":
             return n
 
         if word not in dic:
@@ -262,7 +280,84 @@ class DFManager(object):
 
         return self.code_into_dic_structurally(word[:-1], dic, n)
 
-    def bar_separated_dictionary(self, df_name, col_name, save=False, skip=True):
+    def bar_separated_cate_dictionary(self, df_name, col_name, save=False, skip=True):
+        savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
+        print(savepath)
+
+        if skip:
+            try:
+                with savepath.open('rb') as f:
+                    dic = pickle.load(f)
+                    setattr(self, df_name + "_" + col_name + "_dict", dic)
+                    return dic
+            except FileNotFoundError:
+                pass
+
+        dic = {}
+        n = 0
+
+        series = self.get_series(df_name, col_name)
+
+        for row in series:
+            try:
+                if not pd.isna(row):
+                    splitted = row.split("|")
+                    for word in splitted:
+                        # Is there empty? in case I forgot in R
+                        if not pd.isna(word):
+                            if word not in ("","empty","None","none"):
+                                if word not in dic:
+                                    dic[word]=n
+                                    n+=1
+            except AttributeError:
+                print("woah woah woah what did you do")
+                raise
+
+        if save == True:
+            with savepath.open("wb") as f:
+                pickle.dump(dic, f, protocol=pickle.HIGHEST_PROTOCOL)
+                print('saved')
+        getattr(self, df_name + "_" + col_name + "_dict", dic)
+
+        return dic
+
+    def category_dictionary(self, df_name, col_name, save=False, skip=True):
+        savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
+        print(savepath)
+
+        if skip:
+            try:
+                with savepath.open('rb') as f:
+                    dic = pickle.load(f)
+                    setattr(self, df_name + "_" + col_name + "_dict", dic)
+                    return dic
+            except FileNotFoundError:
+                pass
+
+        dic = {}
+        n = 0
+
+        series = self.get_series(df_name, col_name)
+
+        for row in series:
+            if not pd.isna(row):
+                if row not in ("", "empty", "None", "none"):
+                    if row not in dic:
+                        dic[row]=n
+                        n+=1
+
+        if save == True:
+            with savepath.open('wb') as f:
+                pickle.dump(dic, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+                print('saved')
+
+        getattr(self, df_name + "_" + col_name + "_dict", dic)
+
+        return dic
+
+
+    def bar_separated_i9_dictionary(self, df_name, col_name, save=False, skip=True):
         '''
 
         :param df_name:
@@ -310,7 +405,7 @@ class DFManager(object):
 
         return dic
 
-    def no_bar_dictionary(self, df_name, col_name, save=False, skip=True):
+    def no_bar_i9_dictionary(self, df_name, col_name, save=False, skip=True):
 
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
         print("save to path:", savepath)
@@ -358,10 +453,8 @@ def repickle():
     dfs = DFManager()
     # dfs.load_raw(save=False)
     dfs.load_pickle()
-    # dfs.make_dictionary(verbose=True,save=False,skip=False)
-    dfs.no_bar_dictionary("death","code",save=False)
+    dfs.make_dictionary(verbose=True,save=True,skip=False)
     print("end script")
-
 
 
 if __name__ == "__main__":

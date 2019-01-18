@@ -65,9 +65,10 @@ class InputGen(Dataset, DFManager):
         self.earla = pd.read_csv("/infodev1/rep/projects/jason/earla.csv", parse_dates=["earliest", "latest"])
         self.earla.set_index("rep_person_id", inplace=True)
         self.len = len(self.rep_person_id)
-        self.check_nan()
+        # self.check_nan()
         self.debug=debug
-        print("Input Gen initiated")
+        if self.verbose:
+            print("Input Gen initiated")
 
     def get_output_dim(self):
         '''
@@ -170,14 +171,16 @@ class InputGen(Dataset, DFManager):
         if debug:
             if not isinstance(indices[0],collections.Iterable) or not isinstance(indices[1], collections.Iterable):
                 raise TypeError("code_into_array_structurally() type error, indices[n] must be iterable")
-        if word!=word or word=="":
-            print("a code is empty or NAN")
-        else:
+        assert (len(indices[1])==1)
+        if word not in ("", "empty", "None", "none"):
             # start idx plus dic index
             codelist=indices[1]
-            for idx in range(len(codelist)):
-                codelist[idx]+=dic[word]
-            np.add.at(array,indices,1)
+            struct_code_list=[]
+            while word !="":
+                struct_code_list.append(dic[word]+codelist[0])
+                word=word[:-1]
+            indices[1]=struct_code_list
+            np.add.at(array, indices, 1)
 
     def get_by_id(self,id,debug=False):
         time_length = self.earla.loc[id]["int"] + 1
@@ -199,8 +202,9 @@ class InputGen(Dataset, DFManager):
             # I know that only one row is possible
             val = row[coln].iloc[0]
             if val == val:
-                insidx = dic[val] + startidx
-                np.add.at(input, [tss, insidx], 1)
+                if val not in ("", "empty", "None", "none"):
+                    insidx = dic[val] + startidx
+                    np.add.at(input, [tss, insidx], 1)
         if (input != input).any():
             raise ValueError("NA FOUND")
 
@@ -208,7 +212,9 @@ class InputGen(Dataset, DFManager):
         insidx, endidx = self.get_column_index_range(dfn, coln)
         val = row[coln].iloc[0]
         if val == val:
-            np.add.at(input, [tss, insidx], 1)
+            if val not in ("", "empty", "None", "none"):
+                if val:
+                    np.add.at(input, [tss, insidx], 1)
         # this might have problem, we should use two dimensions for bool. But for now, let's not go back to prep.
         if (input != input).any():
             raise ValueError("NA FOUND")
@@ -243,7 +249,6 @@ class InputGen(Dataset, DFManager):
             # cause of death
             cods = allrows["code"]
             unds = allrows["underlying"]
-            insidx = []
 
             for code, underlying in zip(cods, unds):
                 # no na testing, I tested it in R
@@ -297,13 +302,19 @@ class InputGen(Dataset, DFManager):
 
                 # we bucket the columns so we know how to process them.
                 direct_insert = []
-                barsep = []
-                nobarsep = []
+                barsepi9 = []
+                barsepcate = []
+                nobari9 = []
+                cate=[]
                 for coln in datacolns:
-                    if (dfn, coln) in self.no_bar:
-                        nobarsep.append(coln)
-                    elif (dfn, coln) in self.bar_separated:
-                        barsep.append(coln)
+                    if (dfn, coln) in self.no_bar_i9:
+                        nobari9.append(coln)
+                    elif (dfn, coln) in self.bar_separated_i9:
+                        barsepi9.append(coln)
+                    elif (dfn, coln) in self.categories:
+                        cate.append(coln)
+                    elif (dfn, coln) in self.bar_separated_categories:
+                        barsepcate.append(coln)
                     else:
                         direct_insert.append(coln)
                         if debug:
@@ -330,11 +341,17 @@ class InputGen(Dataset, DFManager):
                     raise ValueError("NA FOUND")
 
                 # codes
-                for coln in nobarsep:
+                for coln in cate:
+                    startidx, _ = self.get_column_index_range(dfn, coln)
+                    dic = self.__getattribute__(dfn + "_" + coln + "_dict")
+                    for ts, val in zip(tsloc, allrows[coln]):
+                        if val not in ("", "empty", "None", "none"):
+                            codeidx=dic[val]
+                            np.add.at(input,[[ts],[codeidx+startidx]], 1)
+
+                for coln in nobari9:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
-                    insidx = []
-                    nantsloc = []
 
                     for ts, val in zip(tsloc, allrows[coln]):
                         # if not nan
@@ -347,11 +364,9 @@ class InputGen(Dataset, DFManager):
                 if (input != input).any():
                     raise ValueError("NA FOUND")
 
-                for coln in barsep:
+                for coln in barsepi9:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
-                    tss = []
-                    insidx = []
 
                     for ts, multival in zip(tsloc, allrows[coln]):
                         if multival == multival:
@@ -369,6 +384,21 @@ class InputGen(Dataset, DFManager):
                     # except IndexError:
                     #     raise IndexError
 
+                for coln in barsepcate:
+                    startidx, endidx = self.get_column_index_range(dfn, coln)
+                    dic = self.__getattribute__(dfn + "_" + coln + "_dict")
+
+                    for ts, multival in zip(tsloc, allrows[coln]):
+                        if multival == multival:
+                            vals = multival.split("|")
+                            vals = list(filter(lambda a: a != "", vals))
+                            vals = list(filter(lambda a: a != "empty", vals))
+
+                            for val in vals:
+                                if val not in ("", "empty", "None", "none"):
+                                    np.add.at(input,[[ts],[startidx+dic[val]]],1)
+
+
         if (input != input).any():
             raise ValueError("NA FOUND")
         # high frequency visitors have been handled smoothly, by aggregating
@@ -381,6 +411,7 @@ class InputGen(Dataset, DFManager):
     def __len__(self):
         '''
         Length of the demographics dataset
+        247428
         :return:
         '''
         return self.len
@@ -456,9 +487,10 @@ class GenHelper(Dataset):
 
 
 class InputGenG(InputGen):
-    def __init__(self, death_fold=0, curriculum=False, validation_test_proportion=0.1, random_seed=54321,small_target=False):
-        verbose = False
-        debug = True
+    def __init__(self, death_fold=0, curriculum=False, validation_test_proportion=0.1, random_seed=54321,small_target=False,
+                 debug=False,verbose=True):
+        verbose = verbose
+        debug = debug
         super(InputGenG, self).__init__(verbose=verbose, debug=debug)
 
         self.death_fold=death_fold
@@ -474,11 +506,12 @@ class InputGenG(InputGen):
 
         # the proportion of death records the last training set has
         self.proportion=None
-        print("Using InputGenF")
-        if self.curriculum:
-            print("Using curriculum learning")
-        else:
-            print("Not using curriculum learning")
+        if verbose:
+            print("Using InputGenG")
+            if self.curriculum:
+                print("Using curriculum learning")
+            else:
+                print("Not using curriculum learning")
 
         self.small_target=small_target
 
@@ -561,8 +594,6 @@ class InputGenG(InputGen):
             pickle.dump(weights,f)
 
 
-    def __getitem__(self, item):
-        raise NotImplementedError("Do not call this function")
 
 
 def pad_sequence(sequences, batch_first=False, padding_value=0):
@@ -667,4 +698,4 @@ def main():
 
 if __name__=="__main__":
     ig=InputGenG()
-    print("hello")
+    print("DONe")

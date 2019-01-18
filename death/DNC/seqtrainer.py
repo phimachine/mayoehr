@@ -22,7 +22,7 @@ import pdb
 from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
 
-param_x = 66529
+param_x = 54764
 param_h = 64  # 64
 param_L = 4  # 4
 param_v_t = 2976 # 5952
@@ -295,13 +295,13 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
     starting_iteration = 0
     logfile = "log/dnc_" + savestr + "_" + datetime_filename() + ".txt"
 
-    num_workers = 16
-    # ig=InputGenG(small_target=True)
-    ig = InputGenH(small_target=True)
+    num_workers = 8
+    ig=InputGenG(small_target=True)
+    # ig = InputGenH(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
-    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate,pin_memory=True)
+    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
 
     print("Using", num_workers, "workers for training set")
     computer = SeqDNC(x=param_x,
@@ -339,7 +339,8 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
 
     real_criterion = TOELoss()
     # this parameter does not appear in PyTorch 0.3.1
-    binary_criterion = WeightedBCELLoss(pos_weight=weights)
+    # binary_criterion = WeightedBCELLoss(pos_weight=None)
+    binary_criterion= nn.BCEWithLogitsLoss()
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,

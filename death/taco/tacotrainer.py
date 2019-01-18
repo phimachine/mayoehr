@@ -292,18 +292,18 @@ def forevermain(load=False, lr=1e-3, savestr=""):
 
 def main(load=False, lr=1e-3, beta=1e-3, savestr="", kill_time=True):
     total_epochs = 1
-    iter_per_epoch = 2019
+    iter_per_epoch = 10000
     lr = lr
     optim = None
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log/taco_"+savestr+"_"+datetime_filename()+".txt"
 
-    num_workers = 16
+    num_workers = 4
     ig = InputGenH(small_target=True)
     validds = ig.get_valid()
     trainds = ig.get_train()
-    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//4, collate_fn=pad_collate,pin_memory=True)
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
     traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
 
     print("Using", num_workers, "workers for training set")
