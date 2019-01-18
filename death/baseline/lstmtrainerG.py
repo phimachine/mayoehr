@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planH import InputGenH, pad_collate
+from death.post.inputgen_planG import InputGenG
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.nn.modules import LSTM
@@ -171,7 +172,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     for epoch in range(starting_epoch, total_epochs):
         for i, (input, target, loss_type) in enumerate(train):
             i=starting_iter+i
-            # out_of_time()
+            out_of_time()
 
             if i < iter_per_epoch:
                 cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
@@ -234,7 +235,7 @@ def validate(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapperG(nn.Module):
-    def __init__(self,input_size=66529, output_size=2976,hidden_size=128,num_layers=16,batch_first=True,
+    def __init__(self,input_size=54764, output_size=2976,hidden_size=128,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
@@ -317,7 +318,7 @@ def main(load,savestr,lr = 1e-3, beta=1e-3):
     logfile = "log/lstm_"+savestr+"_"+datetime_filename()+".txt"
 
     num_workers = 16
-    ig = InputGenH(small_target=True)
+    ig = InputGenG(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
@@ -355,8 +356,8 @@ def main(load,savestr,lr = 1e-3, beta=1e-3):
     weights=torch.from_numpy(weights).float().cuda()
     weights=Variable(weights)
 
-    binary_criterion = WeightedBCELLoss(pos_weight=weights)
-
+    # binary_criterion = WeightedBCELLoss(pos_weight=weights)
+    binary_criterion = nn.BCEWithLogitsLoss()
     # starting with the epoch after the loaded one
 
     train(lstm, optimizer, real_criterion, binary_criterion,

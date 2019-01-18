@@ -5,10 +5,12 @@
 
 require(data.table)
 require(dplyr)
+require(fuzzyjoin)
+
 
 gem<-fread('/local2/tmp/pycharm_project_292/drug/2018_I10gem.txt')
 colnames(gem)<-c("i10","i9","flags")
-drugs<-fread('/local2/tmp/pycharm_project_292/drug/drug2.csv')
+drugs<-fread('/local2/tmp/pycharm_project_292/drug/drugcod2.csv')
 
 # match any beginning of the string
 drugs <- drugs %>% mutate(name=paste('^',name,sep="")) %>% setDT()

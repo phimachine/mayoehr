@@ -98,25 +98,30 @@ def run_one_patient(computer, input, target, loss_type, beta):
 
 
 
-def loss_compare(savestr=("5toe","5toe","3toe"), model_design_name=("seqDNC", "lstmnorm", "taco")):
+def loss_compare(savestr=("poswei","maxpool","poswei"), model_design_name=("seqDNC", "lstmnorm", "taco")):
     logfile = "log/final_" + datetime_filename() + ".txt"
     models = load_models(savestr=savestr, model_design_name=model_design_name)
 
     for mdn in model_design_name:
         bs=8
         num_workers = 8
-        ig = InputGenH()
+        small_target=True
+        ig = InputGenH(small_target=small_target)
+        if small_target:
+            outputlen=2975
+        else:
+            outputlen=5951
         # use validation for the moment
-        validds = ig.get_valid()
-        valid = DataLoader(dataset=validds, batch_size=bs, num_workers=num_workers, collate_fn=pad_collate)
-        valid_iterator=iter(valid)
+        testds = ig.get_test()
+        test = DataLoader(dataset=testds, batch_size=bs, num_workers=num_workers, collate_fn=pad_collate)
+        valid_iterator=iter(test)
         model=next(models)
         model=model.cuda()
         loss=0
 
         val_batch=25
-        oo=torch.zeros((val_batch*bs,5951))
-        tt=torch.zeros((val_batch*bs,5951))
+        oo=torch.zeros((val_batch*bs,outputlen))
+        tt=torch.zeros((val_batch*bs,outputlen))
         for i in range(val_batch):
             (input, target, loss_type) = next(valid_iterator)
             dl = run_one_patient(model, input, target, loss_type, 1e-5)
@@ -142,3 +147,5 @@ def loss_compare(savestr=("5toe","5toe","3toe"), model_design_name=("seqDNC", "l
 
 if __name__ == '__main__':
     loss_compare()
+
+# TODO partial matching is not allowed. You need to slice the codes to perfect matching only.

@@ -172,4 +172,10 @@ with no problem.
 ### Redesign time series
 Start with birth, instead of the first record. Normalize all sequence length.
 
-### 
+### Positive weights?
+My implementation of weighted by class binary cross entorpy loss has back-propagation 
+problems.
+
+### Only mortality
+Setting the population to patients with known mortality records is more
+reasonable than setting population to be the whole REP. 
