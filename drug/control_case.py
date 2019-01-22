@@ -106,7 +106,7 @@ def look_up_locations_drug_base_cases(ig):
     with open("/infodev1/rep/projects/jason/drugsi9.csv",'r') as code_file:
         for line in code_file:
             drug_list.append(line.strip())
-    dfn_coln=[("dia","dx_codes"),("dhos","dx_codes"),("ahos","dx_codes"),("serv","srv_px_code")]
+    dfn_coln=[("dia","dx_codes"),("dhos","dx_codes"),("ahos","dx_codes")]
     dfn_coln_words=[]
     for dfn, coln in dfn_coln:
         for drug in drug_list:
@@ -136,30 +136,43 @@ def base_case_collection():
             f.write(str(data_index))
 
     print("finished")
+#
+# def parallel_base_case_collection():
+#     def look_up(data_index):
+#         # for data_index in tqdm([88]):
+#         rpi = ig.rep_person_id[data_index]
+#         i, t, lt = ig.get_by_id(rpi)
+#         ret = look_up_any(ig, i, t, dfn_coln_words)
+#         if ret:
+#             return data_index
+#
+#
+#     ig = InputGenG()
+#     # rpi=ig.rep_person_id[88]
+#     ds_index = []
+#     dfn_coln_words = look_up_locations_drug_base_cases(ig)
+#     res= Parallel(n_jobs=2)(delayed(look_up)(data_index)  for data_index in tqdm(range(20)))#len(ig))))
+#     with open("/infodev1/rep/projects/jason/drug_users.txt", "w+") as f:
+#         for data_index in ds_index:
+#             f.write(str(data_index))
+#
+#     print("finished")
 
-def parallel_base_case_collection():
-    def look_up(data_index):
-        # for data_index in tqdm([88]):
-        rpi = ig.rep_person_id[data_index]
-        i, t, lt = ig.get_by_id(rpi)
-        ret = look_up_any(ig, i, t, dfn_coln_words)
-        if ret:
-            return data_index
+def look_up(data_index, ig, dfn_coln_words):
+    # for data_index in tqdm([88]):
+    # rpi = ig.rep_person_id[data_index]
+    i,t,lt=ig[data_index]
+    ret = look_up_any(ig, i, t, dfn_coln_words)
+    if ret:
+        return data_index
 
-
-    ig = InputGenG()
-    # rpi=ig.rep_person_id[88]
-    ds_index = []
-    dfn_coln_words = look_up_locations_drug_base_cases(ig)
-    res= Parallel(n_jobs=2)(delayed(look_up)(data_index)  for data_index in tqdm(range(20)))#len(ig))))
-    with open("/infodev1/rep/projects/jason/drug_users.txt", "w+") as f:
-        for data_index in ds_index:
-            f.write(str(data_index))
-
-    print("finished")
-
-
-def look_up(data_index):
+def look_up_for_imap(data_index):
+    """
+    This function cannot be run directly.
+    dfn_coln_words and ig are assumed to be global variables that will be dealt with by the initializer of p.imap.
+    :param data_index:
+    :return:
+    """
 
     # for data_index in tqdm([88]):
     # rpi = ig.rep_person_id[data_index]
@@ -244,6 +257,7 @@ def parallel_test():
 #     with Pool(2) as p:
 #         r = list(tqdm.tqdm(p.imap(_foo, range(30)), total=30))
 
+# this is the one that worked.
 def multiprocessing_base_case_collection():
 
     # with mp.Pool(2,initializer) as p:
@@ -251,7 +265,7 @@ def multiprocessing_base_case_collection():
 
     # using 32 processers 3 it/s. One processer uses around 30 s/it
     with mp.Pool(32,initializer) as p:
-        ret=list(tqdm(p.imap(look_up, range(247428)),total=247428))
+        ret=list(tqdm(p.imap(look_up_for_imap, range(247428)), total=247428))
 
     ret=[i for i in ret if i is not None]
     with open("/infodev1/rep/projects/jason/drug_users.txt", "w+") as f:
@@ -259,8 +273,240 @@ def multiprocessing_base_case_collection():
             f.write(str(data_index)+"\n")
     print("Scanning finished")
 
+def review_look_up(data_index, ig, dfn_coln_words):
+    # for data_index in tqdm([88]):
+    # rpi = ig.rep_person_id[data_index]
+    i,t,lt=ig[data_index]
+    ret = review_look_up_any(ig, i, t, dfn_coln_words)
+    return ret
+
+def review_results():
+    ig=InputGenG(debug=False)
+    dfn_coln_words=look_up_locations_drug_base_cases(ig)
+
+
+    for di in interested:
+        ret=review_look_up(di,ig,dfn_coln_words)
+        rep_person_id=ig.rep_person_id[di]
+        print("REP Person ID:", rep_person_id)
+        print("%8s | %12s | %10s"%("dfn", "coln","code"))
+        for dfn, coln, code in ret:
+            print("%8s | %12s | %10s"%(dfn, coln, code))
+
+
+def review_look_up_any(ig, input, target, dfn_coln_words, time=None, input_only=True):
+    """
+    This is a function that looks up whether a code has ever appeared in a patient history.
+    Checks the whole code, not structure
+    :param ig:
+    :param input:
+    :param target:
+    :param dfn_coln_words: a list of dfn, coln and word you want to lookup. [(dfn1,coln1,word1), (dfn2,coln2,word2)...]
+    :return:
+    """
+    def set_dict(dfn,coln):
+        dic=ig.get_dict(dfn,coln)
+        setattr(review_look_up_any,dfn + "_" + coln + "_dict",dict((v,k) for k, v in dic.items()))
+
+    if time is not None:
+        raise NotImplementedError()
+
+    input_idx_list = []
+    target_idx_list = []
+    input_idx_dic={}
+    target_idx_dic={}
+
+    for dfn, coln, word in dfn_coln_words:
+        if dfn != "death":
+            # then array is input
+            startidx, endidx = ig.get_column_index_range(dfn, coln)
+
+            # if word not in ("", "empty", "None", "none"):
+            #     dic = ig.get_dict(dfn, coln)
+            #     wordidx = dic[word]
+            #     idx = wordidx + startidx
+            #     input_idx_list.append(idx)
+        else:
+            # then array is target
+            assert (coln == "code")
+            startidx = 1
+
+        dic = ig.get_dict(dfn, coln)
+        if word not in ("", "empty", "None", "none"):
+            try:
+                wordidx = dic[word]
+            except KeyError:
+                print("The word not consulted is", word, "in", dfn, coln)
+        idx = wordidx + startidx
+
+        if dfn != "death":
+            input_idx_list.append(idx)
+            input_idx_dic[idx]=(dfn,coln,word)
+        else:
+            target_idx_list.append(idx)
+            target_idx_dic[idx]=(dfn,coln,word)
+
+    ii=np.asarray(input_idx_list)
+    ti=np.asarray(target_idx_list)
+
+    dfn_coln_codes_input = []
+    dfn_coln_codes_death = []
+
+    for array,indices,dfn_coln_codes,is_death in [(input, ii,dfn_coln_codes_input,False), (target,ti,dfn_coln_codes_death,True)]:
+        if input_only and is_death:
+            pass
+        else:
+            if indices.size!=0:
+                if len(array.shape) == 1:
+                    time_slice = array[indices]
+                else:
+                    time_slice = array[:, indices]
+                # the goal is to decipher where the flag was raised.
+
+                flag_indices=time_slice.nonzero()[1]
+                # starting from here I modify the function to get information about the look_up.
+                if is_death:
+                    try:
+                        dic = getattr(review_look_up_any, dfn + "_" + coln + "_dict")
+                    except AttributeError:
+                        set_dict(dfn, coln)
+                        dic = getattr(review_look_up_any, dfn + "_" + coln + "_dict")
+                    dfn_coln_codes.append((dfn, coln, dic[idx]))
+                else:
+                    for idx in flag_indices:
+                        ig_loc=indices[idx]
+                        for dfn, coln in ig.all_dfn_coln:
+                            if dfn!="death":
+                                st,end=ig.get_column_index_range(dfn,coln)
+                                if st<=ig_loc and end>=ig_loc:
+                                    # then this is the dfn and coln
+                                    try:
+                                        dic=getattr(review_look_up_any,dfn + "_" + coln + "_dict")
+                                    except AttributeError:
+                                        set_dict(dfn,coln)
+                                        dic=getattr(review_look_up_any,dfn + "_" + coln + "_dict")
+
+                                    no_code=True
+                                    code=dic[ig_loc-st]
+                                    for a,b,c in dfn_coln_words:
+                                        if c==code:
+                                            no_code=False
+                                            break
+                                    if no_code:
+                                        raise ValueError("This code is not found in dfn_coln_words")
+                                    dfn_coln_codes.append((dfn,coln,code))
+
+
+    if input_only:
+        return dfn_coln_codes_input
+    else:
+        return dfn_coln_codes_input,dfn_coln_codes_death
+
+def pandas_lookup(index, ig, drug_list):
+    # because the numpy lookup has significant performance issue, I wnat to try another route.
+    # Maybe faster maybe slower, let's see.
+
+    # in ig, line by line examination of relevant datasets and columns.
+    # deal with bar separations
+    # if true, record.
+
+    # [("dia","dx_codes"),("dhos","dx_codes"),("ahos","dx_codes")]
+    # all of them are bar separated
+
+    # ig and drug_related_i9 should be allocated as global env var in multiprocessing.
+
+    dia=ig.dia
+    dhos=ig.dhos
+    ahos=ig.ahos
+    dfs=[dia,dhos,ahos]
+
+    for df in dfs:
+        try:
+            rows=df.loc[[index]]
+            dx_codes=rows["dx_codes"]
+            for dx_code in dx_codes:
+                splitted=dx_code.split("|")
+                for code in splitted:
+                    if code in drug_list:
+                      return index
+        except KeyError:
+            pass
+
+def imap_pandas_lookup(index):
+    # because the numpy lookup has significant performance issue, I wnat to try another route.
+    # Maybe faster maybe slower, let's see.
+
+    # in ig, line by line examination of relevant datasets and columns.
+    # deal with bar separations
+    # if true, record.
+
+    # [("dia","dx_codes"),("dhos","dx_codes"),("ahos","dx_codes")]
+    # all of them are bar separated
+
+    # ig and drug_related_i9 should be allocated as global env var in multiprocessing.
+
+    dia=ig.dia
+    dhos=ig.dhos
+    ahos=ig.ahos
+    dfs=[dia,dhos,ahos]
+
+    for df in dfs:
+        try:
+            rows=df.loc[[index]]
+            dx_codes=rows["dx_codes"]
+            for dx_code in dx_codes:
+                splitted=dx_code.split("|")
+                for code in splitted:
+                    if code in drug_list:
+                      return index
+        except KeyError:
+            pass
+
+def pandas_initializer():
+    global ig
+    global drug_list
+    ig=InputGenG()
+    drug_list=[]
+    with open("/infodev1/rep/projects/jason/drugsi9.csv",'r') as code_file:
+        for line in code_file:
+            drug_list.append(line.strip())
+
+# this is the one that worked.
+def multiprocessing_pandas_base_case_collection():
+
+    # with mp.Pool(2,initializer) as p:
+    #     r=list(p.imap(look_up, range(5)))
+
+    # using 32 processers 3 it/s. One processer uses around 30 s/it
+    with mp.Pool(32,pandas_initializer) as p:
+        ret=list(tqdm(p.imap(imap_pandas_lookup, range(247428)), total=247428))
+
+    ret=[i for i in ret if i is not None]
+    with open("/infodev1/rep/projects/jason/drug_users.txt", "w+") as f:
+        for data_index in ret:
+            f.write(str(data_index)+"\n")
+    print("Scanning finished")
+
+
+def some_tests_pandas():
+    ig=InputGenG()
+    drug_list=[]
+    with open("/infodev1/rep/projects/jason/drugsi9.csv",'r') as code_file:
+        for line in code_file:
+            drug_list.append(line.strip())
+    cnt=0
+    for i in range(593,594):
+        cnt+=1
+        ret=pandas_lookup(i,ig,drug_list)
+        if cnt==20:
+            cnt=0
+            print("another 20")
+        if ret is not None:
+            print(ret)
+            print("we done")
+
 def main():
-    multiprocessing_base_case_collection()
+    multiprocessing_pandas_base_case_collection()
 
 if __name__ == '__main__':
-    main()
+    multiprocessing_pandas_base_case_collection()

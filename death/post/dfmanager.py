@@ -39,13 +39,14 @@ class DFManager(object):
                            ("serv", "srv_admit_type"),
                            ("serv", "srv_admit_src"), ("serv", "srv_disch_stat")]
 
-        self.bar_separated_categories=[("pres", "med_ingr_rxnorm_code")]
+        self.bar_separated_categories=[("pres", "med_ingr_rxnorm_code"), ("serv", "srv_px_code")]
         self.bar_separated_i9=[("dia", "dx_codes"), ("dhos", "dx_codes"), ("ahos", "dx_codes")]
         self.bar_separated = self.bar_separated_i9 + self.bar_separated_categories
         # where did you get this collapsed px code?
 
-        self.no_bar_i9=[("death", "code"), ("serv", "srv_px_code"), ("surg", "collapsed_px_code")]
+        self.no_bar_i9=[("death", "code"), ("surg", "collapsed_px_code")]
         self.no_bar = self.categories + self.no_bar_i9
+        self.all_dfn_coln=self.bar_separated+self.no_bar
 
 
         self.dtypes = collections.OrderedDict()

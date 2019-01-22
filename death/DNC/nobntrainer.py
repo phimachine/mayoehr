@@ -17,7 +17,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
-from death.DNC.batchtrainer import logprint
+from death.DNC.tsDNCtrainer import logprint
 import pdb
 from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time

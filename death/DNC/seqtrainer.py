@@ -5,6 +5,7 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
+from death.post.inputgen_planI import InputGenI, pad_collate
 from death.post.inputgen_planG import InputGenG, pad_collate
 from death.post.inputgen_planH import InputGenH
 from death.DNC.seqDNC import SeqDNC
@@ -17,7 +18,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
-from death.DNC.batchtrainer import logprint
+from death.DNC.tsDNCtrainer import logprint
 import pdb
 from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
@@ -296,7 +297,7 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
     logfile = "log/dnc_" + savestr + "_" + datetime_filename() + ".txt"
 
     num_workers = 8
-    ig=InputGenG(small_target=True)
+    ig=InputGenI(small_target=True)
     # ig = InputGenH(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()

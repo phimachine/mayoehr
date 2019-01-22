@@ -13,7 +13,7 @@ from death.post.inputgen_planF import InputGenF
 from torch.utils.data import DataLoader
 from death.post.channelmanager import ChannelManager
 import torch.nn as nn
-from death.DNC.batchDNC import BatchDNC as DNC
+from death.DNC.timestepDNC import BatchDNC as DNC
 from torch.autograd import Variable
 import pickle
 from shutil import copy

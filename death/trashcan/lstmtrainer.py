@@ -15,7 +15,7 @@ from shutil import copy
 import traceback
 from collections import deque
 import datetime
-from death.DNC.batchtrainer import logprint
+from death.DNC.tsDNCtrainer import logprint
 from death.taco.collate import pad_collate
 
 batch_size = 1

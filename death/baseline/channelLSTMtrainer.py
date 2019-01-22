@@ -17,7 +17,7 @@ from collections import deque
 import datetime
 from death.baseline.channelLSTM import ChannelLSTM
 from death.baseline.lstmcm import ChannelManager
-from death.DNC.batchtrainer import logprint
+from death.DNC.tsDNCtrainer import logprint
 
 batch_size = 1
 
