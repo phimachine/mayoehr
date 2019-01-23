@@ -22,8 +22,9 @@ from death.DNC.tsDNCtrainer import logprint
 import pdb
 from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
+from death.final.metrics import *
 
-param_x = 54764
+param_x = 52686
 param_h = 64  # 64
 param_L = 4  # 4
 param_v_t = 2976 # 5952
@@ -135,6 +136,17 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
         if not validate:
             total_loss.backward()
             optimizer.step()
+            return float(cod_loss.data), float(toe_loss.data)
+
+        else:
+            sen=sensitivity(cause_of_death_output,cause_of_death_target)
+            spe=specificity(cause_of_death_output,cause_of_death_target)
+            prec=precision(cause_of_death_output,cause_of_death_target)
+            reca=recall(cause_of_death_output,cause_of_death_target)
+            f1=f1score(cause_of_death_output,cause_of_death_target)
+            accu=accuracy(cause_of_death_output,cause_of_death_target)
+            roc=sen+spe
+            return float(cod_loss.data), float(toe_loss.data), sen, spe, prec, reca, f1, accu, roc
 
         if global_exception_counter > -1:
             global_exception_counter -= 1
@@ -149,7 +161,6 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
         else:
             pass
 
-    return float(cod_loss.data), float(toe_loss.data)
 
 
 def train(computer, optimizer, real_criterion, binary_criterion,
@@ -196,6 +207,13 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                 if i % val_interval == 0:
                     total_cod=0
                     total_toe=0
+                    total_sen=0
+                    total_spe=0
+                    total_prec=0
+                    total_reca=0
+                    total_f1=0
+                    total_accu=0
+                    total_roc=0
                     for _ in range(val_batch):
                         # we should consider running validation multiple times and average. TODO
                         try:
@@ -204,15 +222,32 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                             valid_iterator = iter(valid_dl)
                             (input, target, loss_type) = next(valid_iterator)
 
-                        cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
-                                                   real_criterion, binary_criterion, beta, validate=True)
+                        cod_loss, toe_loss, sen, spe, prec, reca, f1, accu, roc \
+                            = run_one_patient(computer, input, target, optimizer, loss_type,
+                                              real_criterion, binary_criterion, beta, validate=True)
                         total_cod+=cod_loss
                         total_toe+=toe_loss
+                        total_sen+=sen
+                        total_spe+=spe
+                        total_prec+=prec
+                        total_reca+=reca
+                        total_f1+=f1
+                        total_accu+=accu
+                        total_roc+=roc
                     total_cod=total_cod/val_batch
                     total_toe=total_toe/val_batch
+                    total_sen=total_sen/val_batch
+                    total_spe=total_spe/val_batch
+                    total_prec=total_prec/val_batch
+                    total_reca=total_reca/val_batch
+                    total_f1=total_f1/val_batch
+                    total_accu=total_accu/val_batch
+                    total_roc=total_roc/val_batch
                     # TODO this validation is not printing correctly. Way too big.
                     logprint(logfile, "validation. cod: %.10f, toe: %.10f, total: %.10f" %
                              (total_cod, total_toe, total_cod + beta*total_toe))
+                    logprint(logfile, "sen: %.6f, spe: %.6f, prec: %.6f, recall: %.6f, f1: %.6f, accu: %.6f, roc: %.6f" %
+                             (total_sen, total_spe, total_prec, total_reca, total_f1, total_accu, total_roc))
 
 
                 if i % save_interval == 0:
@@ -350,7 +385,7 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
 
 
 if __name__ == "__main__":
-    main(False)
+    main(False, kill_time=False)
 
     """
     12/6

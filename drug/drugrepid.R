@@ -18,11 +18,11 @@ regex_result <- gem %>% regex_right_join(drugs, by=c(i10="name")) %>% setDT()
 # matched 739 rows of i9 codes that are drug related deaths
 regex_result <- regex_result %>% filter(!is.na(i9))
 drugi9<-unique(regex_result[!is.na(i9),i9])
-fwrite(list(drugi9),"/infodev1/rep/projects/jason/drugcodi9.csv")
+# fwrite(list(drugi9),"/infodev1/rep/projects/jason/drugcodi9.csv")
 nd<-fread("/infodev1/rep/projects/jason/newdeath.csv")
 drugi9<-data.table(drugi9)
 drugi9<-drugi9 %>% mutate(drugi9=paste('^',drugi9,sep="")) %>% setDT()
 drug_rep_id <- nd %>% regex_right_join(drugi9, by=c(code="drugi9")) %>% setDT()
 # 1220 cases
 drug_rep_id<-drug_rep_id[!is.na(rep_person_id), rep_person_id]
-fwrite(list(drug_rep_id),"/infodev1/rep/projects/jason/drugrepid.csv")
+# fwrite(list(drug_rep_id),"/infodev1/rep/projects/jason/drugrepid.csv")

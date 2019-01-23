@@ -11,24 +11,24 @@ def sensitivity(output, target):
 
     # target is one
 
-    truepositive=torch.sum(target*output)
-    real_positive=torch.sum(target)
+    truepositive=torch.sum(target*output).data[0]
+    real_positive=torch.sum(target).data[0]
     if real_positive<1e-6:
         real_positive=1e-6
 
     return (truepositive/real_positive)
 
 def specificity(output, target):
-    truenegative=torch.sum((1-target)*(1-output))
-    real_negative=torch.sum(1-target)
+    truenegative=torch.sum((1-target)*(1-output)).data[0]
+    real_negative=torch.sum(1-target).data[0]
     if real_negative<1e-6:
         real_negative=1e-6
 
     return (truenegative/real_negative)
 
 def precision(output, target):
-    truepositive=torch.sum(output*target)
-    positive=torch.sum(output)
+    truepositive=torch.sum(output*target).data[0]
+    positive=torch.sum(output).data[0]
     if positive<1e-6:
         positive=1e-6
     return (truepositive/positive)
@@ -48,8 +48,8 @@ def f1score(output, target):
     return f1
 
 def accuracy(output,target):
-    truepositive=torch.sum(output*target)
-    truenegative=torch.sum((1-target)*(1-output))
+    truepositive=torch.sum(output*target).data[0]
+    truenegative=torch.sum((1-target)*(1-output)).data[0]
     inc=target.nelement()
 
     return (truenegative+truepositive)/inc

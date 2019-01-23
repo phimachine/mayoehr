@@ -235,7 +235,7 @@ def validate(computer, optimizer, real_criterion, binary_criterion,
 
 
 class lstmwrapperG(nn.Module):
-    def __init__(self,input_size=54764, output_size=2976,hidden_size=128,num_layers=16,batch_first=True,
+    def __init__(self,input_size=52686, output_size=2976,hidden_size=128,num_layers=16,batch_first=True,
                  dropout=True):
         super(lstmwrapperG, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
