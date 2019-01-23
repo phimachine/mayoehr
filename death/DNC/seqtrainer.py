@@ -132,6 +132,8 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
         toe_loss=real_criterion(toe_output,toe_target,loss_type)
 
         total_loss=cod_loss+beta*toe_loss
+        if cod_loss.data[0] < 0:
+            raise ValueError
 
         if not validate:
             total_loss.backward()

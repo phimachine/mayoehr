@@ -159,6 +159,7 @@ class InputGen(Dataset, DFManager):
     def code_into_array_structurally(self, array, indices, word, dic, debug):
         """
         Lookup the dictionary and insert the code by it structure into the array.
+        This function needs to check whether
 
         :param array:
         :param indices: [timesteps, startindices], both of them must be lists.
@@ -178,6 +179,9 @@ class InputGen(Dataset, DFManager):
                 struct_code_list.append(dic[word]+codelist[0])
                 word=word[:-1]
             indices[1]=struct_code_list
+            # remove all structured codes before
+            # this causes target to be bigger than 1 therefore BCE cannot be applied.
+            np.multiply.at(array,indices,0)
             np.add.at(array, indices, 1)
 
     def get_by_id(self,id,debug=False):
