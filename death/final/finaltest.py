@@ -149,3 +149,7 @@ if __name__ == '__main__':
     loss_compare()
 
 # TODO partial matching is not allowed. You need to slice the codes to perfect matching only.
+
+"""
+Loss is reduced so much. Why does the ROC still look like a coin toss?
+"""

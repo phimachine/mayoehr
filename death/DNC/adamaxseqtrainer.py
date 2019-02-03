@@ -25,11 +25,11 @@ from death.final.killtime import out_of_time
 from death.final.metrics import *
 
 param_x = 52686
-param_h = 64  # 64 # 256
+param_h = 64  # 64
 param_L = 4  # 4
 param_v_t = 2976 # 5952
-param_W = 256  # 8
-param_R = 4  # 8
+param_W = 8  # 8
+param_R = 8  # 8
 param_N = 64  # 64
 param_bs = 8
 # this is the empirical saturation level when positive weights are not used.
@@ -357,7 +357,7 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
 
     computer = computer.cuda()
     if optim is None:
-        optimizer = torch.optim.Adam(computer.parameters(), lr=lr)
+        optimizer = torch.optim.Adamax(computer.parameters(), lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)
         # optimizer = torch.optim.Adadelta(computer.parameters(), lr=lr)

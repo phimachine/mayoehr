@@ -5,7 +5,8 @@ import pdb
 from pathlib import Path
 import os
 from os.path import abspath
-from death.post.inputgen_planH import InputGenH, pad_collate
+from death.post.inputgen_planI import InputGenI, pad_collate
+from death.post.inputgen_planH import InputGenH
 from death.post.inputgen_planG import InputGenG
 from torch.utils.data import DataLoader
 import torch.nn as nn
@@ -253,8 +254,15 @@ class lstmwrapperG(nn.Module):
 
     def forward(self, input, hx=None):
         input=input.permute(0,2,1).contiguous()
-        bnout=self.bn(input)
-        bnout[(bnout != bnout).detach()] = 0
+        try:
+            bnout=self.bn(input)
+            bnout[(bnout != bnout).detach()] = 0
+        except ValueError:
+            if step_input.shape[0]==1:
+                print("Somehow the batch size is one for this input")
+                bnout=step_input
+            else:
+                raise
         input=bnout.permute(0,2,1).contiguous()
         output,statetuple=self.lstm(input,hx)
         output=self.output(output)
@@ -318,7 +326,7 @@ def main(load,savestr,lr = 1e-3, beta=1e-3):
     logfile = "log/lstm_"+savestr+"_"+datetime_filename()+".txt"
 
     num_workers = 16
-    ig = InputGenG(small_target=True)
+    ig = InputGenI(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()

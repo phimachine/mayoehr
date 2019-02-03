@@ -242,14 +242,20 @@ class SeqDNC(nn.Module):
         # The reason is because batch normalization cannot be applied to a series of highly sparse
         # it's thus reasonable to change NAN to zero.
         # pdb.set_trace()
-        bnout = self.bn(step_input)
-        # if (bnout != bnout).any():
+        try:
+            bnout = self.bn(step_input)
+            # if (bnout != bnout).any():
 
-        # through this piece, it's clear that dimension 59105 is highly sparse and is causing problem
-        # it's sensible to make it 0, because it's the original value
-        # print("BN has produced NAN, Location at ", (bnout!=bnout).nonzero())
-        bnout[(bnout != bnout).detach()] = 0
-
+            # through this piece, it's clear that dimension 59105 is highly sparse and is causing problem
+            # it's sensible to make it 0, because it's the original value
+            # print("BN has produced NAN, Location at ", (bnout!=bnout).nonzero())
+            bnout[(bnout != bnout).detach()] = 0
+        except ValueError:
+            if step_input.shape[0]==1:
+                print("Somehow the batch size is one for this input")
+                bnout=step_input
+            else:
+                raise
         bnout = bnout.unsqueeze(1)
 
         input_x_t = torch.cat((bnout, self.last_read_vector.view(self.bs, 1, -1)), dim=2)
