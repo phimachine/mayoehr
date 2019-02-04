@@ -156,7 +156,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
     valid_iterator=iter(valid)
     print_interval=10
     val_interval=200
-    save_interval=1000
+    save_interval=500
     target_dim=None
     rldmax_len=50
     val_batch=100
@@ -317,7 +317,7 @@ def validationonly(savestr):
              traindl, validdl, int(starting_epoch), total_epochs, int(starting_iteration), iter_per_epoch, logfile)
 
 def main(load,savestr,lr = 1e-3, beta=1e-3):
-    total_epochs = 1
+    total_epochs = 10
     iter_per_epoch = 2019
     optim = None
     starting_epoch = 0
