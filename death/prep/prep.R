@@ -150,8 +150,11 @@ cl<-parallel::makeForkCluster(32)
 doParallel::registerDoParallel(cl)
 ret<-foreach(i=1:nrow(all_i10_codes), .combine='rbind') %dopar%{
     pcs%>% regex_right_join(all_i10_codes[i],by=c(i10="nodot"))
-
+}
 stopCluster(cl)
+
+# 6688 entries of distinct (i9, nodot) pairs, there seem to be multiple matches unaccounted for.
+
 # Throws error if 48 clusters
 # Error in unserialize(socklist[[n]]) : error reading from connection
 fwrite(ret,"/infodev1/rep/projects/jason/mydia_reg")

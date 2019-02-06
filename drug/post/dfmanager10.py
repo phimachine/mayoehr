@@ -33,7 +33,7 @@ class DFManager(object):
         # do not contain all columns of the datasets
 
         # moved lab loinc code, because it's actually categories
-        self.categories = [("demo", "educ_level"), ("dhos", "hosp_adm_source"), ("dhos", "hosp_disch_disp"),
+        self.categories = [("demo", ""), ("dhos", "hosp_adm_source"), ("dhos", "hosp_disch_disp"),
                            ("ahos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
                            ("lab", "lab_abn_flag"),("lab", "lab_loinc_code"), ("demo", "race"), ("serv", "SRV_LOCATION"),
                            ("serv", "srv_admit_type"),
@@ -112,7 +112,8 @@ class DFManager(object):
             "pres" :"/infodev1/rep/projects/jason/multipres.csv",
             "serv" : '/infodev1/rep/projects/jason/multiserv.csv',
             'surg' : "/infodev1/rep/projects/jason/multisurg.csv",
-            "vital": "/infodev1/rep/projects/jason/multivital.csv"
+            "vital": "/infodev1/rep/projects/jason/multivital.csv",
+            "newdia":"/infodev1/rep/projects/jason/new/mydia_before_bar.csv"
         }
 
         self.dfn=tuple(self.dtypes.keys())
@@ -146,7 +147,6 @@ class DFManager(object):
         df.fillna(filldict,inplace=True)
 
     def load_raw(self, verbose=True, save=True):
-
         '''
         load all preprocessed datasets, return in the order of death,demo,dia,hos,lab,pres,serv,surg,vital
 

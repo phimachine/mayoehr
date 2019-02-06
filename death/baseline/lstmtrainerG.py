@@ -212,6 +212,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                     print("model saved for epoch", epoch, "input", i)
             else:
                 break
+        starting_epoch=0
 
 def validate(computer, optimizer, real_criterion, binary_criterion,
              train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, beta, logfile=False):
@@ -330,8 +331,8 @@ def main(load,savestr,lr = 1e-3, beta=1e-3):
     trainds = ig.get_train()
     validds = ig.get_valid()
     testds = ig.get_test()
-    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//2, collate_fn=pad_collate)
-    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate)
+    validdl = DataLoader(dataset=validds, batch_size=8, num_workers=num_workers//2, collate_fn=pad_collate, shuffle=True)
+    traindl = DataLoader(dataset=trainds, batch_size=8, num_workers=num_workers, collate_fn=pad_collate, shuffle=True)
 
     print("Using", num_workers, "workers for training set")
     # testing whether this LSTM works is basically a question whether
@@ -399,4 +400,9 @@ if __name__ == "__main__":
     """
     12/20
     Validation is always NAN. why?
+    """
+
+    """
+    2/4
+    on death dataset, saturated training. No results.
     """

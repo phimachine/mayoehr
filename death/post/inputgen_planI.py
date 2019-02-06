@@ -6,16 +6,12 @@
 # But we are not going into that plan anymore.
 # This only applies in our motality studies. For drug studies, this does not apply.
 
-from death.post.dfmanager import *
-from torch.utils.data import Dataset, DataLoader
+from drug.post.dfmanager10 import *
+from torch.utils.data import Dataset
 import numpy as np
-import random
 from numpy.random import permutation
 import time
 import torch
-from multiprocessing.pool import ThreadPool as Pool
-import os
-import traceback
 
 
 def get_timestep_location(earliest, dates):

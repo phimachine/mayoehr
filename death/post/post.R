@@ -4,6 +4,19 @@ require(data.table)
 require(dplyr)
 
 
+
+
+#########################
+# split hospitalization file since it has two dates? what the heck?
+hos<-fread('/infodev1/rep/projects/jason/myhosp.csv')
+# all hos rows have admit dt
+disch_hos<-hos[hosp_disch_dt!=""] %>% select(-hosp_admit_dt)
+admit_hos<-hos %>% select(-hosp_disch_dt) %>% setDT()
+
+fwrite(admit_hos,'/infodev1/rep/projects/jason/admit_hos.csv')
+fwrite(disch_hos,'/infodev1/rep/projects/jason/disch_hos.csv')
+
+
 ####################
 # find the first and the last date of all demo
 
@@ -56,38 +69,6 @@ ret <- ret %>% mutate(int=interval(earliest,latest) %/% months(1)) %>% setDT()
 fwrite(ret,'/infodev1/rep/projects/jason/earla.csv')
 
 
-
-#########################
-# split hospitalization file since it has two dates? what the heck?
-hos<-fread('/infodev1/rep/projects/jason/myhosp.csv')
-# all hos rows have admit dt
-disch_hos<-hos[hosp_disch_dt!=""] %>% select(-hosp_admit_dt)
-admit_hos<-hos %>% select(-hosp_disch_dt) %>% setDT()
-
-fwrite(admit_hos,'/infodev1/rep/projects/jason/admit_hos.csv')
-fwrite(disch_hos,'/infodev1/rep/projects/jason/disch_hos.csv')
-
-
-##########################
-# add natural death causes records in cod dataset
-require(lubridate)
-mydeath<-fread('/infodev1/rep/projects/jason/multideath.csv')
-demo<-fread('/infodev1/rep/data/demographics.dat')
-
-dead<-demo[death_date!=""]
-natural<-dead[!rep_person_id %in% mydeath$rep_person_id]
-natural<-natural %>% select(rep_person_id,death_date) %>% setDT()
-natural <- natural %>% mutate(id=1, code=0, underlying=F, death_date=mdy(death_date)) %>% setDT()
-mydeath<- mydeath %>% mutate(death_date=ymd(death_date)) %>% setDT()
-newdeath<-rbind(mydeath,natural)
-newdeath<-newdeath%>% arrange(rep_person_id, id) %>% setDT()
-fwrite(newdeath,"/infodev1/rep/projects/jason/newdeath.csv")
-
-
-##### newdeath contains patients with no EHR records
-newdeath<-newdeath[rep_person_id %in% demo$rep_person_id]
-fwrite(newdeath,"/infodev1/rep/projects/jason/newdeath.csv")
-
 ####################
 
 # This script makes a fake index so that multiindexing can be used in pandas.
@@ -117,36 +98,32 @@ cl<-parallel::makeForkCluster(6)
 doParallel::registerDoParallel(cl)
 
 # passing a list of strings has much higher performance than passing a list of datatables.
-
+# the multideath.csv file was accidentally changed, regen this line.
 foreach(dfn=dfs) %dopar%{
     df<-get(dfn)
     df<- df %>% group_by(rep_person_id) %>% mutate(id=row_number())
     fwrite(df,paste('/infodev1/rep/projects/jason/multi',dfn,'.csv',sep=''))
     1
 }
+stopCluster((cl))
 
 
-###################
-# it feed the code structure into the net.
+##########################
+# add natural death causes records in cod dataset
+require(lubridate)
+mydeath<-fread('/infodev1/rep/projects/jason/multideath.csv')
+demo<-fread('/infodev1/rep/data/demographics.dat')
 
-# this script augments the dataset codes by inserting more codes
-# by lowering the precision of the precise codes.
+dead<-demo[death_date!=""]
+natural<-dead[!rep_person_id %in% mydeath$rep_person_id]
+natural<-natural %>% select(rep_person_id,death_date) %>% setDT()
+natural <- natural %>% mutate(id=1, code=0, underlying=F, death_date=mdy(death_date)) %>% setDT()
+mydeath<- mydeath %>% mutate(death_date=ymd(death_date)) %>% setDT()
+newdeath<-rbind(mydeath,natural)
+newdeath<-newdeath%>% arrange(rep_person_id, id) %>% setDT()
+fwrite(newdeath,"/infodev1/rep/projects/jason/newdeath.csv")
 
-source("loadall.R")
-require(stringr)
 
-# this is a function that spawns multiple columns with one column
-# depth refers to the maximal depth of a column code. E.g., A1B2C3 has depth 6.
-# When code is A1B, we pad the code to have depth 6 then start splitting.
-
-spawn <- function(dt, col, depth){
-    dt <- get(dt)
-    dt <- dt %>% mutate(!!col:=str_pad(dt[[col]],depth,side="right",pad="0"))
-    dt
-}
-sptb <- data.table(
-dt = character(),
-col = character(),
-depth = numeric()
-)
-rbindlist(list(sptb, list("death","code",5), list(
+##### newdeath contains patients with no EHR records
+newdeath<-newdeath[rep_person_id %in% demo$rep_person_id]
+fwrite(newdeath,"/infodev1/rep/projects/jason/newdeath.csv")

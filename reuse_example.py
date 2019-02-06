@@ -4,7 +4,7 @@
 # Note that DFManager allows you to load from pickle file or raw csv files
 # pickle loading is much faster. loading raw rebuilds pickle
 #
-from death.post.dfmanager import DFManager
+from drug.post.dfmanager10 import DFManager
 dfs = DFManager()
 dfs.load_pickle(verbose=True)
 # from here, you can see all dataframes as dfs' properties

@@ -1,10 +1,8 @@
-from death.post.dfmanager import *
+from drug.post.dfmanager10 import *
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd
-import copy
 import time
-import torch
 import collections
 
 

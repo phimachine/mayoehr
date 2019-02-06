@@ -7,16 +7,12 @@
 # visit time to death. For those whose death records are unknown, the t-o-e target will be the last visit, which
 # will be known to the model. If model predicts anything earlier than this, it receives a linear penalty.
 
-from death.post.dfmanager import *
-from torch.utils.data import Dataset, DataLoader
+from drug.post.dfmanager10 import *
+from torch.utils.data import Dataset
 import numpy as np
-import random
 from numpy.random import permutation
 import time
 import torch
-from multiprocessing.pool import ThreadPool as Pool
-import os
-import traceback
 
 
 def get_timestep_location(earliest, dates):

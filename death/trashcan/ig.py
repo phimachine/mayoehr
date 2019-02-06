@@ -1,6 +1,6 @@
-from death.post.dfmanager import DFManager
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
+from drug.post.dfmanager10 import DFManager
+from torch.utils.data import Dataset
+
 
 # we can only assume that all deaths are recorded
 
