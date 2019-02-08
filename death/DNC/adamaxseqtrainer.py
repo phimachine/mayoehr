@@ -326,20 +326,20 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
     """
 
 
-    total_epochs = 1
+    total_epochs = 5
     iter_per_epoch = int(saturation/param_bs)
     optim = None
     starting_epoch = 0
     starting_iteration = 0
     logfile = "log/dnc_" + savestr + "_" + datetime_filename() + ".txt"
 
-    num_workers = 8
-    ig=InputGenI(small_target=True)
+    num_workers = 16
+    ig = InputGenI(small_target=True)
     # ig = InputGenH(small_target=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
-    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
+    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate,pin_memory=True)
 
     print("Using", num_workers, "workers for training set")
     computer = SeqDNC(x=param_x,
@@ -357,6 +357,7 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
 
     computer = computer.cuda()
     if optim is None:
+        # does adamax perform better with sparse output?
         optimizer = torch.optim.Adamax(computer.parameters(), lr=lr)
     else:
         # print('use Adadelta optimizer with learning rate ', lr)

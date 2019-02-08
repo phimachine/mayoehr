@@ -6,7 +6,7 @@
 # But we are not going into that plan anymore.
 # This only applies in our motality studies. For drug studies, this does not apply.
 
-from drug.post.dfmanager10 import *
+from death.post.dfmanager import *
 from torch.utils.data import Dataset
 import numpy as np
 from numpy.random import permutation

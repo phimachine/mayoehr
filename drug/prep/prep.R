@@ -548,7 +548,7 @@ mysurg <- mysurg[!is.na(i10)] %>% mutate(rep_person_id=as.integer(rep_person_id)
 # #fwrite(mys
 
 mysurg <- mysurg %>% arrange(rep_person_id,px_date) %>% setDT()
-
+mysurg <- mysurg %>% select(-px_codetype) %>% setDT()
 fwrite(mysurg, "/infodev1/rep/projects/jason/new/mysurg.csv")
 
 

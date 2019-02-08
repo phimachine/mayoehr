@@ -1,4 +1,4 @@
-from drug.post.dfmanager10 import *
+from death.post.dfmanager import *
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd

@@ -10,7 +10,7 @@ from pathlib import Path
 import pickle
 import collections
 
-pickle_path = "/infodev1/rep/projects/jason/pickle/new/"
+pickle_path = "/infodev1/rep/projects/jason/pickle/"
 
 
 class DFManager(object):
@@ -34,19 +34,17 @@ class DFManager(object):
 
         # moved lab loinc code, because it's actually categories
         self.categories = [("demo", "educ_level"), ("dhos", "hosp_adm_source"), ("dhos", "hosp_disch_disp"),
-                           ("dhos", "hosp_inout_code"),
-                           ("ahos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"), ("ahos","hosp_inout_code"),
+                           ("ahos", "hosp_adm_source"), ("ahos", "hosp_disch_disp"),
                            ("lab", "lab_abn_flag"),("lab", "lab_loinc_code"), ("demo", "race"), ("serv", "SRV_LOCATION"),
                            ("serv", "srv_admit_type"),
                            ("serv", "srv_admit_src"), ("serv", "srv_disch_stat")]
 
         self.bar_separated_categories=[("pres", "med_ingr_rxnorm_code"), ("serv", "srv_px_code")]
-        #[("dia", "dx_codes"), ("dhos", "dx_codes"), ("ahos", "dx_codes")]
-        self.bar_separated_i9=[]
+        self.bar_separated_i9=[("dia", "dx_codes"), ("dhos", "dx_codes"), ("ahos", "dx_codes")]
         self.bar_separated = self.bar_separated_i9 + self.bar_separated_categories
         # where did you get this collapsed px code?
 
-        self.no_bar_i9=[("death", "code"), ("surg", "i10"), ("dia","nodot"), ("ahos","nodot"), ("dhos","nodot")]
+        self.no_bar_i9=[("death", "code"), ("surg", "collapsed_px_code")]
         self.no_bar = self.categories + self.no_bar_i9
         self.all_dfn_coln=self.bar_separated+self.no_bar
 
@@ -63,18 +61,18 @@ class DFManager(object):
                                                        ("male", "bool")])
         self.dtypes["dia"] = collections.OrderedDict([('rep_person_id', "int"),
                                                       ('dx_date', "str"),
-                                                      ("nodot", "str")])
+                                                      ("dx_codes", "str")])
         self.dtypes["ahos"] = collections.OrderedDict([("rep_person_id", "int"),
                                                       ("hosp_admit_dt", "str"),
                                                       ("hosp_adm_source", "category"),
                                                       ("hosp_disch_disp", "category"),
-                                                      ("nodot", "str"),
+                                                      ("dx_codes", "str"),
                                                       ("is_in_patient", "bool")])
         self.dtypes["dhos"] = collections.OrderedDict([("rep_person_id", "int"),
                                                       ("hosp_disch_dt", "str"),
                                                       ("hosp_adm_source", "category"),
                                                       ("hosp_disch_disp", "category"),
-                                                      ("nodot", "str"),
+                                                      ("dx_codes", "str"),
                                                       ("is_in_patient", "bool")])
         self.dtypes["lab"] = collections.OrderedDict([("rep_person_id", "int"),
                                                       ("lab_date", "str"),
@@ -95,7 +93,7 @@ class DFManager(object):
                                                        ('srv_disch_stat', 'category')])
         self.dtypes["surg"] = collections.OrderedDict([("rep_person_id", "int"),
                                                        ("px_date", "str"),
-                                                       ("i10", "str")])
+                                                       ("collapsed_px_code", "str")])
         self.dtypes["vital"] = collections.OrderedDict([("rep_person_id", "int"),
                                                          ("VITAL_DATE", "str"),
                                                          ("BMI", "float"),
@@ -105,16 +103,16 @@ class DFManager(object):
                                                          ("WEIGHT", "float")])
 
         self.fpaths={
-            "death":"/infodev1/rep/projects/jason/new/newdeath.csv",
+            "death":"/infodev1/rep/projects/jason/newdeath.csv",
             "demo":"/infodev1/rep/projects/jason/demo.csv",
-            "dia":"/infodev1/rep/projects/jason/new/multidia.csv",
-            "ahos":"/infodev1/rep/projects/jason/new/multiahos.csv",
-            "dhos": "/infodev1/rep/projects/jason/new/multidhos.csv",
+            "dia":"/infodev1/rep/projects/jason/multidia.csv",
+            "ahos":"/infodev1/rep/projects/jason/multiahos.csv",
+            "dhos": "/infodev1/rep/projects/jason/multidhos.csv",
             "lab" :"/infodev1/rep/projects/jason/multilab.csv",
             "pres" :"/infodev1/rep/projects/jason/multipres.csv",
             "serv" : '/infodev1/rep/projects/jason/multiserv.csv',
-            'surg' : "/infodev1/rep/projects/jason/new/multisurg.csv",
-            "vital": "/infodev1/rep/projects/jason/multivital.csv",
+            'surg' : "/infodev1/rep/projects/jason/multisurg.csv",
+            "vital": "/infodev1/rep/projects/jason/multivital.csv"
         }
 
         self.dfn=tuple(self.dtypes.keys())
@@ -148,6 +146,7 @@ class DFManager(object):
         df.fillna(filldict,inplace=True)
 
     def load_raw(self, verbose=True, save=True):
+
         '''
         load all preprocessed datasets, return in the order of death,demo,dia,hos,lab,pres,serv,surg,vital
 
@@ -193,7 +192,7 @@ class DFManager(object):
         else:
             return False
 
-    def load_pickle(self, verbose=False, dicts=True):
+    def load_pickle(self, verbose=False):
         try:
             # load df
             if verbose:
@@ -204,14 +203,13 @@ class DFManager(object):
 
                 self.loaded = True
 
-            if dicts:
-                for df, col in self.bar_separated + self.no_bar:
-                    if verbose:
-                        print("loading dictionary on bar separated " + df + " " + col)
-                    savepath = Path(pickle_path) / "dicts" / (df + "_" + col + ".pkl")
-                    with savepath.open('rb') as f:
-                        dic = pickle.load(f)
-                        self.__setattr__(df + "_" + col + "_dict", dic)
+            for df, col in self.bar_separated + self.no_bar:
+                if verbose:
+                    print("loading dictionary on bar separated " + df + " " + col)
+                savepath = Path(pickle_path) / "dicts" / (df + "_" + col + ".pkl")
+                with savepath.open('rb') as f:
+                    dic = pickle.load(f)
+                    self.__setattr__(df + "_" + col + "_dict", dic)
 
         except (OSError, IOError) as e:
             raise FileNotFoundError("pickle pddfs not found")
@@ -236,7 +234,7 @@ class DFManager(object):
 
         if self.loaded == False:
             try:
-                self.load_pickle(dicts=False)
+                self.load_pickle()
                 if verbose:
                     print('pickle file not found, loading from raw')
             except FileNotFoundError:
@@ -274,7 +272,7 @@ class DFManager(object):
         :param n:
         :return:
         """
-        if word =="" or word=="empty" or word=="None" or word=="none" or word=="NoDx" or word=="NaN":
+        if word =="" or word=="empty" or word=="None" or word=="none":
             return n
 
         if word not in dic:
@@ -455,8 +453,8 @@ def repickle():
 
     dfs = DFManager()
     dfs.load_raw(save=True)
-    # dfs.make_dictionary(verbose=True,save=True,skip=False)
     # dfs.load_pickle()
+    dfs.make_dictionary(verbose=True,save=True,skip=False)
     print("end script")
 
 

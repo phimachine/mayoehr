@@ -1,13 +1,7 @@
-# Plan G rewrites the InputGen parent object.
-# Channel manager causes unmanageable variance at validation time and train time.
-# Pad collate seems to be a better answer.
-# Initially, channel manager was chosen to reduce computation.
-# Exactly why channelmanager reduces model performance is unknown to me.
-# Anyhow, now target should not be timestep based. Time-to-event prediction target will be the distance from the last
-# visit time to death. For those whose death records are unknown, the t-o-e target will be the last visit, which
-# will be known to the model. If model predicts anything earlier than this, it receives a linear penalty.
+# inputgen for icd10 codes.
 
-from death.post.dfmanager import *
+
+from drug.post.dfmanager10 import *
 from torch.utils.data import Dataset
 import numpy as np
 from numpy.random import permutation
@@ -50,7 +44,6 @@ class InputGen(Dataset, DFManager):
         self.rep_person_id = self.demo.index.values
         self.verbose = verbose
         # 47774
-        # TODO we need to exploit the structured codes and augment inputs
         self.input_dim = None
         # manual format: (dfname,colname,starting_index)
         self.input_dim_manual = None
@@ -157,6 +150,7 @@ class InputGen(Dataset, DFManager):
     def code_into_array_structurally(self, array, indices, word, dic, debug):
         """
         Lookup the dictionary and insert the code by it structure into the array.
+        This function needs to check whether
 
         :param array:
         :param indices: [timesteps, startindices], both of them must be lists.
@@ -176,6 +170,9 @@ class InputGen(Dataset, DFManager):
                 struct_code_list.append(dic[word]+codelist[0])
                 word=word[:-1]
             indices[1]=struct_code_list
+            # remove all structured codes before
+            # this causes target to be bigger than 1 therefore BCE cannot be applied.
+            np.multiply.at(array,indices,0)
             np.add.at(array, indices, 1)
 
     def get_by_id(self,id,debug=False):
@@ -269,9 +266,7 @@ class InputGen(Dataset, DFManager):
             # countdown_val now is zero, so no need to add
             # countdown_val = np.arange(time_length - 1, -1, -1)
             # np.add.at(target, [tss, 0], countdown_val)
-            # TODO do not pass gradient to code if loss_type is 1
         target=target.squeeze(0)
-        # TODO use bottom layer bias to offset missing data.
 
         #####
         # all other dataframes, will insert at specific timestamps
@@ -330,6 +325,7 @@ class InputGen(Dataset, DFManager):
                     # this line will increment only 1:
                     # input[tsloc,startidx]+=allrows[coln]
                     try:
+                        # what if this is nan TODO see BMI, weight, height
                         np.add.at(input, (tsloc, startidx), np.nan_to_num(allrows[coln].values))
                     except IndexError:
                         print("we found it")
@@ -482,14 +478,13 @@ class GenHelper(Dataset):
         return len(self.ids)
 
 
-class InputGenG(InputGen):
-    def __init__(self, death_fold=0, curriculum=False, validation_test_proportion=0.1, random_seed=54321,small_target=False,
+class InputGenJ(InputGen):
+    def __init__(self, curriculum=False, validation_test_proportion=0.1, random_seed=54321,small_target=False,
                  debug=False,verbose=False):
         verbose = verbose
         debug = debug
-        super(InputGenG, self).__init__(verbose=verbose, debug=debug)
+        super(InputGenJ, self).__init__(verbose=verbose, debug=debug)
 
-        self.death_fold=death_fold
         self.validation_test_proportion=validation_test_proportion
         self.random_seed=random_seed
         np.random.seed(random_seed)
@@ -503,7 +498,7 @@ class InputGenG(InputGen):
         # the proportion of death records the last training set has
         self.proportion=None
         if verbose:
-            print("Using InputGenG")
+            print("Using InputGenI")
             if self.curriculum:
                 print("Using curriculum learning")
             else:
@@ -520,12 +515,12 @@ class InputGenG(InputGen):
         self.test_death_id=death_rep_person_id[valid_or_test_death_len:valid_or_test_death_len*2]
         self.train_death_id=death_rep_person_id[valid_or_test_death_len*2:]
 
-        no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]
-        no_death_rep_person_id=permutation(no_death_rep_person_id)
-        valid_or_test_no_death_len=int(len(no_death_rep_person_id)*self.validation_test_proportion)
-        self.valid_no_death_id=no_death_rep_person_id[:valid_or_test_no_death_len]
-        self.test_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len:valid_or_test_no_death_len*2]
-        self.train_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len*2:]
+        # no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]
+        # no_death_rep_person_id=permutation(no_death_rep_person_id)
+        # valid_or_test_no_death_len=int(len(no_death_rep_person_id)*self.validation_test_proportion)
+        # self.valid_no_death_id=no_death_rep_person_id[:valid_or_test_no_death_len]
+        # self.test_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len:valid_or_test_no_death_len*2]
+        # self.train_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len*2:]
 
     def get_valid(self):
         """
@@ -533,7 +528,7 @@ class InputGenG(InputGen):
         :return:
         """
         if self.valid is None:
-            ids=np.concatenate((self.valid_death_id,self.valid_no_death_id))
+            ids=self.valid_death_id
             ids=permutation(ids)
             self.valid=GenHelper(ids, self)
         return self.valid
@@ -544,7 +539,7 @@ class InputGenG(InputGen):
         :return:
         """
         if self.test is None:
-            ids=np.concatenate((self.test_death_id,self.test_no_death_id))
+            ids=self.test_death_id
             ids=permutation(ids)
             self.test=GenHelper(ids, self)
         return self.test
@@ -554,14 +549,14 @@ class InputGenG(InputGen):
         modifies the deathfold everytime it is called
         :return:
         """
-        resample_rate=2**self.death_fold
-        new_no_death_length=len(self.train_no_death_id)//resample_rate
-        new_no_death_id=permutation(self.train_no_death_id)
-        new_no_death_id=new_no_death_id[:new_no_death_length]
-        self.proportion=len(self.train_death_id)/(len(self.train_death_id)+len(new_no_death_id))
-        print("Death proportion", self.proportion, ", death fold",  self.death_fold)
-        ids=np.concatenate((self.train_death_id,new_no_death_id))
-        ids=permutation(ids)
+        # resample_rate=2**self.death_fold
+        # new_no_death_length=len(self.train_no_death_id)//resample_rate
+        # new_no_death_id=permutation(self.train_no_death_id)
+        # new_no_death_id=new_no_death_id[:new_no_death_length]
+        # self.proportion=len(self.train_death_id)/(len(self.train_death_id)+len(new_no_death_id))
+        # print("Death proportion", self.proportion, ", death fold",  self.death_fold)
+        # ids=np.concatenate((self.train_death_id,new_no_death_id))
+        ids=permutation(self.train_death_id)
         train=GenHelper(ids,self)
         if self.curriculum:
             self.change_fold()
@@ -660,38 +655,9 @@ def pad_collate(args):
     padded[1]=padded[1].permute(1,0)
     return padded
 
-# def selective_cache_train_valid():
-#     ig=InputGenG(death_fold=0)
-#     ig.train_valid_test_split()
-#     valid=ig.get_valid()
-#     valid_cacher=DatasetCacher("zerofold/valid",valid)
-#     valid_cacher.cache_some(16,500)
-#
-#
-#     print("Done")
-
-def igtest():
-    ig=InputGenG(death_fold=0)
-    ig.train_valid_test_split()
-    valid=ig.get_valid()
-    test=ig.get_test()
-    train=ig.get_train()
-    print(valid[100])
-    print(train[192])
-    cacher=DatasetCacher("test/npz",valid)
-    for i in range(10):
-        cacher.cache_one(i)
-    print(cacher[55])
-    print("Done")
-    print(cacher[2])
-
-    for i in range(10):
-        input, target, l = cacher[i]
-        print(target[0])
-
-def main():
-    selective_cache()
-
 if __name__=="__main__":
-    ig=InputGenG()
+    ig=InputGenJ()
+    for idx in range(10):
+        i,t,l=ig[idx]
+        print(i,t,l)
     print("DONe")
