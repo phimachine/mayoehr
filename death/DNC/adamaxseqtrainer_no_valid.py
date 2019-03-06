@@ -21,10 +21,9 @@ from collections import deque
 import datetime
 from death.DNC.tsDNCtrainer import logprint
 import pdb
-from death.final.losses import TOELoss, AnotherBCEWithLogits
+from death.final.losses import TOELoss, WeightedBCELLoss
 from death.final.killtime import out_of_time
-from death.final.wrongmetrics import *
-import code
+from death.final.metrics import *
 
 # param_x = 7298
 param_h = 64  # 64
@@ -136,25 +135,7 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
         total_loss=cod_loss+beta*toe_loss
         sigoutput=torch.sigmoid(cause_of_death_output)
 
-        # this numerical issue destroyed this model training.
-        # loss keeps going down, but ROC is the same. I need to load an earlier epoch and restart.
-        # I need to reimplement my BCE
-        # this is a known issue for PyTorch 0.3.1 https://github.com/pytorch/pytorch/issues/2866
-
-        # this happens when the logit is exactly 1 (\sigma(593)), and the loss is around 0.01
-        # I decide to not debug it, because the backwards signal should still be usable.
-
-        # no. the actual problem is that the death target does not conform one-hot requirement.
-        # it's not the sparsity, because the output was one
         if cod_loss.data[0] < 0:
-            import pickle
-            # this was reached with loss negative. Why did that happen?
-            # BCE loss is supposed to be positive all the time.
-            with open("debug/itcc.pkl",'wb') as f:
-                # this is a 1 Gb pickle. Somehow loading it takes forever. What?
-                pickle.dump((input, target, cause_of_death_output, cause_of_death_target),f)
-            print(cod_loss.data[0])
-            code.interact(local=locals())
             raise ValueError
 
         if not validate:
@@ -196,10 +177,10 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
 
 def train(computer, optimizer, real_criterion, binary_criterion,
           train, valid_dl, starting_epoch, total_epochs, starting_iter, iter_per_epoch, savestr, beta, logfile=False, kill_time=True):
-    valid_iterator = iter(valid_dl)
+    # valid_iterator = iter(valid_dl)
     print_interval = 100
-    val_interval = 5
-    save_interval = 5
+    val_interval = 500
+    save_interval = int(32768/param_bs)
     target_dim = None
     rldmax_len = 50
     val_batch = int(val_bat_cons/param_bs)
@@ -234,123 +215,126 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                              "batch %4d. batch cod: %.5f, toe: %.5f, total: %.5f. running cod: %.5f, toe: %.5f, total: %.5f" %
                              (i, cod_loss, toe_loss, cod_loss + beta*toe_loss, running_cod, running_toe,
                               running_cod + beta*running_toe))
+                #
+                # if i % val_interval == 0:
+                #     total_cod=0
+                #     total_toe=0
+                #     total_sen=0
+                #     total_spe=0
+                #     total_prec=0
+                #     total_reca=0
+                #     total_f1=0
+                #     total_accu=0
+                #     total_roc=0
+                #     for _ in range(val_batch):
+                #         # we should consider running validation multiple times and average. TODO
+                #         try:
+                #             (input, target, loss_type) = next(valid_iterator)
+                #         except StopIteration:
+                #             valid_iterator = iter(valid_dl)
+                #             (input, target, loss_type) = next(valid_iterator)
+                #
+                #         cod_loss, toe_loss, sen, spe, prec, reca, f1, accu, roc \
+                #             = run_one_patient(computer, input, target, optimizer, loss_type,
+                #                               real_criterion, binary_criterion, beta, validate=True)
+                #         total_cod+=cod_loss
+                #         total_toe+=toe_loss
+                #         total_sen+=sen
+                #         total_spe+=spe
+                #         total_prec+=prec
+                #         total_reca+=reca
+                #         total_f1+=f1
+                #         total_accu+=accu
+                #         total_roc+=roc
+                #     total_cod=total_cod/val_batch
+                #     total_toe=total_toe/val_batch
+                #     total_sen=total_sen/val_batch
+                #     total_spe=total_spe/val_batch
+                #     total_prec=total_prec/val_batch
+                #     total_reca=total_reca/val_batch
+                #     total_f1=total_f1/val_batch
+                #     total_accu=total_accu/val_batch
+                #     total_roc=total_roc/val_batch
+                #     assert(total_cod>0)
+                #     assert(total_toe>0)
+                #     assert(total_sen>0)
+                #     assert(total_spe>0)
+                #     assert(total_prec>0)
+                #     assert(total_reca>0)
+                #     assert(total_f1>0)
+                #     assert(total_accu>0)
+                #     assert(total_roc>0)
+                #     # TODO this validation is not printing correctly. Way too big.
+                #     logprint(logfile, "validation. cod: %.10f, toe: %.10f, total: %.10f" %
+                #              (total_cod, total_toe, total_cod + beta*total_toe))
+                #     logprint(logfile, "sen: %.6f, spe: %.6f, prec: %.6f, recall: %.6f, f1: %.6f, accu: %.6f, roc: %.6f" %
+                #              (total_sen, total_spe, total_prec, total_reca, total_f1, total_accu, total_roc))
+                #
+
+                if i % save_interval == 0:
+                    save_model(computer, optimizer, epoch, i, savestr)
+                    print("model saved for epoch", epoch, "input", i)
             else:
                 break
-        if epoch % val_interval == 0:
-            total_cod = 0
-            total_toe = 0
-            total_sen = 0
-            total_spe = 0
-            total_prec = 0
-            total_reca = 0
-            total_f1 = 0
-            total_accu = 0
-            total_roc = 0
-            for _ in range(val_batch):
-                # we should consider running validation multiple times and average. TODO
-                try:
-                    (input, target, loss_type) = next(valid_iterator)
-                except StopIteration:
-                    valid_iterator = iter(valid_dl)
-                    (input, target, loss_type) = next(valid_iterator)
-
-                cod_loss, toe_loss, sen, spe, prec, reca, f1, accu, roc \
-                    = run_one_patient(computer, input, target, optimizer, loss_type,
-                                      real_criterion, binary_criterion, beta, validate=True)
-                total_cod += cod_loss
-                total_toe += toe_loss
-                total_sen += sen
-                total_spe += spe
-                total_prec += prec
-                total_reca += reca
-                total_f1 += f1
-                total_accu += accu
-                total_roc += roc
-            total_cod = total_cod / val_batch
-            total_toe = total_toe / val_batch
-            total_sen = total_sen / val_batch
-            total_spe = total_spe / val_batch
-            total_prec = total_prec / val_batch
-            total_reca = total_reca / val_batch
-            total_f1 = total_f1 / val_batch
-            total_accu = total_accu / val_batch
-            total_roc = total_roc / val_batch
-            assert (total_cod > 0)
-            assert (total_toe > 0)
-            assert (total_sen > 0)
-            assert (total_spe > 0)
-            assert (total_prec > 0)
-            assert (total_reca > 0)
-            assert (total_f1 > 0)
-            assert (total_accu > 0)
-            assert (total_roc > 0)
-            # TODO this validation is not printing correctly. Way too big.
-            logprint(logfile, "validation. cod: %.10f, toe: %.10f, total: %.10f" %
-                     (total_cod, total_toe, total_cod + beta * total_toe))
-            logprint(logfile, "sen: %.6f, spe: %.6f, prec: %.6f, recall: %.6f, f1: %.6f, accu: %.6f, roc: %.6f" %
-                     (total_sen, total_spe, total_prec, total_reca, total_f1, total_accu, total_roc))
-
-        if epoch % save_interval == 0:
-            save_model(computer, optimizer, epoch, i, savestr)
-            print("model saved for epoch", epoch, "input", i)
         starting_iter=0
 
-# def validationonly(savestr, beta, epoch=0, iteration=0):
-#     """
-#
-#     :param savestr:
-#     :param epoch: default to 0 if loading the highest model
-#     :param iteration: ditto
-#     :return:
-#     """
-#
-#     lr = 1e-3
-#     optim = None
-#     logfile = "vallog.txt"
-#
-#     num_workers = 8
-#     ig = InputGenH()
-#     # multiprocessing disabled, because socket request seems unstable.
-#     # performance should not be too bad?
-#     validds=ig.get_valid()
-#     validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=param_bs, collate_fn=pad_collate)
-#     valid_iterator=iter(validdl)
-#
-#     print("Using", num_workers, "workers for validation set")
-#     computer = SeqDNC(x=param_x,
-#                       h=param_h,
-#                       L=param_L,
-#                       v_t=param_v_t,
-#                       W=param_W,
-#                       R=param_R,
-#                       N=param_N,
-#                       bs=param_bs)
-#     # load model:
-#     print("loading model")
-#     computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, epoch, iteration, savestr)
-#
-#     computer = computer.cuda()
-#
-#     real_criterion = nn.SmoothL1Loss()
-#     binary_criterion = nn.BCEWithLogitsLoss()
-#
-#     # starting with the epoch after the loaded one
-#     running_loss=[]
-#     valid_batches=500
-#     for i in range(valid_batches):
-#         input, target, loss_type = next(valid_iterator)
-#         val_loss = run_one_patient(computer, input, target, None, None, loss_type,
-#                                    real_criterion, binary_criterion, beta, validate=True)
-#         if val_loss is not None:
-#             printloss = float(val_loss[0])
-#             running_loss.append((printloss))
-#         if logfile:
-#             with open(logfile, 'a') as handle:
-#                 handle.write("validation. count: %4d, val loss     : %.10f \n" %
-#                              (i, printloss))
-#         print("validation. count: %4d, val loss: %.10f" %
-#               (i, printloss))
-#     print(np.mean(running_loss))
+
+def validationonly(savestr, beta, epoch=0, iteration=0):
+    """
+
+    :param savestr:
+    :param epoch: default to 0 if loading the highest model
+    :param iteration: ditto
+    :return:
+    """
+
+    lr = 1e-3
+    optim = None
+    logfile = "vallog.txt"
+
+    num_workers = 8
+    ig = InputGenH()
+    # multiprocessing disabled, because socket request seems unstable.
+    # performance should not be too bad?
+    validds=ig.get_valid()
+    validdl = DataLoader(dataset=validds,num_workers=num_workers, batch_size=param_bs, collate_fn=pad_collate)
+    valid_iterator=iter(validdl)
+
+    print("Using", num_workers, "workers for validation set")
+    computer = SeqDNC(x=param_x,
+                      h=param_h,
+                      L=param_L,
+                      v_t=param_v_t,
+                      W=param_W,
+                      R=param_R,
+                      N=param_N,
+                      bs=param_bs)
+    # load model:
+    print("loading model")
+    computer, optim, starting_epoch, starting_iteration = load_model(computer, optim, epoch, iteration, savestr)
+
+    computer = computer.cuda()
+
+    real_criterion = nn.SmoothL1Loss()
+    binary_criterion = nn.BCEWithLogitsLoss()
+
+    # starting with the epoch after the loaded one
+    running_loss=[]
+    valid_batches=500
+    for i in range(valid_batches):
+        input, target, loss_type = next(valid_iterator)
+        val_loss = run_one_patient(computer, input, target, None, None, loss_type,
+                                   real_criterion, binary_criterion, beta, validate=True)
+        if val_loss is not None:
+            printloss = float(val_loss[0])
+            running_loss.append((printloss))
+        if logfile:
+            with open(logfile, 'a') as handle:
+                handle.write("validation. count: %4d, val loss     : %.10f \n" %
+                             (i, printloss))
+        print("validation. count: %4d, val loss: %.10f" %
+              (i, printloss))
+    print(np.mean(running_loss))
 
 def testdl():
 
@@ -360,13 +344,13 @@ def testdl():
     starting_epoch = 0
     starting_iteration = 0
 
-    num_workers = 32
+    num_workers = 16
     ig = InputGenJ(no_underlying=True)
     # ig = InputGenH(no_underlying=True)
     trainds = ig.get_train()
     validds = ig.get_valid()
     traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate,pin_memory=True)
-    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate,pin_memory=False)
+    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate,pin_memory=True)
 
     for i, (input, target, loss_type) in enumerate(traindl):
         if i==100:
@@ -382,7 +366,7 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
     """
 
 
-    total_epochs = 40
+    total_epochs = 20
     iter_per_epoch = int(saturation/param_bs)
     optim = None
     starting_epoch = 0
@@ -390,14 +374,12 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
     logfile = "log/dnc_" + savestr + "_" + datetime_filename() + ".txt"
 
     num_workers = 32
-    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    ig = InputGenJ(no_underlying=True, death_only=True)
     # ig = InputGenH(no_underlying=True)
     param_x=ig.input_dim
     param_v_t=ig.output_dim
     trainds = ig.get_train()
-    validds = ig.get_valid()
     traindl = DataLoader(dataset=trainds, batch_size=param_bs, num_workers=num_workers, collate_fn=pad_collate, pin_memory=True)
-    validdl = DataLoader(dataset=validds, batch_size=param_bs, num_workers=num_workers//2, collate_fn=pad_collate, pin_memory=True)
 
     print("Using", num_workers, "workers for training set")
     computer = SeqDNC(x=param_x,
@@ -441,7 +423,7 @@ def main(load, savestr='default', lr=1e-3, beta=0.01, kill_time=True):
     # starting with the epoch after the loaded one
 
     train(computer, optimizer, real_criterion, binary_criterion,
-          traindl, validdl, int(starting_epoch), total_epochs,
+          traindl, None, int(starting_epoch), total_epochs,
           int(starting_iteration), iter_per_epoch, savestr, beta, logfile, kill_time)
 
 if __name__ == "__main__":
@@ -484,4 +466,25 @@ if __name__ == "__main__":
     Beta is too low.
     Maybe training two models separately is better?
     See if adding a last output layer would help. I assume so.
+    """
+
+    """
+    3/2
+    Porbably need another hyperparameter tuning.
+    
+    validation. cod: 0.0926709906, toe: 7.2557596415, total: 0.0927435482
+    sen: 0.136135, spe: 0.978085, prec: 0.138011, recall: 0.136135, f1: 0.136925, accu: 0.956922, roc: 1.114221
+        
+    param_h = 64  # 64
+    param_L = 4  # 4
+    param_W = 8  # 8
+    param_R = 8  # 8
+    param_N = 64  # 64
+    param_bs = 64
+    saturation=2000000
+    val_bat_cons=2048
+    
+    GPU saturation is very good for this config. V100 fully running. Remember there are only 300 batches in this dataset.
+    
+    Loss seems to decrease after plateau. Maybe patience is the key?
     """

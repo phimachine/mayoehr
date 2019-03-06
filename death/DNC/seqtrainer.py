@@ -132,6 +132,8 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
         toe_loss=real_criterion(toe_output,toe_target,loss_type)
 
         total_loss=cod_loss+beta*toe_loss
+        sigoutput=torch.sigmoid(cause_of_death_output)
+
         if cod_loss.data[0] < 0:
             raise ValueError
 
@@ -141,12 +143,12 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
             return float(cod_loss.data), float(toe_loss.data)
 
         else:
-            sen=sensitivity(cause_of_death_output,cause_of_death_target)
-            spe=specificity(cause_of_death_output,cause_of_death_target)
-            prec=precision(cause_of_death_output,cause_of_death_target)
-            reca=recall(cause_of_death_output,cause_of_death_target)
-            f1=f1score(cause_of_death_output,cause_of_death_target)
-            accu=accuracy(cause_of_death_output,cause_of_death_target)
+            sen=sensitivity(sigoutput,cause_of_death_target)
+            spe=specificity(sigoutput,cause_of_death_target)
+            prec=precision(sigoutput,cause_of_death_target)
+            reca=recall(sigoutput,cause_of_death_target)
+            f1=f1score(sigoutput,cause_of_death_target)
+            accu=accuracy(sigoutput,cause_of_death_target)
             roc=sen+spe
             return float(cod_loss.data), float(toe_loss.data), sen, spe, prec, reca, f1, accu, roc
 

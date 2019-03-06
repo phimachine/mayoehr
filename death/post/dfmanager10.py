@@ -4,11 +4,16 @@
 # usually you do not need to modify anything in this script and pickling will be automatic
 # it will take a few minutes.
 
+# now dfmanager will count the number of codes and pickle it.
+# when used, the tail codes of some specified percentile will be mapped to 0
+# This reduces the number of unique codes in the dataset.
+
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import pickle
 import collections
+import operator
 
 pickle_path = "/infodev1/rep/projects/jason/pickle/new/"
 
@@ -42,13 +47,12 @@ class DFManager(object):
 
         self.bar_separated_categories=[("pres", "med_ingr_rxnorm_code"), ("serv", "srv_px_code")]
         #[("dia", "dx_codes"), ("dhos", "dx_codes"), ("ahos", "dx_codes")]
-        self.bar_separated_i9=[]
-        self.bar_separated = self.bar_separated_i9 + self.bar_separated_categories
+        self.bar_separated = self.bar_separated_categories
         # where did you get this collapsed px code?
 
-        self.no_bar_i9=[("death", "code"), ("surg", "i10"), ("dia","nodot"), ("ahos","nodot"), ("dhos","nodot")]
-        self.no_bar = self.categories + self.no_bar_i9
-        self.all_dfn_coln=self.bar_separated+self.no_bar
+        self.no_bar_i10=[("death", "code"), ("surg", "i10"), ("dia","nodot"), ("ahos","nodot"), ("dhos","nodot")]
+        self.no_bar = self.categories + self.no_bar_i10
+        self.code_dfn_coln=self.bar_separated+self.no_bar
 
 
         self.dtypes = collections.OrderedDict()
@@ -69,12 +73,14 @@ class DFManager(object):
                                                       ("hosp_adm_source", "category"),
                                                       ("hosp_disch_disp", "category"),
                                                       ("nodot", "str"),
+                                                       ("hosp_inout_code", "category"),
                                                       ("is_in_patient", "bool")])
         self.dtypes["dhos"] = collections.OrderedDict([("rep_person_id", "int"),
                                                       ("hosp_disch_dt", "str"),
                                                       ("hosp_adm_source", "category"),
                                                       ("hosp_disch_disp", "category"),
                                                       ("nodot", "str"),
+                                                       ("hosp_inout_code", "category"),
                                                       ("is_in_patient", "bool")])
         self.dtypes["lab"] = collections.OrderedDict([("rep_person_id", "int"),
                                                       ("lab_date", "str"),
@@ -127,6 +133,12 @@ class DFManager(object):
 
     def get_dict(self, df, col):
         return getattr(self, df + "_" + col + "_dict")
+
+    def get_count_dict(self,df,col):
+        return getattr(self, df + "_" + col + "_count")
+
+    def get_sort_dic(self,df,col):
+        return getattr(self, df + "_" + col + "_sort")
 
     def fill_na(self, dfn):
         df=self.__getattribute__(dfn)
@@ -193,7 +205,7 @@ class DFManager(object):
         else:
             return False
 
-    def load_pickle(self, verbose=False, dicts=True):
+    def load_pickle(self, verbose=False, dicts=True, sorted=True):
         try:
             # load df
             if verbose:
@@ -209,14 +221,26 @@ class DFManager(object):
                     if verbose:
                         print("loading dictionary on bar separated " + df + " " + col)
                     savepath = Path(pickle_path) / "dicts" / (df + "_" + col + ".pkl")
+                    countsavepath = Path(pickle_path) / "dicts" / (df + "_" + col + "_count.pkl")
                     with savepath.open('rb') as f:
                         dic = pickle.load(f)
                         self.__setattr__(df + "_" + col + "_dict", dic)
+                    with countsavepath.open('rb') as f:
+                        countdic=pickle.load(f)
+                        self.__setattr__(df + "_" + col + "_count", countdic)
+            if sorted:
+                for df, col in self.bar_separated + self.no_bar:
+                    if verbose:
+                        print("loading sorted on", df,col)
+                    sortpath = Path(pickle_path) / "dicts" / (df + "_" + col + "_sort.pkl")
+                    with sortpath.open("rb") as f:
+                        sortdic=pickle.load(f)
+                        self.__setattr__(df + "_" + col + "_sort", sortdic)
 
         except (OSError, IOError) as e:
             raise FileNotFoundError("pickle pddfs not found")
 
-    def make_dictionary(self, save=True, verbose=False, skip=True):
+    def make_dictionary(self, save=True, verbose=False, skip=True, count=True):
         '''
         Collects all codes in all data sets, and produces dictionary for one-hot
         encoding purposes, word to index.
@@ -242,30 +266,51 @@ class DFManager(object):
             except FileNotFoundError:
                 self.load_raw(verbose=verbose)
 
-        print("file loaded, making dictionaries")
+        if verbose:
+            print("file loaded, making dictionaries")
+            if count:
+                print("will keep a count of the codes")
 
-        for df, col in self.bar_separated_i9:
-            if verbose:
-                print("generating dictionary on bar separated " + df + " " + col)
-            self.bar_separated_i9_dictionary(df, col, save=save, skip=skip)
+        # for df, col in self.bar_separated_i10:
+        #     if verbose:
+        #         print("generating dictionary on bar separated " + df + " " + col)
+        #     self.bar_separated_i10_dictionary(df, col, save=save, skip=skip, count=count)
 
         for df, col in self.bar_separated_categories:
             if verbose:
                 print("generating dictionary on bar separated " + df + " " + col)
-            self.bar_separated_cate_dictionary(df, col, save=save, skip=skip)
+            self.bar_separated_cate_dictionary(df, col, save=save, skip=skip, count=count)
 
-        for df, col in self.no_bar_i9:
+        for df, col in self.no_bar_i10:
             if verbose:
                 print("generating dictionary on no bar " + df + " " + col)
-            self.no_bar_i9_dictionary(df, col, save=save, skip=skip)
+            self.no_bar_i10_dictionary(df, col, save=save, skip=skip, count=count)
 
         for df, col in self.categories:
             if verbose:
                 print("generating dictionary on categories " + df + " " + col)
-            self.category_dictionary(df,col,save=save,skip=skip)
+            self.category_dictionary(df,col,save=save,skip=skip, count=count)
 
+        self.sort_dictionaries()
 
-    def code_into_dic_structurally(self, word, dic, n):
+    def sort_dictionaries(self):
+        # My goal is to allow pruning percentile to be a hyperparameter
+        # that means repickling dictionary is not a good idea.
+        # this means I need to sort the dictionaries. See inputgen.replace_dict_elim()
+
+        # make a new param for the load_pickle to load sorted.
+        for dfn, coln in self.code_dfn_coln:
+            count_dict=self.get_count_dict(dfn,coln)
+            by_count_desc=sorted(count_dict.items(),key=operator.itemgetter(1),reverse=True)
+            codes=[code_count[0] for code_count in by_count_desc]
+
+            sorted_dict=dict(zip(codes,range(len(codes))))
+            sortpath = Path(pickle_path) / "dicts" / (dfn + "_" + coln + "_sort.pkl")
+            with sortpath.open('wb') as f:
+                pickle.dump(sorted_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+                setattr(self, dfn + "_" + coln + "_sort", sorted_dict)
+
+    def code_into_dic_structurally(self, word, dic, n, count_dic=None):
         """
         Given a structured code and a dictionary, insert code by structural information.
         Example word: 1SA30B
@@ -280,12 +325,17 @@ class DFManager(object):
         if word not in dic:
             dic[word] = n
             n+=1
+            count_dic[word]=1
+        else:
+            count_dic[word]+=1
 
-        return self.code_into_dic_structurally(word[:-1], dic, n)
+        return self.code_into_dic_structurally(word[:-1], dic, n, count_dic)
 
-    def bar_separated_cate_dictionary(self, df_name, col_name, save=False, skip=True):
+    def bar_separated_cate_dictionary(self, df_name, col_name, save=False, skip=True, count=True):
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
+        savecountpath= Path(pickle_path) / "dicts" / (df_name + "_" + col_name + "_count.pkl")
         print(savepath)
+        print(savecountpath)
 
         if skip:
             try:
@@ -297,6 +347,7 @@ class DFManager(object):
                 pass
 
         dic = {}
+        countdic={}
         n = 0
 
         series = self.get_series(df_name, col_name)
@@ -308,10 +359,13 @@ class DFManager(object):
                     for word in splitted:
                         # Is there empty? in case I forgot in R
                         if not pd.isna(word):
-                            if word not in ("","empty","None","none"):
+                            if word not in ("","empty","None","none","NoDx","NaN"):
                                 if word not in dic:
                                     dic[word]=n
                                     n+=1
+                                    countdic[word]=1
+                                else:
+                                    countdic[word]+=1
             except AttributeError:
                 print("woah woah woah what did you do")
                 raise
@@ -320,13 +374,20 @@ class DFManager(object):
             with savepath.open("wb") as f:
                 pickle.dump(dic, f, protocol=pickle.HIGHEST_PROTOCOL)
                 print('saved')
-        getattr(self, df_name + "_" + col_name + "_dict", dic)
+            if count:
+                with savecountpath.open('wb') as f:
+                    pickle.dump(countdic,f)
 
+        getattr(self, df_name + "_" + col_name + "_dict", dic)
+        if count:
+            getattr(self, df_name + "_" + col_name + "_count", countdic)
         return dic
 
-    def category_dictionary(self, df_name, col_name, save=False, skip=True):
+    def category_dictionary(self, df_name, col_name, save=False, skip=True,count=True):
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
+        savecountpath= Path(pickle_path) / "dicts" / (df_name + "_" + col_name + "_count.pkl")
         print(savepath)
+        print(savecountpath)
 
         if skip:
             try:
@@ -338,80 +399,100 @@ class DFManager(object):
                 pass
 
         dic = {}
+        countdic={}
         n = 0
 
         series = self.get_series(df_name, col_name)
 
         for row in series:
             if not pd.isna(row):
-                if row not in ("", "empty", "None", "none"):
+                if row not in ("", "empty", "None", "none","NoDx","NaN"):
                     if row not in dic:
                         dic[row]=n
                         n+=1
+                        countdic[row]=1
+                    else:
+                        countdic[row]+=1
 
         if save == True:
             with savepath.open('wb') as f:
                 pickle.dump(dic, f, protocol=pickle.HIGHEST_PROTOCOL)
-
                 print('saved')
+            if count:
+                with savecountpath.open('wb') as f:
+                    pickle.dump(countdic,f)
 
         getattr(self, df_name + "_" + col_name + "_dict", dic)
+        if count:
+            getattr(self, df_name + "_" + col_name + "_count", countdic)
 
         return dic
 
+    # bar sep i10 has bad runtime efficiency and has deprecated
+    # def bar_separated_i10_dictionary(self, df_name, col_name, save=False, skip=True, count=True):
+    #     '''
+    #
+    #     :param df_name:
+    #     :param col_name:
+    #     :param save:
+    #     :return:
+    #     '''
+    #
+    #
+    #     savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
+    #     savecountpath= Path(pickle_path) / "dicts" / (df_name + "_" + col_name + "_count.pkl")
+    #     print(savepath)
+    #     print(savecountpath)
+    #
+    #     if skip:
+    #         try:
+    #             with savepath.open('rb') as f:
+    #                 dic = pickle.load(f)
+    #                 setattr(self, df_name + "_" + col_name + "_dict", dic)
+    #                 return dic
+    #         except FileNotFoundError:
+    #             pass
+    #
+    #     dic = {}
+    #     # always count internally, but may not save
+    #     countdic={}
+    #     n = 0
+    #
+    #     series = self.get_series(df_name, col_name)
+    #
+    #     for row in series:
+    #         try:
+    #             if not pd.isna(row):
+    #                 splitted = row.split("|")
+    #                 for word in splitted:
+    #                     # Is there empty? in case I forgot in R
+    #                     if not pd.isna(word):
+    #                         n=self.code_into_dic_structurally(word, dic, n, countdic)
+    #
+    #         except AttributeError:
+    #             print("woah woah woah what did you do")
+    #             raise
+    #
+    #     if save == True:
+    #         with savepath.open("wb") as f:
+    #             pickle.dump(dic, f, protocol=pickle.HIGHEST_PROTOCOL)
+    #             print('saved')
+    #         if count:
+    #             with savecountpath.open('wb') as f:
+    #                 pickle.dump(countdic,f)
+    #
+    #     getattr(self, df_name + "_" + col_name + "_dict", dic)
+    #     if count:
+    #         getattr(self, df_name + "_" + col_name + "_count", countdic)
+    #
+    #     return dic
 
-    def bar_separated_i9_dictionary(self, df_name, col_name, save=False, skip=True):
-        '''
-
-        :param df_name:
-        :param col_name:
-        :param save:
-        :return:
-        '''
-
+    def no_bar_i10_dictionary(self, df_name, col_name, save=False, skip=True, count=True):
 
         savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
+        savecountpath= Path(pickle_path) / "dicts" / (df_name + "_" + col_name + "_count.pkl")
         print(savepath)
-
-        if skip:
-            try:
-                with savepath.open('rb') as f:
-                    dic = pickle.load(f)
-                    setattr(self, df_name + "_" + col_name + "_dict", dic)
-                    return dic
-            except FileNotFoundError:
-                pass
-
-        dic = {}
-        n = 0
-
-        series = self.get_series(df_name, col_name)
-
-        for row in series:
-            try:
-                if not pd.isna(row):
-                    splitted = row.split("|")
-                    for word in splitted:
-                        # Is there empty? in case I forgot in R
-                        if not pd.isna(word):
-                            n=self.code_into_dic_structurally(word, dic, n)
-
-            except AttributeError:
-                print("woah woah woah what did you do")
-                raise
-
-        if save == True:
-            with savepath.open("wb") as f:
-                pickle.dump(dic, f, protocol=pickle.HIGHEST_PROTOCOL)
-                print('saved')
-        getattr(self, df_name + "_" + col_name + "_dict", dic)
-
-        return dic
-
-    def no_bar_i9_dictionary(self, df_name, col_name, save=False, skip=True):
-
-        savepath = Path(pickle_path) / "dicts" / (df_name + "_" + col_name + ".pkl")
-        print("save to path:", savepath)
+        print(savecountpath)
 
         if skip:
             try:
@@ -422,19 +503,27 @@ class DFManager(object):
             except FileNotFoundError:
                 pass
         dic = {}
+        countdic= {}
         n = 0
 
         series = self.get_series(df_name, col_name)
 
         for row in series:
             if not pd.isna(row):
-                n=self.code_into_dic_structurally(row, dic, n)
+                n=self.code_into_dic_structurally(row, dic, n, countdic)
 
         if save == True:
             with savepath.open('wb') as f:
                 pickle.dump(dic, f, protocol=pickle.HIGHEST_PROTOCOL)
                 print('saved')
+            if count:
+                with savecountpath.open('wb') as f:
+                    pickle.dump(countdic,f)
+
         getattr(self, df_name + "_" + col_name + "_dict", dic)
+        if count:
+            getattr(self, df_name + "_" + col_name + "_count", countdic)
+
 
         return dic
 
@@ -454,9 +543,10 @@ def repickle():
     '''
 
     dfs = DFManager()
-    dfs.load_raw(save=True)
+    # dfs.load_raw(save=True)
     # dfs.make_dictionary(verbose=True,save=True,skip=False)
-    # dfs.load_pickle()
+    # dfs.load_pickle(sorted=False)
+    # dfs.sort_dictionaries()
     print("end script")
 
 

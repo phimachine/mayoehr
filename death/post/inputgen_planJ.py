@@ -1,7 +1,9 @@
 # inputgen for icd10 codes.
+# The plan J uses a different dataset: all icd10 codes, no code selection was run during preprocessing.
+# It allows setting a percentile on specified columns that prune out rare codes. The number of cases is known too, if needed.
+# It allows setting death proportion, in order to increase ROC.
 
-
-from drug.post.dfmanager10 import *
+from death.post.dfmanager10 import *
 from torch.utils.data import Dataset
 import numpy as np
 from numpy.random import permutation
@@ -38,11 +40,22 @@ class InputGen(Dataset, DFManager):
     See get_by_id()
     '''
 
-    def __init__(self, verbose=False, debug=False):
+    def __init__(self, elim_rare_code=True, incidence=0.01, death_incidence=0.001, verbose=False, debug=False, no_underlying=False):
         super(InputGen, self).__init__()
-        self.load_pickle(verbose=verbose)
-        self.rep_person_id = self.demo.index.values
         self.verbose = verbose
+        self.debug=debug
+        self.rare_thres=int(230000 * incidence)
+        self.rare_death_thres=int(59394 * death_incidence)
+        self.no_underlying=no_underlying
+
+        self.elim_rare_code=elim_rare_code
+        self.load_pickle(verbose=verbose)
+        if self.elim_rare_code:
+            # take a look at this function to determine how you want to eliminate rare codes
+            # you can select the criterion and columsn to be modified. The parameters are too complicated to be included
+            # in init(args)
+            self.replace_dict_elim(self.rare_thres, self.rare_death_thres)
+
         # 47774
         self.input_dim = None
         # manual format: (dfname,colname,starting_index)
@@ -51,13 +64,107 @@ class InputGen(Dataset, DFManager):
         self.get_input_dim()
         self.get_output_dim()
         # this df has no na
-        self.earla = pd.read_csv("/infodev1/rep/projects/jason/earla.csv", parse_dates=["earliest", "latest"])
+        self.earla = pd.read_csv("/infodev1/rep/projects/jason/new/earla.csv", parse_dates=["earliest", "latest"])
         self.earla.set_index("rep_person_id", inplace=True)
+        # earla will have to be consulted. If no time step was found, then it is discarded.
+        self.rep_person_id = self.earla.index.values
         self.len = len(self.rep_person_id)
         # self.check_nan()
-        self.debug=debug
         if self.verbose:
             print("Input Gen initiated")
+
+
+    def replace_dict_elim(self,  rare_thres, rare_death_thres):
+        """
+        Modify the mapping from codes to numpy array indices.
+        For example, a rare code can be mapped to default 0. All ICD-10 codes start with a letter.
+        The condition for a rare code can be specified here.
+        The whole dataset size is 50
+
+        I'm planning to cut very aggressively. set minimum_count=500 and do not use percentile.
+        :return:
+        """
+
+        def get_replace_index(dfn, coln):
+            dic=self.__getattribute__(dfn+"_"+coln+"_dict")
+            countdic=self.__getattribute__(dfn+"_"+coln+"_count")
+
+            dtype = self.dtypes[dfn][coln]
+            if dtype == "int":
+                rep_val = -1
+                raise ValueError("Why would this block be reached?")
+            elif dtype == "category":
+                rep_val = "rde_cat"
+            elif dtype == "bool":
+                rep_val = 0
+                raise ValueError("Why would this block be reached?")
+            elif dtype == "str":
+                rep_val = "rde_str"
+            elif dtype == "float":
+                rep_val = 0
+                raise ValueError("Why would this block be reached?")
+            else:
+                raise ValueError("This is a problem")
+            # consult whether this value exists
+            try:
+                rep_index = dic[rep_val]
+            except KeyError:
+                if self.verbose:
+                    print("No key", rep_val, "found, as expected")
+                # insert the key. Everything is computed on the fly, and there is no state to be modified here
+                replace_index=len(dic)
+                dic[rep_val]=replace_index
+
+
+            return rep_index
+
+        def examine(dfn, coln, cutoff):
+            dic = self.get_dict(dfn, coln)
+            countdic = self.get_count_dict(dfn, coln)
+            print(dfn, coln)
+            print(len(countdic))
+            print(len([val for val in countdic.values() if val > cutoff]))
+
+
+        # the get_input_dim() would not have the right answer because of how many codes there are.
+        # but then, the dictionary cannot be changed, because I need to look up the replacement locations
+        # moreover, even the other codes that are not replaced need to be remapped. wow.
+        # this is actually a dfmanager work.
+        # to avoid doing so, we need to sort the dictionaries given the count. rare codes at the tail
+        # so we are really chopping off the tail, and it's guaranteed that earlier codes won't have their mapping
+        # changed. This is better.
+
+        # the following columns will have codes that appear fewer than **minimum_count** times eliminated
+        count_chop=self.categories+self.bar_separated_categories+self.no_bar_i10
+        # the value imputation will depend on the dtype of the column, which can be consulted in self.dtypes
+        for dfn, coln in count_chop:
+            dic=self.get_dict(dfn,coln)
+            sortdic=self.get_sort_dic(dfn,coln)
+            countdic=self.get_count_dict(dfn,coln)
+            if dfn == "death" and coln=="code":
+                thres=rare_death_thres
+            else:
+                thres=rare_thres
+            to_elim=[]
+            for code,count in countdic.items():
+                if count<thres:
+                    to_elim.append(code)
+
+            other_index=len(countdic)-len(to_elim)
+            copy_dic=sortdic.copy()
+
+            for code in to_elim:
+                copy_dic[code]=other_index
+            # the dict will be replaced completely.
+            self.__setattr__(dfn + "_" + coln + "_dict", copy_dic)
+
+        # # the following columsn will have top **percentile** codes retained
+        # percentile_chop=self.bar_separated_categories+self.no_bar_i10
+
+        if self.verbose:
+            print("Rare codes have been eliminated")
+
+
 
     def get_output_dim(self):
         '''
@@ -65,11 +172,20 @@ class InputGen(Dataset, DFManager):
         :return:
         '''
         # dimsize (death_date,cause)
-        dimsize = 1 + 1
+        # dimsize = 1 + 1
+        dimsize = 1
         dic = self.__getattribute__("death_code_dict")
-        dimsize += 2 * len(dic)
+        dic_size=max(dic.values())+1
+        if self.no_underlying:
+            dimsize+=dic_size
+        else:
+            dimsize += 2 * dic_size
         self.output_dim = dimsize
-        self.underlying_code_location = 1 + len(dic)
+        if self.no_underlying:
+            self.underlying_code_location=None
+        else:
+            self.underlying_code_location = 1 + dic_size
+
 
         return dimsize
 
@@ -99,9 +215,11 @@ class InputGen(Dataset, DFManager):
                         if dtn == 'bool':
                             dimsize += 1
                         elif dtn == "category":
-                            dimsize += len(self.get_dict(dfn, colname))
+                            dic=self.get_dict(dfn, colname)
+                            dimsize += max(dic.values())+1
                         elif dtn == "object":
-                            dimsize += len(self.get_dict(dfn, colname))
+                            dic=self.get_dict(dfn, colname)
+                            dimsize += max(dic.values())+1
                         elif dtn == "float64":
                             dimsize += 1
                         elif dtn == "int64":
@@ -162,7 +280,7 @@ class InputGen(Dataset, DFManager):
             if not isinstance(indices[0],collections.Iterable) or not isinstance(indices[1], collections.Iterable):
                 raise TypeError("code_into_array_structurally() type error, indices[n] must be iterable")
         assert (len(indices[1])==1)
-        if word not in ("", "empty", "None", "none"):
+        if word not in ("", "empty", "None", "none","NoDx","NaN"):
             # start idx plus dic index
             codelist=indices[1]
             struct_code_list=[]
@@ -176,6 +294,7 @@ class InputGen(Dataset, DFManager):
             np.add.at(array, indices, 1)
 
     def get_by_id(self,id,debug=False):
+        # TODO earla dataset might not contain all entries?
         time_length = self.earla.loc[id]["int"] + 1
         earliest = self.earla.loc[id]["earliest"]
         latest = self.earla.loc[id]["latest"]
@@ -195,7 +314,7 @@ class InputGen(Dataset, DFManager):
             # I know that only one row is possible
             val = row[coln].iloc[0]
             if val == val:
-                if val not in ("", "empty", "None", "none"):
+                if val not in ("", "empty", "None", "none","NoDx","NaN"):
                     insidx = dic[val] + startidx
                     np.add.at(input, [tss, insidx], 1)
         if (input != input).any():
@@ -205,7 +324,7 @@ class InputGen(Dataset, DFManager):
         insidx, endidx = self.get_column_index_range(dfn, coln)
         val = row[coln].iloc[0]
         if val == val:
-            if val not in ("", "empty", "None", "none"):
+            if val not in ("", "empty", "None", "none","NoDx","NaN"):
                 if val:
                     np.add.at(input, [tss, insidx], 1)
         # this might have problem, we should use two dimensions for bool. But for now, let's not go back to prep.
@@ -253,7 +372,10 @@ class InputGen(Dataset, DFManager):
                 #     print("Death code does not exist")
                 #     idx = dic["0"]
                 self.code_into_array_structurally(target, [[0], [1]], code, dic, debug)
-                if underlying:
+                if debug:
+                    if (target[1:]>1).any():
+                        raise ValueError("The multiply in code_into_array_structurally() did not work?")
+                if underlying and not self.no_underlying:
                     self.code_into_array_structurally(target, [[0], [self.underlying_code_location]], code, dic, debug)
                 # insidx += [1 + idx]
                 # if underlying:
@@ -293,15 +415,15 @@ class InputGen(Dataset, DFManager):
 
                 # we bucket the columns so we know how to process them.
                 direct_insert = []
-                barsepi9 = []
+                barsepi10 = []
                 barsepcate = []
-                nobari9 = []
+                nobari10 = []
                 cate=[]
                 for coln in datacolns:
-                    if (dfn, coln) in self.no_bar_i9:
-                        nobari9.append(coln)
-                    elif (dfn, coln) in self.bar_separated_i9:
-                        barsepi9.append(coln)
+                    if (dfn, coln) in self.no_bar_i10:
+                        nobari10.append(coln)
+                    # elif (dfn, coln) in self.bar_separated_i10:
+                    #     barsepi10.append(coln)
                     elif (dfn, coln) in self.categories:
                         cate.append(coln)
                     elif (dfn, coln) in self.bar_separated_categories:
@@ -325,7 +447,6 @@ class InputGen(Dataset, DFManager):
                     # this line will increment only 1:
                     # input[tsloc,startidx]+=allrows[coln]
                     try:
-                        # what if this is nan TODO see BMI, weight, height
                         np.add.at(input, (tsloc, startidx), np.nan_to_num(allrows[coln].values))
                     except IndexError:
                         print("we found it")
@@ -341,7 +462,7 @@ class InputGen(Dataset, DFManager):
                             codeidx=dic[val]
                             np.add.at(input,[[ts],[codeidx+startidx]], 1)
 
-                for coln in nobari9:
+                for coln in nobari10:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
 
@@ -356,7 +477,7 @@ class InputGen(Dataset, DFManager):
                 if (input != input).any():
                     raise ValueError("NA FOUND")
 
-                for coln in barsepi9:
+                for coln in barsepi10:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
                     dic = self.__getattribute__(dfn + "_" + coln + "_dict")
 
@@ -463,28 +584,34 @@ class GenHelper(Dataset):
 
         self.ids=ids
         self.ig=ig
-        self.small_target=ig.small_target
+        self.no_underlying=ig.no_underlying
 
     def __getitem__(self, index):
 
-        ret_val = self.ig.get_by_id(self.ids[index])
-        if self.small_target:
-            st=ret_val[1][:2976]
-            return ret_val[0], st, ret_val[2]
-        else:
-            return ret_val
+        return self.ig.get_by_id(self.ids[index])
+
+        # if self.no_underlying:
+        #     st=ret_val[1][:2976]
+        #     return ret_val[0], st, ret_val[2]
+        # else:
+        #     return ret_val
 
     def __len__(self):
         return len(self.ids)
 
 
 class InputGenJ(InputGen):
-    def __init__(self, curriculum=False, validation_test_proportion=0.1, random_seed=54321,small_target=False,
-                 debug=False,verbose=False):
+    def __init__(self, death_fold=0, death_only=True, curriculum=False, validation_test_proportion=0.1,
+                 elim_rare_code=True, incidence=0.01, death_incidence=0.001, random_seed=10086, no_underlying=True,
+                 debug=False, verbose=False):
         verbose = verbose
         debug = debug
-        super(InputGenJ, self).__init__(verbose=verbose, debug=debug)
-
+        super(InputGenJ, self).__init__(elim_rare_code=elim_rare_code, incidence=incidence,
+                                        death_incidence=death_incidence,
+                                        no_underlying=no_underlying,
+                                        verbose=verbose, debug=debug)
+        self.death_only=death_only
+        self.death_fold=death_fold
         self.validation_test_proportion=validation_test_proportion
         self.random_seed=random_seed
         np.random.seed(random_seed)
@@ -497,30 +624,35 @@ class InputGenJ(InputGen):
 
         # the proportion of death records the last training set has
         self.proportion=None
+        print("Using InputGenJ")
+
         if verbose:
-            print("Using InputGenI")
             if self.curriculum:
                 print("Using curriculum learning")
             else:
                 print("Not using curriculum learning")
 
-        self.small_target=small_target
+        self.no_underlying=no_underlying
 
     def train_valid_test_split(self):
         # splits the whole set by id
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
+        self.death_rep_person_id = np.intersect1d(death_rep_person_id,self.rep_person_id)
+        death_rep_person_id=self.death_rep_person_id
+
         death_rep_person_id=permutation(death_rep_person_id)
         valid_or_test_death_len=int(len(death_rep_person_id)*self.validation_test_proportion)
         self.valid_death_id=death_rep_person_id[:valid_or_test_death_len]
         self.test_death_id=death_rep_person_id[valid_or_test_death_len:valid_or_test_death_len*2]
         self.train_death_id=death_rep_person_id[valid_or_test_death_len*2:]
 
-        # no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]
-        # no_death_rep_person_id=permutation(no_death_rep_person_id)
-        # valid_or_test_no_death_len=int(len(no_death_rep_person_id)*self.validation_test_proportion)
-        # self.valid_no_death_id=no_death_rep_person_id[:valid_or_test_no_death_len]
-        # self.test_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len:valid_or_test_no_death_len*2]
-        # self.train_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len*2:]
+        if not self.death_only:
+            no_death_rep_person_id = self.rep_person_id[np.invert(np.in1d(self.rep_person_id, death_rep_person_id))]
+            no_death_rep_person_id=permutation(no_death_rep_person_id)
+            valid_or_test_no_death_len=int(len(no_death_rep_person_id)*self.validation_test_proportion)
+            self.valid_no_death_id=no_death_rep_person_id[:valid_or_test_no_death_len]
+            self.test_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len:valid_or_test_no_death_len*2]
+            self.train_no_death_id=no_death_rep_person_id[valid_or_test_no_death_len*2:]
 
     def get_valid(self):
         """
@@ -528,7 +660,10 @@ class InputGenJ(InputGen):
         :return:
         """
         if self.valid is None:
-            ids=self.valid_death_id
+            if self.death_only:
+                ids=self.valid_death_id
+            else:
+                ids=np.concatenate((self.valid_death_id,self.valid_no_death_id))
             ids=permutation(ids)
             self.valid=GenHelper(ids, self)
         return self.valid
@@ -539,7 +674,10 @@ class InputGenJ(InputGen):
         :return:
         """
         if self.test is None:
-            ids=self.test_death_id
+            if self.death_only:
+                ids=self.test_death_id
+            else:
+                ids = np.concatenate((self.test_death_id, self.test_no_death_id))
             ids=permutation(ids)
             self.test=GenHelper(ids, self)
         return self.test
@@ -549,14 +687,17 @@ class InputGenJ(InputGen):
         modifies the deathfold everytime it is called
         :return:
         """
-        # resample_rate=2**self.death_fold
-        # new_no_death_length=len(self.train_no_death_id)//resample_rate
-        # new_no_death_id=permutation(self.train_no_death_id)
-        # new_no_death_id=new_no_death_id[:new_no_death_length]
-        # self.proportion=len(self.train_death_id)/(len(self.train_death_id)+len(new_no_death_id))
-        # print("Death proportion", self.proportion, ", death fold",  self.death_fold)
-        # ids=np.concatenate((self.train_death_id,new_no_death_id))
-        ids=permutation(self.train_death_id)
+        if self.death_only:
+            ids = permutation(self.train_death_id)
+        else:
+            resample_rate=2**self.death_fold
+            new_no_death_length=len(self.train_no_death_id)//resample_rate
+            new_no_death_id=permutation(self.train_no_death_id)
+            new_no_death_id=new_no_death_id[:new_no_death_length]
+            self.proportion=len(self.train_death_id)/(len(self.train_death_id)+len(new_no_death_id))
+            print("Death proportion", self.proportion, ", death fold",  self.death_fold)
+            ids=np.concatenate((self.train_death_id,new_no_death_id))
+            ids=permutation(ids)
         train=GenHelper(ids,self)
         if self.curriculum:
             self.change_fold()
@@ -568,21 +709,22 @@ class InputGenJ(InputGen):
         else:
             self.death_fold-=1
 
-    def pickle_death_code_count(self):
-        # this function calculates the death structure codes's frequency
-        # for a code, number_of_negatives/number_of_positives will weigh the positive binary cross entropy
-        # this allows me to sample more points on the ROC
-
-        dic=self.death_code_dict
-        weights=np.zeros((len(dic)))
-        for row in self.death["code"]:
-            code=row
-            while code!="":
-                weights[dic[code]]+=1
-                code=code[:-1]
-
-        with open("/infodev1/rep/projects/jason/pickle/dcc.pkl", "wb+") as f:
-            pickle.dump(weights,f)
+    # count is an attr of this object
+    # def pickle_death_code_count(self):
+    #     # this function calculates the death structure codes's frequency
+    #     # for a code, number_of_negatives/number_of_positives will weigh the positive binary cross entropy
+    #     # this allows me to sample more points on the ROC
+    #
+    #     dic=self.death_code_dict
+    #     weights=np.zeros((len(dic)))
+    #     for row in self.death["code"]:
+    #         code=row
+    #         while code!="":
+    #             weights[dic[code]]+=1
+    #             code=code[:-1]
+    #
+    #     with open("/infodev1/rep/projects/jason/pickle/dcc.pkl", "wb+") as f:
+    #         pickle.dump(weights,f)
 
 
 
@@ -656,8 +798,16 @@ def pad_collate(args):
     return padded
 
 if __name__=="__main__":
-    ig=InputGenJ()
-    for idx in range(10):
+    # this means at least 1% of the population has this code.
+    # ig=InputGenJ(incidence=0.01, no_underlying=True)
+    # print(ig.input_dim)
+    # print(ig.output_dim)
+    # print("See this")
+    import random
+    # this yields an input of 7298 and output of 436
+    ig=InputGenJ(incidence=0.01, death_incidence=0.001, no_underlying=True, debug=True)
+    # print(ig.earla.loc[317247])
+    for idx in random.sample(range(len(ig)),100):
         i,t,l=ig[idx]
         print(i,t,l)
     print("DONe")
