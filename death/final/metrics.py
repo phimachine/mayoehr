@@ -56,7 +56,7 @@ class ConfusionMatrixStats():
         self.true_negative[:,self.idx]=true_negative
 
         batch_sensitivity=np.mean(true_positive/conditional_positive.clip(1e-8,None), axis=0)
-        batch_specificity=np.mean(true_negative/conditional_negative.clip(1e-8,None),axis=0)
+        batch_specificity=np.mean(true_negative/conditional_negative.clip(1e-8,None), axis=0)
         batch_ROC=batch_sensitivity+batch_specificity
 
         assert((batch_sensitivity>0).all())
@@ -74,20 +74,20 @@ class ConfusionMatrixStats():
 
     def running_stats(self):
         if self.all:
-            running_sensitivity=np.mean(np.sum(self.true_positive,axis=1)/np.sum(self.conditional_positives,axis=1), axis=0)
-            running_specificity=np.mean(np.sum(self.true_negative,axis=1)/np.sum(self.conditional_negatives,axis=1), axis=0)
+            running_sensitivity=np.mean(np.sum(self.true_positive,axis=1)/np.sum(self.conditional_positives,axis=1).clip(min=1e-8), axis=0)
+            running_specificity=np.mean(np.sum(self.true_negative,axis=1)/np.sum(self.conditional_negatives,axis=1).clip(min=1e-8), axis=0)
             running_ROC=running_sensitivity+running_specificity
         else:
             running_sensitivity=np.mean(np.sum(self.true_positive[:,:self.idx],axis=1)/
-                                        np.sum(self.conditional_positives[:,:self.idx],axis=1), axis=0)
+                                        np.sum(self.conditional_positives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
             running_specificity=np.mean(np.sum(self.true_negative[:,:self.idx],axis=1)/
-                                        np.sum(self.conditional_negatives[:,:self.idx],axis=1), axis=0)
+                                        np.sum(self.conditional_negatives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
             running_ROC=running_sensitivity+running_specificity
         assert((running_sensitivity>0).all())
         assert((running_sensitivity<1).all())
         assert((running_specificity>0).all())
         assert((running_specificity<1).all())
-        assert((running_ROC>1).all())
+        assert((running_ROC>0).all())
         assert((running_ROC<2).all())
 
         return running_sensitivity, running_specificity, running_ROC

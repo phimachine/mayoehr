@@ -287,7 +287,7 @@ class InputGen(Dataset, DFManager):
             while word !="":
                 struct_code_list.append(dic[word]+codelist[0])
                 word=word[:-1]
-            indices[1]=struct_code_list
+            indices[1]=list(set(struct_code_list))
             # remove all structured codes before
             # this causes target to be bigger than 1 therefore BCE cannot be applied.
             np.multiply.at(array,indices,0)

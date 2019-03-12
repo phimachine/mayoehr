@@ -4,6 +4,52 @@ from collections import Counter
 import tqdm
 import numpy as np
 
+def get_death_code_proportion(ig):
+    index_list=[]
+    dic=ig.death_code_dict
+    total_patients=len(ig.death_rep_person_id) # equals to the intersection
+    patients_lookup={id: 0 for id in ig.death_rep_person_id}
+
+    patient_list = []
+    last_patient = None
+
+    for index, row in tqdm.tqdm(ig.death.iterrows()):
+        rep_id=index[0]
+        if rep_id in patients_lookup:
+            if rep_id != last_patient:
+                # new patient
+                index_list+=patient_list
+                patient_list = []
+                last_patient=rep_id
+
+            code = row['code']
+            while code is not "":
+                idx=dic[code]
+                patient_list.append(idx)
+                code=code[:-1]
+            patient_list=list(set(patient_list))
+    index_list += patient_list
+
+    # for row in tqdm.tqdm(series):
+    #     idx=dic[row]
+    #     index_list.append(idx)
+    #
+    counter=Counter(index_list)
+    # code_proportion=list(counter.values())
+    #
+    # for i in range(len(code_proportion)):
+    #     code_proportion[i]/=total_patients
+
+    prop=np.zeros((ig.output_dim-1))
+
+    for key, value in counter.items():
+        prop[key]+=value
+        if value==0 or value<0:
+            print("look into it.")
+    prop=prop/total_patients
+
+    return prop
+
 def ROC_2():
     """
     Because codes have been merged, and we do not know the interaction among the merged codes,
