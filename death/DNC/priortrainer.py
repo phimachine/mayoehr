@@ -168,11 +168,11 @@ def run_one_patient(computer, input, target, optimizer, loss_type, real_criterio
         if not validate:
             total_loss.backward()
             optimizer.step()
-            traincms.update_one_pass(sigoutput, cause_of_death_target)
+            traincms.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
             return float(cod_loss.data), float(toe_loss.data)
 
         else:
-            valicms.update_one_pass(sigoutput, cause_of_death_target)
+            valicms.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
             return float(cod_loss.data), float(toe_loss.data)
 
         if global_exception_counter > -1:
@@ -218,6 +218,23 @@ def train(computer, optimizer, real_criterion, binary_criterion,
             if kill_time:
                 out_of_time()
 
+            if i % val_interval == 0:
+                for _ in range(val_batch):
+                    # we should consider running validation multiple times and average. TODO
+                    try:
+                        (input, target, loss_type) = next(valid_iterator)
+                    except StopIteration:
+                        valid_iterator = iter(valid_dl)
+                        (input, target, loss_type) = next(valid_iterator)
+                    cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
+                                          real_criterion, binary_criterion, beta, cms, validate=True)
+                # TODO this validation is not printing correctly. Way too big.
+                # this line is not printing the right value. it's not averaged.
+                logprint(logfile, "validation. cod: %.10f, toe: %.10f, total: %.10f" %
+                         (cod_loss, toe_loss, cod_loss + beta * toe_loss))
+                logprint(logfile, "validate sen: %.6f, spe: %.6f, roc: %.6f" %
+                         tuple(validcms.running_stats()))
+
             if i < iter_per_epoch:
                 cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
                                                    real_criterion, binary_criterion, beta, cms)
@@ -235,22 +252,7 @@ def train(computer, optimizer, real_criterion, binary_criterion,
                              tuple(traincms.running_stats()))
             else:
                 break
-            if i % val_interval == 0:
-                for _ in range(val_batch):
-                    # we should consider running validation multiple times and average. TODO
-                    try:
-                        (input, target, loss_type) = next(valid_iterator)
-                    except StopIteration:
-                        valid_iterator = iter(valid_dl)
-                        (input, target, loss_type) = next(valid_iterator)
 
-                    cod_loss, toe_loss = run_one_patient(computer, input, target, optimizer, loss_type,
-                                          real_criterion, binary_criterion, beta, cms, validate=True)
-                # TODO this validation is not printing correctly. Way too big.
-                logprint(logfile, "validation. cod: %.10f, toe: %.10f, total: %.10f" %
-                         (total_cod, total_toe, total_cod + beta * total_toe))
-                logprint(logfile, "validate sen: %.6f, spe: %.6f, roc: %.6f" %
-                         tuple(validcms.running_stats()))
 
         if epoch % save_interval == 0:
             save_model(computer, optimizer, epoch, i, savestr)

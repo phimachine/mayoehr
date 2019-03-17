@@ -45,7 +45,7 @@ class Encoder(nn.Module):
         """
         super(Encoder, self).__init__()
         # no embeddings
-        self.bn = nn.BatchNorm1d(hp.input_size)
+        self.bn = nn.BatchNorm1d(input_size)
         self.lin=nn.Linear(input_size,embedding_size)
         self.prenet = Prenet(embedding_size, hp.hidden_size * 2, hp.hidden_size)
         self.cbhg = CBHG(hp.hidden_size, projection_size=256)
@@ -150,7 +150,7 @@ class PostProcessingNet(nn.Module):
     """
     Post-processing Network
     """
-    def __init__(self):
+    def __init__(self, target_size):
         super(PostProcessingNet, self).__init__()
         self.postcbhg = CBHG(hp.hidden_size,
                              K=8,
@@ -159,7 +159,7 @@ class PostProcessingNet(nn.Module):
         # here is a modification.
         # we take max directly
         self.linear = SeqLinear(hp.hidden_size * 2,
-                                hp.target_size)
+                                target_size)
 
     def forward(self, input_):
         out = self.postcbhg(input_)
@@ -171,11 +171,11 @@ class Tacotron(nn.Module):
     """
     End-to-end Tacotron Network
     """
-    def __init__(self):
+    def __init__(self, input_size, target_size):
         super(Tacotron, self).__init__()
-        self.encoder = Encoder(hp.input_size,hp.embedding_size)
+        self.encoder = Encoder(input_size,hp.embedding_size)
         self.decoder = MelDecoder()
-        self.postp = PostProcessingNet()
+        self.postp = PostProcessingNet(target_size)
 
     def forward(self, characters):
         # .forward() should never be explicitly called.
@@ -191,7 +191,7 @@ def main():
     # proportion to the input, we need to feed the whole time-wise sequence in the machine.
     input=Variable(torch.rand((16, 100, 47774))).cuda()
     mel_input=Variable(torch.rand((16,1, hp.num_mels))).cuda()
-    taco=Tacotron().cuda()
+    taco=Tacotron(47774,100).cuda()
     output=taco(input)
     print("script finished")
     print(output)

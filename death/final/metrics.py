@@ -5,6 +5,7 @@
 import torch
 import numpy as np
 from torch.autograd import Variable
+from collections import deque
 
 class ConfusionMatrixStats():
     """
@@ -23,12 +24,15 @@ class ConfusionMatrixStats():
         self.conditional_positives=np.zeros((dims,memory_len))
         self.conditional_negatives=np.zeros((dims,memory_len))
 
+        self.running_cod_loss = deque(maxlen=memory_len)
+        self.running_toe_loss = deque(maxlen=memory_len)
+
         self.idx=0
         self.all=False
 
 
 
-    def update_one_pass(self, output, target):
+    def update_one_pass(self, output, target, cod_loss=None, toe_loss=None):
         """
         record the confusion matrix statistics for each label.
         average is done on the final metrics of all labels, not before
@@ -36,6 +40,9 @@ class ConfusionMatrixStats():
         :param target: ditto
         :return:
         """
+
+        self.running_cod_loss.appendleft(cod_loss)
+        self.running_toe_loss.appendleft(toe_loss)
 
         positive=output.data.cpu().numpy()
         conditional_positive=target.data.cpu().numpy()
@@ -83,6 +90,13 @@ class ConfusionMatrixStats():
             running_specificity=np.mean(np.sum(self.true_negative[:,:self.idx],axis=1)/
                                         np.sum(self.conditional_negatives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
             running_ROC=running_sensitivity+running_specificity
+        if self.idx==0:
+            assert (running_sensitivity > 0)
+            assert (running_sensitivity < 1)
+            assert (running_specificity > 0)
+            assert (running_specificity < 1)
+            assert (running_ROC > 0)
+            assert (running_ROC < 2)
         assert((running_sensitivity>0).all())
         assert((running_sensitivity<1).all())
         assert((running_specificity>0).all())
@@ -91,6 +105,9 @@ class ConfusionMatrixStats():
         assert((running_ROC<2).all())
 
         return running_sensitivity, running_specificity, running_ROC
+
+    def running_loss(self):
+        return np.mean(self.running_cod_loss), np.mean(self.running_toe_loss)
 
 
 def sensitivity(output, target):
