@@ -28,12 +28,12 @@ import code
 from death.analysis.expectedroc import get_death_code_proportion
 
 # param_x = 7298
-param_h = 64  # 64
+param_h = 16  # 64
 param_L = 4  # 4
 # param_v_t = 3592 # 5952
-param_W = 8  # 8
-param_R = 8  # 8
-param_N = 64  # 64
+param_W = 4  # 8
+param_R = 4  # 8
+param_N = 16  # 64
 param_bs = 64
 # this is the empirical saturation level when positive weights are not used.
 # with lower lr, saturation can be higher

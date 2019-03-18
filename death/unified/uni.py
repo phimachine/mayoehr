@@ -218,16 +218,6 @@ class ModelManager():
                 if self.kill_time:
                     out_of_time()
 
-                if i % val_interval == 0:
-                    for _ in range(val_batch):
-                        # we should consider running validation multiple times and average. TODO
-                        try:
-                            (input, target, loss_type) = next(valid_iterator)
-                        except StopIteration:
-                            valid_iterator = iter(self.validdl)
-                            (input, target, loss_type) = next(valid_iterator)
-                        cod_loss, toe_loss = self.run_one_patient(i, input, target, loss_type, cmss, validate=True)
-
                 for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
                     traincms, validcms= cms[0], cms[1]
                     logprint(logfile, name + " validation. cod: %.10f, toe: %.10f, total: %.10f" %
@@ -244,6 +234,18 @@ class ModelManager():
                                  (i, cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
                         logprint(logfile, name+" train sen: %.6f, spe: %.6f, roc: %.6f" %
                                  tuple(traincms.running_stats()))
+
+
+                # running validation before training might cause problem
+                if i % val_interval == 0:
+                    for _ in range(val_batch):
+                        # we should consider running validation multiple times and average. TODO
+                        try:
+                            (input, target, loss_type) = next(valid_iterator)
+                        except StopIteration:
+                            valid_iterator = iter(self.validdl)
+                            (input, target, loss_type) = next(valid_iterator)
+                        cod_loss, toe_loss = self.run_one_patient(i, input, target, loss_type, cmss, validate=True)
 
 
             starting_iter = 0

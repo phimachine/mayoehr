@@ -41,8 +41,8 @@ class ConfusionMatrixStats():
         :return:
         """
 
-        self.running_cod_loss.appendleft(cod_loss)
-        self.running_toe_loss.appendleft(toe_loss)
+        self.running_cod_loss.appendleft(float(cod_loss.data))
+        self.running_toe_loss.appendleft(float(toe_loss.data))
 
         positive=output.data.cpu().numpy()
         conditional_positive=target.data.cpu().numpy()
@@ -90,19 +90,12 @@ class ConfusionMatrixStats():
             running_specificity=np.mean(np.sum(self.true_negative[:,:self.idx],axis=1)/
                                         np.sum(self.conditional_negatives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
             running_ROC=running_sensitivity+running_specificity
-        if self.idx==0:
-            assert (running_sensitivity > 0)
-            assert (running_sensitivity < 1)
-            assert (running_specificity > 0)
-            assert (running_specificity < 1)
-            assert (running_ROC > 0)
-            assert (running_ROC < 2)
-        assert((running_sensitivity>0).all())
-        assert((running_sensitivity<1).all())
-        assert((running_specificity>0).all())
-        assert((running_specificity<1).all())
-        assert((running_ROC>0).all())
-        assert((running_ROC<2).all())
+        assert((running_sensitivity>=0).all())
+        assert((running_sensitivity<=1).all())
+        assert((running_specificity>=0).all())
+        assert((running_specificity<=1).all())
+        assert((running_ROC>=0).all())
+        assert((running_ROC<=2).all())
 
         return running_sensitivity, running_specificity, running_ROC
 

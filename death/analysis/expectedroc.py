@@ -50,6 +50,51 @@ def get_death_code_proportion(ig):
 
     return prop
 
+def ROC_3():
+    """
+    Well, the ROC_2() apparently does not take into consideration of the strcutural codes.
+    These things are tricky as hell. Unexpected.
+    Well why did you not use NP?
+    Why was ROC_2() formula still wrong? Jesus.
+    :return:
+    """
+
+    ig=InputGenJ(no_underlying=True, death_only=True)
+
+    print("Generating prior")
+    code_proportion=get_death_code_proportion(ig)
+    code_proportion=np.asarray(code_proportion)
+
+    # actual positives is code proportion
+    expected_true_positives=(code_proportion*code_proportion)
+
+    setp=sum(expected_true_positives)
+    scp=sum(code_proportion)
+    sensitivity_average=expected_true_positives/code_proportion
+
+
+    print("Expected true positives per patient", setp) # 1.276
+    print("Expected positives per patient", scp) # 10.7094
+    print("Expected sensitivity:",np.mean(sensitivity_average)) # 0.02467
+    # higher than actual
+
+    # what's the expected specificity?
+    negative_code_proportion=1-code_proportion
+    expected_true_negatives=negative_code_proportion*negative_code_proportion
+    specificity_average=expected_true_negatives/negative_code_proportion
+    actual_negatives=sum(negative_code_proportion)
+    true_negatives=sum(expected_true_negatives)
+
+    # what is the Gini impurity compared to the AUC?
+    print("Expected true negatives per patient", true_negatives) # 413.85
+    print("Expected negatives per patient", actual_negatives) # 423.29
+    print("Expected specificity:",np.mean(specificity_average)) # 0.97532
+
+    # what is the expected binary cross entropy with random guess?
+    expected_BCE=-code_proportion*np.log(code_proportion)-negative_code_proportion*np.log(negative_code_proportion)
+
+    print(np.mean(expected_BCE)) # 0.09295, which is close to the loss on the first validation before training
+
 def ROC_2():
     """
     Because codes have been merged, and we do not know the interaction among the merged codes,
@@ -180,4 +225,4 @@ def ROC_1():
     print("Expected specificity:",true_negatives/actual_negatives)
 
 if __name__ == '__main__':
-    ROC_2()
+    ROC_3()
