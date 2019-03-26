@@ -3,12 +3,18 @@
 # It allows setting a percentile on specified columns that prune out rare codes. The number of cases is known too, if needed.
 # It allows setting death proportion, in order to increase ROC.
 
+from tqdm import tqdm
 from death.post.dfmanager10 import *
 from torch.utils.data import Dataset
 import numpy as np
 from numpy.random import permutation
 import time
 import torch
+import multiprocessing as mp
+import os
+import traceback
+from joblib import Parallel, delayed
+
 
 
 def get_timestep_location(earliest, dates):
@@ -634,6 +640,8 @@ class InputGenJ(InputGen):
 
         self.no_underlying=no_underlying
 
+        self.dspath="/local2/tmp/jasondata/"
+
     def train_valid_test_split(self):
         # splits the whole set by id
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
@@ -703,6 +711,20 @@ class InputGenJ(InputGen):
             self.change_fold()
         return train
 
+    def get_train_cached(self):
+        """
+        ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+        :return: a dataset that can be fed into dataloader
+        """
+        print("Using cached training set")
+        return DatasetCacher(id="train", dataset=None, len=15667, path=self.dspath)
+
+    def get_valid_cached(self):
+        return DatasetCacher(id="valid", dataset=None, len=1958, path=self.dspath)
+
+    def get_test_cached(self):
+        return DatasetCacher(id="test", dataset=None, len=1958, path=self.dspath)
+
     def change_fold(self):
         if self.death_fold==0:
             print("Death fold is zero, death fold not changed")
@@ -728,44 +750,183 @@ class InputGenJ(InputGen):
 
 
 
+class DatasetCacher(Dataset):
+
+    def __init__(self,id,dataset,len=None,max=None,path="/local2/tmp/jasondata/"):
+        self.path=path
+        self.dataset=dataset
+        self.id=id
+        self.max=max
+        self.len=len
+
+    def cache_one(self,index):
+        pickle_fname = self.path + self.id + "_" + str(index) + ".pkl"
+        # if the file does not exist or the file is extremely small
+        if not os.path.isfile(pickle_fname) or os.stat(pickle_fname).st_size<16:
+            item = self.dataset[index]
+            with open(pickle_fname,"wb+") as f:
+                pickle.dump(item,f)
+            return item
+        else:
+            fname = self.path + self.id + "_" + str(index) + ".pkl"
+            try:
+                with open(fname, "rb") as f:
+                    item = pickle.load(f)
+                return item
+            except FileNotFoundError:
+                traceback.print_exc()
+                print("This line should never be reached")
+
+    # def cache_all(self,num_workers):
+    #     # cache does not cache the whole dataset object
+    #     # it caches the __getitem__ method only
+    #
+    #     dataset_len=len(self.dataset)
+    #     pool=Pool(num_workers)
+    #     for i in range(dataset_len):
+    #         pool.apply_async(self.cache_one, (i,))
+    #     pool.close()
+    #     pool.join()
+    #
+    # def cache_some(self,num_workers, max):
+    #     # cache does not cache the whole dataset object
+    #     # it caches the __getitem__ method only
+    #     dataset_len=len(self.dataset)
+    #     if max >dataset_len:
+    #         max=dataset_len
+    #     pool=Pool(num_workers)
+    #     i=1
+    #     pool.apply_async(self.cache_one, (i,))
+    #     pool.close()
+    #     pool.join()
+
+    # def __getitem__(self, index):
+    #
+    #     if self.max is None or index<self.max:
+    #         fname = self.path + self.id + "_" + str(index) + ".pkl"
+    #         try:
+    #             with open(fname, "rb") as f:
+    #                 item=pickle.load(f)
+    #             return item
+    #         except FileNotFoundError:
+    #             return self.cache_one(index)
+    #     else:
+    #         return self.cache_one(index)
+
+    def __getitem__(self, index):
+
+        fname = self.path + self.id + "_" + str(index) + ".pkl"
+        try:
+            with open(fname, "rb") as f:
+                item=pickle.load(f)
+                return item
+        except FileNotFoundError:
+            raise
+
+    def __len__(self):
+        if self.len is None:
+            return len(self.dataset)
+        else:
+            return self.len
+
+def cache_them():
+
+    with mp.Pool(8,valid_initializer) as p:
+        list(tqdm(p.imap(imap_valid_cache, range(1958)), total=1958))
+
+    with mp.Pool(16,test_initializer) as p:
+        list(tqdm(p.imap(imap_test_cache, range(1958)), total=1958))
+
+    with mp.Pool(16,train_initializer) as p:
+        list(tqdm(p.imap(imap_train_cache, range(15667)), total=15667))
+
+    print("Done")
+
+def valid_initializer():
+    global ig
+    global valid_cacher
+    # global train_cacher
+    # global test_cacher
+
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    ig.train_valid_test_split()
+
+    valid=ig.get_valid()
+    valid_cacher=DatasetCacher("valid",valid)
+    # train=ig.get_train()
+    # train_cacher=DatasetCacher("train",train)
+    # test=ig.get_test()
+    # test_cacher=DatasetCacher("test",test)
+
+def train_initializer():
+    global ig
+    global train_cacher
+
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    ig.train_valid_test_split()
+
+    train=ig.get_train()
+    train_cacher=DatasetCacher("train",train)
+
+
+def test_initializer():
+    global ig
+    global test_cacher
+
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    ig.train_valid_test_split()
+
+    test=ig.get_test()
+    test_cacher=DatasetCacher("test",test)
+
+
+def imap_valid_cache(index):
+    valid_cacher.cache_one(index)
+
+def imap_test_cache(index):
+    test_cacher.cache_one(index)
+
+def imap_train_cache(index):
+    train_cacher.cache_one(index)
+
 
 def pad_sequence(sequences, batch_first=False, padding_value=0):
-    r"""Pad a list of variable length Tensors with zero
-
-    ``pad_sequence`` stacks a list of Tensors along a new dimension,
-    and pads them to equal length. For example, if the input is list of
-    sequences with size ``L x *`` and if batch_first is False, and ``T x B x *``
-    otherwise.
-
-    `B` is batch size. It is equal to the number of elements in ``sequences``.
-    `T` is length of the longest sequence.
-    `L` is length of the sequence.
-    `*` is any number of trailing dimensions, including none.
-
-    Example:
-        >>> from torch.nn.utils.rnn import pad_sequence
-        >>> a = torch.ones(25, 300)
-        >>> b = torch.ones(22, 300)
-        >>> c = torch.ones(15, 300)
-        >>> pad_sequence([a, b, c]).size()
-        torch.Size([25, 3, 300])
-
-    Note:
-        This function returns a Tensor of size ``T x B x *`` or ``B x T x *`` where `T` is the
-            length of the longest sequence.
-        Function assumes trailing dimensions and type of all the Tensors
-            in sequences are same.
-
-    Arguments:
-        sequences (list[Tensor]): list of variable length sequences.
-        batch_first (bool, optional): output will be in ``B x T x *`` if True, or in
-            ``T x B x *`` otherwise
-        padding_value (float, optional): value for padded elements. Default: 0.
-
-    Returns:
-        Tensor of size ``T x B x *`` if batch_first is False
-        Tensor of size ``B x T x *`` otherwise
-    """
+    # r"""Pad a list of variable length Tensors with zero
+    #
+    # ``pad_sequence`` stacks a list of Tensors along a new dimension,
+    # and pads them to equal length. For example, if the input is list of
+    # sequences with size ``L x *`` and if batch_first is False, and ``T x B x *``
+    # otherwise.
+    #
+    # `B` is batch size. It is equal to the number of elements in ``sequences``.
+    # `T` is length of the longest sequence.
+    # `L` is length of the sequence.
+    # `*` is any number of trailing dimensions, including none.
+    #
+    # Example:
+    #     >>> from torch.nn.utils.rnn import pad_sequence
+    #     >>> a = torch.ones(25, 300)
+    #     >>> b = torch.ones(22, 300)
+    #     >>> c = torch.ones(15, 300)
+    #     >>> pad_sequence([a, b, c]).size()
+    #     torch.Size([25, 3, 300])
+    #
+    # Note:
+    #     This function returns a Tensor of size ``T x B x *`` or ``B x T x *`` where `T` is the
+    #         length of the longest sequence.
+    #     Function assumes trailing dimensions and type of all the Tensors
+    #         in sequences are same.
+    #
+    # Arguments:
+    #     sequences (list[Tensor]): list of variable length sequences.
+    #     batch_first (bool, optional): output will be in ``B x T x *`` if True, or in
+    #         ``T x B x *`` otherwise
+    #     padding_value (float, optional): value for padded elements. Default: 0.
+    #
+    # Returns:
+    #     Tensor of size ``T x B x *`` if batch_first is False
+    #     Tensor of size ``B x T x *`` otherwise
+    # """
 
     # assuming trailing dimensions and type of all the Tensors
     # in sequences are same and fetching those from sequences[0]
@@ -797,7 +958,7 @@ def pad_collate(args):
     padded[1]=padded[1].permute(1,0)
     return padded
 
-if __name__=="__main__":
+def oldmain():
     # this means at least 1% of the population has this code.
     # ig=InputGenJ(incidence=0.01, no_underlying=True)
     # print(ig.input_dim)
@@ -811,3 +972,34 @@ if __name__=="__main__":
         i,t,l=ig[idx]
         print(i,t,l)
     print("DONe")
+
+def profiling():
+    import random
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    for idx in random.sample(range(len(ig)),100):
+        i,t,l=ig[idx]
+        print(i,t,l)
+    print("Measure time")
+    # pandas._libs.algos.groupsort_indexer is the most time consuming operation. 22% time.
+    # pandas in total consumes around 40%
+    # pickle is needed again
+
+def try_pickle_again():
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    i,t,l=ig[100]
+    import pickle
+    with open("./test.pkl",'wb') as f:
+        pickle.dump((i,t,l),f)
+    print("stop")
+
+def try_load_pickle():
+    import random
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    train=ig.get_train_cached()
+    for idx in random.sample(range(len(train)),100):
+        i,t,l=train[idx]
+        print(i,t,l)
+    print("Measure time")
+
+if __name__=="__main__":
+    try_load_pickle()

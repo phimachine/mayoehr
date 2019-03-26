@@ -16,28 +16,30 @@ valid_tt=[]
 valid_sen=[]
 valid_spe=[]
 valid_roc=[]
+epochs=[]
 
 
+files=[("adnclog.txt","adnc.csv")]
 
-with open("logtext.txt",'r') as f:
+with open("adnclog.txt",'r') as f:
     while True:
         line=f.readline()
         if not line:
             break
         words=line.split()
-        if words[0] == "batch":
-            if words[1] == "0.":
+        if words[3] == "batch":
+            if words[4] == "0.":
                 # this is a representation of the epoch
                 # I just care about running
-                cod=words[11][:-1]
-                toe=words[13][:-1]
-                tt=words[15]
+                cod=words[7][:-1]
+                toe=words[9][:-1]
+                tt=words[11]
 
                 line=f.readline()
                 words=line.split()
-                sen=words[2][:-1]
-                spe=words[4][:-1]
-                roc=words[6][:-1]
+                sen=words[3][:-1]
+                spe=words[5][:-1]
+                roc=words[7][:-1]
 
                 training_cod.append(cod)
                 training_toe.append(toe)
@@ -51,10 +53,11 @@ with open("logtext.txt",'r') as f:
         if words[0] == "model":
             if words[2] =="for":
                 epoch=words[4]
-        if words[0] == "validation.":
-            cod=words[2][:-1]
-            toe=words[4][:-1]
-            total=words[6]
+                epochs.append(epoch)
+        if words[1] == "validation.":
+            cod=words[3][:-1]
+            toe=words[5][:-1]
+            total=words[7]
 
             valid_cod.append(cod)
             valid_toe.append(toe)
@@ -62,10 +65,10 @@ with open("logtext.txt",'r') as f:
             #print("Stop me here")
 
 
-        if words[0] == "validate":
-            sen=words[2][:-1]
-            spe=words[4][:-1]
-            roc=words[6]
+        if words[1] == "validate":
+            sen=words[3][:-1]
+            spe=words[5][:-1]
+            roc=words[7]
 
             valid_sen.append(sen)
             valid_spe.append(spe)
@@ -75,31 +78,35 @@ with open("logtext.txt",'r') as f:
             #print("Stop me here")
 assert(len(training_cod)==len(training_spe))
 assert(len(training_tt)==len(valid_cod))
-assert(len(valid_spe)==len(valid_cod))
+# assert(len(valid_spe)==len(valid_cod))
 
-with open("curve.csv","w") as f:
-    f.write("tcod, ttoe, ttt, tsen, tspe, troc, vcod, vtoe, vtt, vsen, vspe, vroc\n")
+with open("adnc.csv","w") as f:
+    f.write("epoch, tcod, ttoe, ttt, tsen, tspe, troc, vcod, vtoe, vtt, vsen, vspe, vroc\n")
     for i in range(len(training_cod)):
 
-        strs=[]
+        try:
+            strs=[]
+            strs.append(epochs[i])
+            strs.append(training_cod[i])
+            strs.append(training_toe[i])
+            strs.append(training_tt[i])
+            strs.append(training_sen[i])
+            strs.append(training_spe[i])
+            strs.append(training_roc[i])
 
-        strs.append(training_cod[i])
-        strs.append(training_toe[i])
-        strs.append(training_tt[i])
-        strs.append(training_sen[i])
-        strs.append(training_spe[i])
-        strs.append(training_roc[i])
+            strs.append(valid_cod[i])
+            strs.append(valid_toe[i])
+            strs.append(valid_tt[i])
+            strs.append(valid_sen[i])
+            strs.append(valid_spe[i])
+            strs.append(valid_roc[i])
 
-        strs.append(valid_cod[i])
-        strs.append(valid_toe[i])
-        strs.append(valid_tt[i])
-        strs.append(valid_sen[i])
-        strs.append(valid_spe[i])
-        strs.append(valid_roc[i])
+            newline=", ".join(strs)
+            f.write(newline+"\n")
+            #print("Stop")
+        except IndexError:
+            pass
 
-        newline=", ".join(strs)
-        f.write(newline+"\n")
-        #print("Stop")
+    f.write("\n")
 
-
-#print("Done")
+print("Done")

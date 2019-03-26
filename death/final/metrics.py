@@ -12,10 +12,11 @@ class ConfusionMatrixStats():
     For my usages, only sensitivity and specificity are implemented.
     Uncomment for complete confusion matrix memory and implement the statis
     """
-    def __init__(self,dims,memory_len=50):
+    def __init__(self,dims,memory_len=50, string=None):
 
         self.memory_len=memory_len
         self.dims=dims
+        self.string=string
 
         # self.positive=np.zeros(dims,memory_len)
         # self.negative=np.zeros(dims,memory_len)
@@ -30,7 +31,11 @@ class ConfusionMatrixStats():
         self.idx=0
         self.all=False
 
-
+    def __str__(self):
+        if self.string is not None:
+            return self.string
+        else:
+            return super(ConfusionMatrixStats, self).__str__()
 
     def update_one_pass(self, output, target, cod_loss=None, toe_loss=None):
         """
@@ -41,8 +46,10 @@ class ConfusionMatrixStats():
         :return:
         """
 
-        self.running_cod_loss.appendleft(float(cod_loss.data))
-        self.running_toe_loss.appendleft(float(toe_loss.data))
+        assert(not isinstance(cod_loss, Variable))
+        assert(not isinstance(toe_loss, Variable))
+        self.running_cod_loss.appendleft(cod_loss)
+        self.running_toe_loss.appendleft(toe_loss)
 
         positive=output.data.cpu().numpy()
         conditional_positive=target.data.cpu().numpy()
@@ -100,7 +107,10 @@ class ConfusionMatrixStats():
         return running_sensitivity, running_specificity, running_ROC
 
     def running_loss(self):
-        return np.mean(self.running_cod_loss), np.mean(self.running_toe_loss)
+        if len(self.running_cod_loss)==0:
+            return 0, 0
+        else:
+            return np.mean(self.running_cod_loss), np.mean(self.running_toe_loss)
 
 
 def sensitivity(output, target):
