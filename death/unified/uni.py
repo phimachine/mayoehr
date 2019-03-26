@@ -5,31 +5,34 @@
 
 import pandas as pd
 import torch
-import numpy as np
-import pdb
 from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planJ import InputGenJ, pad_collate
 from death.DNC.priorDNC import PriorDNC
+from death.adnc.adnc import APDNC
 from death.baseline.lstmtrainerG import lstmwrapperG
 from death.taco.model import Tacotron
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from torch.nn.modules import LSTM
 from torch.autograd import Variable
-import pickle
-from shutil import copy
 import traceback
-from collections import deque
 import datetime
-from death.DNC.tsDNCtrainer import logprint
-import pdb
-from death.final.losses import TOELoss, AnotherBCEWithLogits
+from death.final.losses import TOELoss
 from death.final.killtime import out_of_time
 from death.final.metrics import ConfusionMatrixStats
 import code
 from death.analysis.expectedroc import get_death_code_proportion
+from death.adnc.otheradnc import *
+
+
+def logprint(logfile, string):
+    string = str(string)
+    if logprint is not None and logprint != False:
+        with open(logfile, 'a') as handle:
+            handle.write(string + '\n')
+    print(string)
+
 
 def datetime_filename():
     return datetime.datetime.now().strftime("%m_%d_%X")
@@ -40,7 +43,7 @@ def sv(var):
 class ModelManager():
     def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=0.01, num_workers=32, kill_time=False,
                  binary_criterion=nn.BCEWithLogitsLoss, time_criterion=TOELoss,
-                 valid_batches=2048, moving_len=50, print_interval=100, save_internal=5, valid_interval=999):
+                 valid_batches=2048, moving_len=50):
         self.models=[]
         self.model_names=[]
         self.log_files=[]
@@ -70,12 +73,16 @@ class ModelManager():
         self.moving_len=moving_len
         self.valid_batches=valid_batches
 
-    def init_input_gen(self, inputgen_class, collate_fn, *args, **kwargs):
+    def init_input_gen(self, inputgen_class, use_cache, collate_fn, *args, **kwargs):
         self.ig=inputgen_class(*args,**kwargs)
         self.param_x=self.ig.input_dim
         self.param_v_t=self.ig.output_dim
-        self.trainds=self.ig.get_train()
-        self.validds=self.ig.get_valid()
+        if use_cache:
+            self.trainds=self.ig.get_train_cached()
+            self.validds=self.ig.get_valid_cached()
+        else:
+            self.trainds=self.ig.get_train()
+            self.validds=self.ig.get_valid()
         self.traindl = DataLoader(dataset=self.trainds, batch_size=self.batch_size, num_workers=self.num_workers,
                                  collate_fn=collate_fn, pin_memory=True)
         self.validdl = DataLoader(dataset=self.validds, batch_size=self.batch_size, num_workers=self.num_workers // 2,
@@ -196,9 +203,9 @@ class ModelManager():
         val_batch = int(self.valid_batches / self.batch_size)
 
         cmss=[]
-        for i in range(len(self.models)):
-            traincms, validcms = ConfusionMatrixStats(self.param_v_t- 1), ConfusionMatrixStats(self.param_v_t - 1)
-            cmss.append((traincms, validcms))
+        for name in self.model_names:
+            traincm, validcm = ConfusionMatrixStats(self.param_v_t- 1, string=name+" train"), ConfusionMatrixStats(self.param_v_t - 1, string=name+" valid")
+            cmss.append((traincm, validcm))
 
         for computer, logfile in zip(self.models, self.log_files):
             for name, param in computer.named_parameters():
@@ -217,24 +224,16 @@ class ModelManager():
                 i = starting_iter + i
                 if self.kill_time:
                     out_of_time()
-
-                for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
-                    traincms, validcms= cms[0], cms[1]
-                    logprint(logfile, name + " validation. cod: %.10f, toe: %.10f, total: %.10f" %
-                             (cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
-                    logprint(logfile, name + " validate sen: %.6f, spe: %.6f, roc: %.6f" %
-                             tuple(validcms.running_stats()))
-
                 # train
-                cod_loss, toe_loss = self.run_one_patient(i, input, target, loss_type, cmss, validate=False)
+                self.run_one_patient(i, input, target, loss_type, cmss, validate=False)
                 if i % print_interval==0:
                     for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
-                        traincms, validcms = cms[0], cms[1]
-                        logprint(logfile, name+" batch %4d.  running cod: %.5f, toe: %.5f, total: %.5f" %
-                                 (i, cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
+                        traincm, _ = cms[0], cms[1]
+                        cod_loss, toe_loss=traincm.running_loss()
+                        logprint(logfile, name+" epoch %4d, batch %4d. running cod: %.5f, toe: %.5f, total: %.5f" %
+                                 (epoch, i, cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
                         logprint(logfile, name+" train sen: %.6f, spe: %.6f, roc: %.6f" %
-                                 tuple(traincms.running_stats()))
-
+                                 tuple(traincm.running_stats()))
 
                 # running validation before training might cause problem
                 if i % val_interval == 0:
@@ -245,8 +244,14 @@ class ModelManager():
                         except StopIteration:
                             valid_iterator = iter(self.validdl)
                             (input, target, loss_type) = next(valid_iterator)
-                        cod_loss, toe_loss = self.run_one_patient(i, input, target, loss_type, cmss, validate=True)
-
+                        self.run_one_patient(i, input, target, loss_type, cmss, validate=True)
+                    for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
+                        _, validcm= cms[0], cms[1]
+                        cod_loss, toe_loss=validcm.running_loss()
+                        logprint(logfile, name + " validation. cod: %.10f, toe: %.10f, total: %.10f" %
+                                 (cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
+                        logprint(logfile, name + " validate sen: %.6f, spe: %.6f, roc: %.6f" %
+                                 tuple(validcm.running_stats()))
 
             starting_iter = 0
 
@@ -254,21 +259,12 @@ class ModelManager():
         for model, name, optim, logfile, cms, bin, time in zip(self.models, self.model_names, self.optims,
                                                                self.log_files, cmss, self.binary_criterions, self.time_criterions):
             self.run_one_patient_one_model(model, input, target, loss_type, optim, cms, bin, time, validate)
-            if validate:
-                valicms=cms[1]
-                cod_loss, toe_loss=valicms.running_loss()
-                return cod_loss, toe_loss
-            else:
-                traincms=cms[0]
-                cod_loss, toe_loss=traincms.running_loss()
-                return cod_loss, toe_loss
-
 
     def run_one_patient_one_model(self, computer, input, target, loss_type, optim, cms, binary, real, validate):
         global global_exception_counter
         patient_loss = None
-        traincms = cms[0]
-        valicms = cms[1]
+        traincm = cms[0]
+        validcm = cms[1]
         try:
             optim.zero_grad()
 
@@ -319,13 +315,13 @@ class ModelManager():
                 optim.step()
                 cod_loss=float(cod_loss.data)
                 toe_loss=float(toe_loss.data)
-                traincms.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
+                traincm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
                 return cod_loss, toe_loss
 
             else:
                 cod_loss=float(cod_loss.data)
                 toe_loss=float(toe_loss.data)
-                valicms.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
+                validcm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
                 return cod_loss, toe_loss
 
             if global_exception_counter > -1:
@@ -368,7 +364,6 @@ class ExperimentManager(ModelManager):
         param_x=self.param_x
         param_v_t=self.param_v_t
 
-        print("Generating prior for DNC")
         prior_probability = get_death_code_proportion(self.ig)
 
         computer = PriorDNC(x=param_x,
@@ -391,9 +386,31 @@ class ExperimentManager(ModelManager):
         taco=Tacotron(self.param_x, self.param_v_t)
         self.add_model(taco.cuda(),"taco")
 
+    def add_APDNC(self):
+        param_h = 64  # 64
+        param_L = 4  # 4
+        param_W = 8  # 8
+        param_R = 8  # 8
+        param_N = 64  # 64
+        param_x=self.param_x
+        param_v_t=self.param_v_t
+
+        prior_probability = get_death_code_proportion(self.ig)
+
+        apdnc=APDNC(x=param_x,
+                    h=param_h,
+                    L=param_L,
+                    v_t=param_v_t,
+                    W=param_W,
+                    R=param_R,
+                    N=param_N,
+                    prior=prior_probability)
+
+        self.add_model(apdnc.cuda(), "APDNC")
+
     def overfitting_experiment(self, load=False):
-        self.init_input_gen(InputGenJ, collate_fn=pad_collate)
-        self.add_DNC()
+        self.save_str="overfitting"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
         # small param DNC
         param_h = 16  # 64
@@ -406,7 +423,7 @@ class ExperimentManager(ModelManager):
         prior_probability = get_death_code_proportion(self.ig)
 
 
-        computer = PriorDNC(x=param_x,
+        dnc = PriorDNC(x=param_x,
                             h=param_h,
                             L=param_L,
                             v_t=param_v_t,
@@ -414,8 +431,131 @@ class ExperimentManager(ModelManager):
                             R=param_R,
                             N=param_N,
                             prior=prior_probability)
-        self.add_model(computer.cuda(), "onefourthDNC")
+        self.add_model(dnc.cuda(), "onefourthDNC")
+
+        apdnc = APDNC(x=param_x,
+                            h=param_h,
+                            L=param_L,
+                            v_t=param_v_t,
+                            W=param_W,
+                            R=param_R,
+                            N=param_N,
+                            prior=prior_probability)
+        self.add_model(apdnc.cuda(), "onefourthADNC")
+
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+    def high_parameters(self,load=False):
+        self.save_str = "highparam"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        param_h = 128  # 64
+        param_L = 16  # 4
+        param_W = 16  # 8
+        param_R = 16  # 8
+        param_N = 128  # 64
+        param_x = self.param_x
+        param_v_t = self.param_v_t
+        prior_probability = get_death_code_proportion(self.ig)
+
+        dnc = PriorDNC(x=param_x,
+                       h=param_h,
+                       L=param_L,
+                       v_t=param_v_t,
+                       W=param_W,
+                       R=param_R,
+                       N=param_N,
+                       prior=prior_probability)
+        self.add_model(dnc.cuda(), "doubleDNC")
+
+        apdnc = APDNC(x=param_x,
+                      h=param_h,
+                      L=param_L,
+                      v_t=param_v_t,
+                      W=param_W,
+                      R=param_R,
+                      N=param_N,
+                      prior=prior_probability)
+        self.add_model(apdnc.cuda(), "doubleADNC")
+
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+
+    def adnc_exp(self, load=False):
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate)
+        self.add_APDNC()
+
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+    def baseline(self,save_str="baseline", load=False):
+        self.save_str=save_str
+        self.init_input_gen(InputGenJ,collate_fn=pad_collate,use_cache=True)
         self.add_LSTM()
+        self.add_Tacotron()
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+    def adnc_variations(self,load=False):
+
+        self.save_str = "adncvariations"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        param_h =  64
+        param_L = 4
+        param_W = 8
+        param_R = 8
+        param_N = 64
+        param_x = self.param_x
+        param_v_t = self.param_v_t
+        prior_probability = get_death_code_proportion(self.ig)
+
+        dnc = ADNCNorm(x=param_x,
+                       h=param_h,
+                       L=param_L,
+                       v_t=param_v_t,
+                       W=param_W,
+                       R=param_R,
+                       N=param_N,
+                       prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCNorm")
+
+        dnc = ADNCbi(x=param_x,
+                       h=param_h,
+                       L=param_L,
+                       v_t=param_v_t,
+                       W=param_W,
+                       R=param_R,
+                       N=param_N,
+                       prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCbi")
+
+        dnc = ADNCDrop(x=param_x,
+                       h=param_h,
+                       L=param_L,
+                       v_t=param_v_t,
+                       W=param_W,
+                       R=param_R,
+                       N=param_N,
+                       prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCDrop")
+
+
+        dnc = ADNCMEM(x=param_x,
+                       h=param_h,
+                       L=param_L,
+                       v_t=param_v_t,
+                       W=param_W,
+                       R=param_R,
+                       N=param_N,
+                       prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCMEM")
 
         if load:
             self.load_models()
@@ -423,11 +563,9 @@ class ExperimentManager(ModelManager):
 
 
 def main():
-    ds=ExperimentManager(save_str="firstrun")
-    ds.overfitting_experiment()
+    ds=ExperimentManager(batch_size=64, num_workers=8)
+    ds.adnc_variations()
     ds.run()
-
-
 
 
 if __name__ == '__main__':

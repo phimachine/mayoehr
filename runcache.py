@@ -1,3 +1,3 @@
-from death.post.inputgen_planG import main
+from death.post.inputgen_planJ import cache_them
 
-main()
+cache_them()
