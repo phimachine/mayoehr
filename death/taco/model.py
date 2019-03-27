@@ -186,6 +186,39 @@ class Tacotron(nn.Module):
 
         return output
 
+class PriorTacotron(Tacotron):
+    def __init__(self, input_size, target_size, prior):
+        super(PriorTacotron, self).__init__(input_size, target_size)
+        '''prior'''
+        # this is the prior probability of each label predicting true
+        # this is added to the logit
+        self.prior=prior
+        if isinstance(self.prior, np.ndarray):
+            self.prior=torch.from_numpy(self.prior).float()
+            self.prior=Variable(self.prior, requires_grad=False)
+        elif isinstance(self.prior, torch.Tensor):
+            self.prior=Variable(self.prior, requires_grad=False)
+        else:
+            assert(isinstance(self.prior, Variable))
+
+
+        # transform to logits
+        # because we are using sigmoid, not softmax, self.prior=log(P(y))-log(P(not y))
+        # sigmoid_input = z + self.prior
+        # z = log(P(x|y)) - log(P(x|not y))
+        # sigmoid output is the posterior positive
+        self.prior=self.prior.clamp(1e-8, 1 - 1e-8)
+        self.prior=torch.log(self.prior)-torch.log(1-self.prior)
+        a=Variable(torch.Tensor([0]))
+        self.prior=torch.cat((a,self.prior))
+        self.prior=self.prior.cuda()
+
+    def forward(self, characters):
+        output=super(PriorTacotron, self).forward(characters)
+        output=output+self.prior
+
+        return output
+
 def main():
     # because the algorithm requires time wise convolution as well as a decoder whose length is in
     # proportion to the input, we need to feed the whole time-wise sequence in the machine.

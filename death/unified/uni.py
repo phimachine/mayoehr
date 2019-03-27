@@ -561,6 +561,23 @@ class ExperimentManager(ModelManager):
             self.load_models()
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
+    def lstm_tacotron(self, load=False):
+        from death.baseline.priorlstm import PriorLSTM
+        from death.taco.model import PriorTacotron
+
+
+        self.save_str = "priorbaselines"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        lstm=PriorLSTM(input_size=self.param_x, output_size=self.param_v_t).cuda()
+        taco=PriorTacotron(self.param_x, self.param_v_t).cuda()
+
+        self.add_model(lstm, "priorlstm")
+        self.add_model(taco, "priortaco")
+
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
 def main():
     ds=ExperimentManager(batch_size=64, num_workers=8)
