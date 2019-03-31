@@ -28,11 +28,15 @@ from death.adnc.otheradnc import *
 
 def logprint(logfile, string):
     string = str(string)
-    if logprint is not None and logprint != False:
+    if logfile is not None and logfile != False:
         with open(logfile, 'a') as handle:
             handle.write(string + '\n')
     print(string)
 
+def file_exam(filename):
+    with open(filename, "r") as handle:
+        for line in handle:
+            print(line)
 
 def datetime_filename():
     return datetime.datetime.now().strftime("%m_%d_%X")
@@ -41,7 +45,7 @@ def sv(var):
     return var.data.cpu().numpy()
 
 class ModelManager():
-    def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=0.01, num_workers=32, kill_time=False,
+    def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=1e-6, num_workers=32, kill_time=False,
                  binary_criterion=nn.BCEWithLogitsLoss, time_criterion=TOELoss,
                  valid_batches=2048, moving_len=50):
         self.models=[]
@@ -561,16 +565,18 @@ class ExperimentManager(ModelManager):
             self.load_models()
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-    def lstm_tacotron(self, load=False):
+    def lstm_tacotron_with_prior(self, load=False):
         from death.baseline.priorlstm import PriorLSTM
         from death.taco.model import PriorTacotron
-
 
         self.save_str = "priorbaselines"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
-        lstm=PriorLSTM(input_size=self.param_x, output_size=self.param_v_t).cuda()
-        taco=PriorTacotron(self.param_x, self.param_v_t).cuda()
+        prior_probability = get_death_code_proportion(self.ig)
+
+        lstm=PriorLSTM(input_size=self.param_x, output_size=self.param_v_t, hidden_size=64, num_layers=4,
+                       prior=prior_probability).cuda()
+        taco=PriorTacotron(self.param_x, self.param_v_t, prior=prior_probability).cuda()
 
         self.add_model(lstm, "priorlstm")
         self.add_model(taco, "priortaco")
@@ -579,9 +585,22 @@ class ExperimentManager(ModelManager):
             self.load_models()
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
+    def dnc_adnc_rerun(self,load=False):
+        # log was incorrect, and validaion was incorrect. I want to run it again.
+
+        self.save_str = "dnc_adnc_rerun"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        self.add_APDNC()
+        self.add_DNC()
+
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
 def main():
     ds=ExperimentManager(batch_size=64, num_workers=8)
-    ds.adnc_variations()
+    ds.baseline()
     ds.run()
 
 

@@ -48,7 +48,7 @@ class Encoder(nn.Module):
         self.bn = nn.BatchNorm1d(input_size)
         self.lin=nn.Linear(input_size,embedding_size)
         self.prenet = Prenet(embedding_size, hp.hidden_size * 2, hp.hidden_size)
-        self.cbhg = CBHG(hp.hidden_size, projection_size=256)
+        self.cbhg = CBHG(hp.hidden_size, projection_size=hp.hidden_size)
 
     def forward(self, input_):
         # TODO need to add bn here. See permute and transpose.
