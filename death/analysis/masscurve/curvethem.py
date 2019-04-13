@@ -136,7 +136,8 @@ def mass_process(rootdir):
 
     # these are the successful runs that collected data that I want
     interested_time=["03_26_21_33_00.txt","03_20_17_51_44.txt","03_26_13_52_14.txt",
-                     "03_20_00_17_27.txt","03_29_18_09_49.txt","03_26_13_52_15.txt"]
+                     "03_20_00_17_27.txt","03_29_18_09_49.txt","03_26_13_52_15.txt",
+                     "03_31_17_09_13.txt","03_26_21_32_59.txt","04_02_19_48"]
     # interested_time=["03_20_00_17_27.txt"]
     wanted_files=[]
     for file in logdir.iterdir():
@@ -151,7 +152,10 @@ def mass_process(rootdir):
         model=name.split("_")[0]
         entries.append(LogEntry(file, model))
 
+    count=0
     for entry in entries:
+        count+=1
+        print(count)
         process_one_file(entry,rootdir)
 
 

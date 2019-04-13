@@ -45,7 +45,7 @@ def sv(var):
     return var.data.cpu().numpy()
 
 class ModelManager():
-    def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=1e-6, num_workers=32, kill_time=False,
+    def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=1e-8, num_workers=32, kill_time=False,
                  binary_criterion=nn.BCEWithLogitsLoss, time_criterion=TOELoss,
                  valid_batches=2048, moving_len=50):
         self.models=[]
@@ -569,7 +569,7 @@ class ExperimentManager(ModelManager):
         from death.baseline.priorlstm import PriorLSTM
         from death.taco.model import PriorTacotron
 
-        self.save_str = "priorbaselines"
+        self.save_str = "lowbeta"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
         prior_probability = get_death_code_proportion(self.ig)
@@ -600,7 +600,7 @@ class ExperimentManager(ModelManager):
 
 def main():
     ds=ExperimentManager(batch_size=64, num_workers=8)
-    ds.baseline()
+    ds.dnc_adnc_rerun()
     ds.run()
 
 
