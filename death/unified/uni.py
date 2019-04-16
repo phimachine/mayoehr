@@ -24,6 +24,7 @@ from death.final.metrics import ConfusionMatrixStats
 import code
 from death.analysis.expectedroc import get_death_code_proportion
 from death.adnc.otheradnc import *
+from death.tran.transformer.EHRModels import EHRTransformer
 
 
 def logprint(logfile, string):
@@ -102,7 +103,7 @@ class ModelManager():
         # you need to add optim after adding all models
         # can be modified to use a different optimizer for each model
         for model in self.models:
-            self.optims.append(optim_class(model.parameters(),lr=lr))
+            self.optims.append(optim_class(filter(lambda p: p.requires_grad, model.parameters()),lr=lr))
 
         bc=self.binary_criterions
         tc=self.time_criterions
@@ -598,10 +599,71 @@ class ExperimentManager(ModelManager):
             self.load_models()
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
+    def debug_this(self,load=False):
+        self.save_str = "transformer"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        """
+            parser.add_argument('-data', required=True)
+        
+            parser.add_argument('-epoch', type=int, default=10)
+            parser.add_argument('-batch_size', type=int, default=64)
+        
+            #parser.add_argument('-d_word_vec', type=int, default=512)
+            parser.add_argument('-d_model', type=int, default=512)
+            parser.add_argument('-d_inner_hid', type=int, default=2048)
+            parser.add_argument('-d_k', type=int, default=64)
+            parser.add_argument('-d_v', type=int, default=64)
+        
+            parser.add_argument('-n_head', type=int, default=8)
+            parser.add_argument('-n_layers', type=int, default=6)
+            parser.add_argument('-n_warmup_steps', type=int, default=4000)
+        
+            parser.add_argument('-dropout', type=float, default=0.1)
+            parser.add_argument('-embs_share_weight', action='store_true')
+            parser.add_argument('-proj_share_weight', action='store_true')
+        """
+
+        src_vocab_size = 123
+        tgt_vocab_size = 123
+        max_token_seq_len=123
+        proj_share_weight=True
+        embs_share_weight=False
+        d_k=64
+        d_v=64
+        d_model=512
+        d_word_vec=512
+        d_inner_hid=2048
+        n_layers=6
+        n_head=8
+        dropout=0.1
+
+        transformer=EHRTransformer(
+            src_vocab_size,
+            tgt_vocab_size,
+            max_token_seq_len,
+            tgt_emb_prj_weight_sharing=proj_share_weight,
+            emb_src_tgt_weight_sharing=embs_share_weight,
+            d_k=d_k,
+            d_v=d_v,
+            d_model=d_model,
+            d_word_vec=d_word_vec,
+            d_inner=d_inner_hid,
+            n_layers=n_layers,
+            n_head=n_head,
+            dropout=dropout).cuda()
+
+        self.add_model(transformer.cuda(), "transformer")
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+
 def main():
-    ds=ExperimentManager(batch_size=64, num_workers=8)
-    ds.dnc_adnc_rerun()
+    ds=ExperimentManager(batch_size=8, num_workers=4)
+    ds.debug_this()
     ds.run()
+
 
 
 if __name__ == '__main__':

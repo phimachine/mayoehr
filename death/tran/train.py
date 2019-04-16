@@ -48,7 +48,7 @@ def cal_loss(pred, gold, smoothing):
         loss = -(one_hot * log_prb).sum(dim=1)
         loss = loss.masked_select(non_pad_mask).sum()  # average later
     else:
-        loss = F.cross_entropy(pred, gold, ignore_index=Constants.PAD, reduction='sum')
+        loss = F.cross_entropy(pred, gold, ignore_index=Constants.PAD, reduce=False)
 
     return loss
 
@@ -102,26 +102,26 @@ def eval_epoch(model, validation_data, device):
     n_word_total = 0
     n_word_correct = 0
 
-    with torch.no_grad():
-        for batch in tqdm(
-                validation_data, mininterval=2,
-                desc='  - (Validation) ', leave=False):
+    # with torch.no_grad():
+    for batch in tqdm(
+            validation_data, mininterval=2,
+            desc='  - (Validation) ', leave=False):
 
-            # prepare data
-            src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
-            gold = tgt_seq[:, 1:]
+        # prepare data
+        src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: Variable(x.cuda()), batch)
+        gold = tgt_seq[:, 1:]
 
-            # forward
-            pred = model(src_seq, src_pos, tgt_seq, tgt_pos)
-            loss, n_correct = cal_performance(pred, gold, smoothing=False)
+        # forward
+        pred = model(src_seq, src_pos, tgt_seq, tgt_pos)
+        loss, n_correct = cal_performance(pred, gold, smoothing=False)
 
-            # note keeping
-            total_loss += loss.item()
+        # note keeping
+        total_loss += loss.data[0]
 
-            non_pad_mask = gold.ne(Constants.PAD)
-            n_word = non_pad_mask.sum().item()
-            n_word_total += n_word
-            n_word_correct += n_correct
+        non_pad_mask = gold.ne(Constants.PAD)
+        n_word = non_pad_mask.sum().item()
+        n_word_total += n_word
+        n_word_correct += n_correct
 
     loss_per_word = total_loss/n_word_total
     accuracy = n_word_correct/n_word_total

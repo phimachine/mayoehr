@@ -66,8 +66,8 @@ class Encoder(nn.Module):
 
         n_position = len_max_seq + 1
 
-        self.src_word_emb = nn.Embedding(
-            n_src_vocab, d_word_vec, padding_idx=Constants.PAD)
+        # self.src_word_emb = nn.Embedding(
+        #     n_src_vocab, d_word_vec, padding_idx=Constants.PAD)
 
         # self.position_enc = nn.Embedding.from_pretrained(
         #     get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
@@ -120,7 +120,6 @@ class Decoder(nn.Module):
         # self.position_enc = nn.Embedding.from_pretrained(
         #     get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
         #     freeze=True)
-        self.position_enc=from_pretrained(get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0), freeze=True)
 
         self.layer_stack = nn.ModuleList([
             DecoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
@@ -157,7 +156,7 @@ class Decoder(nn.Module):
             return dec_output, dec_slf_attn_list, dec_enc_attn_list
         return dec_output,
 
-class Transformer(nn.Module):
+class EHRTransformer(nn.Module):
     ''' A sequence to sequence model with attention mechanism. '''
 
     def __init__(
@@ -210,4 +209,3 @@ class Transformer(nn.Module):
         dec_output, *_ = self.decoder(tgt_seq, tgt_pos, src_seq, enc_output)
         seq_logit = self.tgt_word_prj(dec_output) * self.x_logit_scale
         seq_logit =  seq_logit.view(-1, seq_logit.size(2))
-        return seq_logit
