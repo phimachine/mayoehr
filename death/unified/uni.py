@@ -3,7 +3,6 @@
 # the design is simple. I want to pass a tuple of models and share a single input generator.
 # will this work take some time? Sure. But not so much. Especially not so much when I start working.
 
-import pandas as pd
 import torch
 from pathlib import Path
 import os
@@ -24,7 +23,7 @@ from death.final.metrics import ConfusionMatrixStats
 import code
 from death.analysis.expectedroc import get_death_code_proportion
 from death.adnc.otheradnc import *
-from death.tran.transformer.EHRModels import EHRTransformer
+from death.tran.EHRtransformer.EHRModels import EHRTransformer
 
 
 def logprint(logfile, string):

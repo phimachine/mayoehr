@@ -67,6 +67,10 @@ def train_epoch(model, training_data, optimizer, device, smoothing):
             desc='  - (Training)   ', leave=False):
 
         # prepare data
+        # targets were fed into the model, because the decoder reads the last prediction.
+        # for the sake of convergence, the target prediction was fed in
+        # a masking was used to make sure the target did not leak.
+        # this is not the case in test time, where a beam search was used instead
         src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: Variable(x.cuda()), batch)
         gold = tgt_seq[:, 1:]
 
@@ -119,7 +123,7 @@ def eval_epoch(model, validation_data, device):
         total_loss += loss.data[0]
 
         non_pad_mask = gold.ne(Constants.PAD)
-        n_word = non_pad_mask.sum().item()
+        n_word = non_pad_mask.sum().data[0]
         n_word_total += n_word
         n_word_correct += n_correct
 
