@@ -50,6 +50,8 @@ class ModelManager():
                  valid_batches=2048, moving_len=50):
         self.models=[]
         self.model_names=[]
+
+        self.transformer=[]
         self.log_files=[]
         self.optims=[]
         self.total_epochs=total_epochs
@@ -92,11 +94,12 @@ class ModelManager():
         self.validdl = DataLoader(dataset=self.validds, batch_size=self.batch_size, num_workers=self.num_workers // 2,
                                  collate_fn=collate_fn, pin_memory=True)
 
-    def add_model(self, model, model_name):
+    def add_model(self, model, model_name, transformer=False):
         self.models.append(model)
         logfile = "log/" + model_name + "_" + datetime_filename() + ".txt"
         self.log_files.append(logfile)
         self.model_names.append(model_name)
+        self.transformer.append(transformer)
 
     def init_optims_and_criterions(self, optim_class, lr):
         # you need to add optim after adding all models
@@ -260,11 +263,13 @@ class ModelManager():
             starting_iter = 0
 
     def run_one_patient(self, index, input, target, loss_type, cmss, validate=False):
-        for model, name, optim, logfile, cms, bin, time in zip(self.models, self.model_names, self.optims,
-                                                               self.log_files, cmss, self.binary_criterions, self.time_criterions):
-            self.run_one_patient_one_model(model, input, target, loss_type, optim, cms, bin, time, validate)
+        for model, name, optim, logfile, cms, bin, time, is_transformer in \
+                zip(self.models, self.model_names, self.optims,
+                    self.log_files, cmss, self.binary_criterions, self.time_criterions, self.transformer):
+            self.run_one_patient_one_model(model, input, target, loss_type, optim, cms, bin, time, validate, is_transformer)
 
-    def run_one_patient_one_model(self, computer, input, target, loss_type, optim, cms, binary, real, validate):
+    def run_one_patient_one_model(self, computer, input, target, loss_type,
+                                  optim, cms, binary, real, validate, is_transformer):
         global global_exception_counter
         patient_loss = None
         traincm = cms[0]
@@ -279,8 +284,11 @@ class ModelManager():
             # we have no critical index, becuase critical index are those timesteps that
             # DNC is required to produce outputs. This is not the case for our project.
             # criterion does not need to be reinitiated for every story, because we are not using a mask
-
-            patient_output = computer(input)
+            if not is_transformer:
+                patient_output = computer(src_seq, src_pos, tgt_seq)
+            else:
+                # TODO how to generate src_seq?
+                patient_output = computer(input)
             cause_of_death_output = patient_output[:, 1:]
             cause_of_death_target = target[:, 1:]
             # pdb.set_trace()
@@ -623,8 +631,8 @@ class ExperimentManager(ModelManager):
             parser.add_argument('-proj_share_weight', action='store_true')
         """
 
-        src_vocab_size = 123
-        tgt_vocab_size = 123
+        src_vocab_size = self.param_x
+        tgt_vocab_size = self.param_v_t
         max_token_seq_len=123
         proj_share_weight=True
         embs_share_weight=False

@@ -1,4 +1,8 @@
-''' Define the Transformer model '''
+"""
+The reason why EHR model is different?
+The target is not a time series. So there is no decoder.
+Becasue there is no decoder, target is not fed into the Transformer model for decoding references.
+"""
 import torch
 import torch.nn as nn
 import numpy as np
@@ -58,7 +62,7 @@ class Encoder(nn.Module):
 
     def __init__(
             self,
-            n_src_vocab, len_max_seq, d_word_vec,
+            input_size, len_max_seq, d_word_vec,
             n_layers, n_head, d_k, d_v,
             d_model, d_inner, dropout=0.1):
 
@@ -73,11 +77,18 @@ class Encoder(nn.Module):
         #     get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
         #     freeze=True)
 
+        self.embedding=torch.nn.Parameter(torch.Tensor(input_size, d_word_vec))
+
         self.position_enc=from_pretrained(get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0), freeze=True)
 
         self.layer_stack = nn.ModuleList([
             EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
             for _ in range(n_layers)])
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.nn.init.xavier_normal_(self.embedding.data)
 
     def forward(self, src_seq, src_pos, return_attns=False):
 
@@ -88,7 +99,7 @@ class Encoder(nn.Module):
         non_pad_mask = get_non_pad_mask(src_seq)
 
         # -- Forward
-        enc_output = self.src_word_emb(src_seq) + self.position_enc(src_pos)
+        enc_output = torch.matmul(src_seq, self.embedding) + self.position_enc(src_pos)
 
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(
@@ -101,73 +112,73 @@ class Encoder(nn.Module):
         if return_attns:
             return enc_output, enc_slf_attn_list
         return enc_output,
-
-class Decoder(nn.Module):
-    ''' A decoder model with self attention mechanism.
-        With mortality, the time dimension on target does not exist, so time-wise masking or attention is
-        not necessary.
-
-    '''
-
-    def __init__(
-            self,
-            n_tgt_vocab, len_max_seq, d_word_vec,
-            n_layers, n_head, d_k, d_v,
-            d_model, d_inner, dropout=0.1):
-
-        super().__init__()
-        n_position = len_max_seq + 1
-
-        self.tgt_word_emb = nn.Embedding(
-            n_tgt_vocab, d_word_vec, padding_idx=Constants.PAD)
-
-        # self.position_enc = nn.Embedding.from_pretrained(
-        #     get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
-        #     freeze=True)
-        self.position_enc=from_pretrained(get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0), freeze=True)
-
-        self.layer_stack = nn.ModuleList([
-            DecoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
-            for _ in range(n_layers)])
-
-    def forward(self, tgt_seq, src_seq, enc_output, return_attns=False):
-
-        dec_slf_attn_list, dec_enc_attn_list = [], []
-
-        # # -- Prepare masks
-        # non_pad_mask = get_non_pad_mask(tgt_seq)
-        #
-        # slf_attn_mask_subseq = get_subsequent_mask(tgt_seq)
-        # slf_attn_mask_keypad = get_attn_key_pad_mask(seq_k=tgt_seq, seq_q=tgt_seq)
-        # slf_attn_mask = (slf_attn_mask_keypad).gt(0)
-
-        dec_enc_attn_mask = get_attn_key_pad_mask(seq_k=src_seq, seq_q=tgt_seq)
-
-        # -- Forward
-        dec_output = self.tgt_word_emb(tgt_seq) #+ self.position_enc(tgt_pos)
-
-        for dec_layer in self.layer_stack:
-            dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
-                dec_output, enc_output,
-                # non_pad_mask=non_pad_mask,
-                # slf_attn_mask=slf_attn_mask,
-                dec_enc_attn_mask=dec_enc_attn_mask)
-
-
-            if return_attns:
-                dec_slf_attn_list += [dec_slf_attn]
-                dec_enc_attn_list += [dec_enc_attn]
-
-        if return_attns:
-            return dec_output, dec_slf_attn_list, dec_enc_attn_list
-        return dec_output,
+#
+# class Decoder(nn.Module):
+#     ''' A decoder model with self attention mechanism.
+#         With mortality, the time dimension on target does not exist, so time-wise masking or attention is
+#         not necessary.
+#
+#     '''
+#
+#     def __init__(
+#             self,
+#             n_tgt_vocab, len_max_seq, d_word_vec,
+#             n_layers, n_head, d_k, d_v,
+#             d_model, d_inner, dropout=0.1):
+#
+#         super().__init__()
+#         n_position = len_max_seq + 1
+#
+#         self.tgt_word_emb = nn.Embedding(
+#             n_tgt_vocab, d_word_vec, padding_idx=Constants.PAD)
+#
+#         # self.position_enc = nn.Embedding.from_pretrained(
+#         #     get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
+#         #     freeze=True)
+#         self.position_enc=from_pretrained(get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0), freeze=True)
+#
+#         self.layer_stack = nn.ModuleList([
+#             DecoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
+#             for _ in range(n_layers)])
+#
+#     def forward(self, tgt_seq, src_seq, enc_output, return_attns=False):
+#
+#         dec_slf_attn_list, dec_enc_attn_list = [], []
+#
+#         # # -- Prepare masks
+#         non_pad_mask = get_non_pad_mask(tgt_seq)
+#         #
+#         # slf_attn_mask_subseq = get_subsequent_mask(tgt_seq)
+#         # slf_attn_mask_keypad = get_attn_key_pad_mask(seq_k=tgt_seq, seq_q=tgt_seq)
+#         # slf_attn_mask = (slf_attn_mask_keypad).gt(0)
+#
+#         dec_enc_attn_mask = get_attn_key_pad_mask(seq_k=src_seq, seq_q=tgt_seq)
+#
+#         # -- Forward
+#         dec_output = self.tgt_word_emb(tgt_seq) #+ self.position_enc(tgt_pos)
+#
+#         for dec_layer in self.layer_stack:
+#             dec_output, dec_slf_attn, dec_enc_attn = dec_layer(
+#                 dec_output, enc_output,
+#                 non_pad_mask=non_pad_mask,
+#                 # slf_attn_mask=slf_attn_mask,
+#                 dec_enc_attn_mask=dec_enc_attn_mask)
+#
+#
+#             if return_attns:
+#                 dec_slf_attn_list += [dec_slf_attn]
+#                 dec_enc_attn_list += [dec_enc_attn]
+#
+#         if return_attns:
+#             return dec_output, dec_slf_attn_list, dec_enc_attn_list
+#         return dec_output,
 
 class EHRTransformer(nn.Module):
     ''' A sequence to sequence model with attention mechanism. '''
 
     def __init__(
             self,
-            n_src_vocab, n_tgt_vocab, len_max_seq,
+            n_src_vocab, n_tgt_vocab, len_max_seq, prior,
             d_word_vec=512, d_model=512, d_inner=2048,
             n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1,
             tgt_emb_prj_weight_sharing=True,
@@ -181,13 +192,13 @@ class EHRTransformer(nn.Module):
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
             dropout=dropout)
 
-        self.decoder = Decoder(
-            n_tgt_vocab=n_tgt_vocab, len_max_seq=len_max_seq,
-            d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
-            n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
-            dropout=dropout)
+        # self.decoder = Decoder(
+        #     n_tgt_vocab=n_tgt_vocab, len_max_seq=len_max_seq,
+        #     d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
+        #     n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
+        #     dropout=dropout)
 
-        self.tgt_word_prj = nn.Linear(d_model, n_tgt_vocab, bias=False)
+        self.tgt_word_prj = nn.Linear(d_model, n_tgt_vocab)
         nn.init.xavier_normal(self.tgt_word_prj.weight)
 
         assert d_model == d_word_vec, \
@@ -207,11 +218,38 @@ class EHRTransformer(nn.Module):
             "To share word embedding table, the vocabulary size of src/tgt shall be the same."
             self.encoder.src_word_emb.weight = self.decoder.tgt_word_emb.weight
 
-    def forward(self, src_seq, src_pos, tgt_seq, tgt_pos):
 
-        tgt_seq, tgt_pos = tgt_seq[:, :-1], tgt_pos[:, :-1]
+        '''prior'''
+        # this is the prior probability of each label predicting true
+        # this is added to the logit
+        self.prior=prior
+        if isinstance(self.prior, np.ndarray):
+            self.prior=torch.from_numpy(self.prior).float()
+            self.prior=Variable(self.prior, requires_grad=False)
+        elif isinstance(self.prior, torch.Tensor):
+            self.prior=Variable(self.prior, requires_grad=False)
+        else:
+            assert(isinstance(self.prior, Variable))
+
+
+        # transform to logits
+        # because we are using sigmoid, not softmax, self.prior=log(P(y))-log(P(not y))
+        # sigmoid_input = z + self.prior
+        # z = log(P(x|y)) - log(P(x|not y))
+        # sigmoid output is the posterior positive
+        self.prior=self.prior.clamp(1e-8, 1 - 1e-8)
+        self.prior=torch.log(self.prior)-torch.log(1-self.prior)
+        a=Variable(torch.Tensor([0]))
+        self.prior=torch.cat((a,self.prior))
+        self.prior=self.prior.cuda()
+
+    def forward(self, src_seq, src_pos):
+
+        # tgt_seq = tgt_seq[:, :-1]
 
         enc_output, *_ = self.encoder(src_seq, src_pos)
-        dec_output, *_ = self.decoder(tgt_seq, tgt_pos, src_seq, enc_output)
-        seq_logit = self.tgt_word_prj(dec_output) * self.x_logit_scale
-        seq_logit =  seq_logit.view(-1, seq_logit.size(2))
+        # # dec_output, *_ = self.decoder(tgt_seq, src_seq, enc_output)
+        seq_logit = self.tgt_word_prj(enc_output) +self.prior #* self.x_logit_scale
+        # seq_logit =  seq_logit.view(-1, seq_logit.size(2))
+
+        return seq_logit

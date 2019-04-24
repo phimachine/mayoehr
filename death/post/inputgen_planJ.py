@@ -4,6 +4,7 @@
 # It allows setting death proportion, in order to increase ROC.
 
 from tqdm import tqdm
+import pandas as pd
 from death.post.dfmanager10 import *
 from torch.utils.data import Dataset
 import numpy as np
@@ -300,6 +301,16 @@ class InputGen(Dataset, DFManager):
             np.add.at(array, indices, 1)
 
     def get_by_id(self,id,debug=False):
+        """
+        This is the workhorse function. For data pipeline, this is the function that consumes the most time.
+        It's possible that there can be some optimization. I suggest that you modify this function to load sparsely.
+        Use sparse matrix and embedding lookup, instead of loading full matrices.
+
+        :param id:
+        :param debug:
+        :return:
+        """
+        
         # TODO earla dataset might not contain all entries?
         time_length = self.earla.loc[id]["int"] + 1
         earliest = self.earla.loc[id]["earliest"]
@@ -609,7 +620,7 @@ class GenHelper(Dataset):
 class InputGenJ(InputGen):
     def __init__(self, death_fold=0, death_only=True, curriculum=False, validation_test_proportion=0.1,
                  elim_rare_code=True, incidence=0.01, death_incidence=0.001, random_seed=10086, no_underlying=True,
-                 debug=False, verbose=False):
+                 debug=False, verbose=False, cached=True, dspath="/local2/tmp/jasondata/"):
         verbose = verbose
         debug = debug
         super(InputGenJ, self).__init__(elim_rare_code=elim_rare_code, incidence=incidence,
@@ -623,10 +634,12 @@ class InputGenJ(InputGen):
         np.random.seed(random_seed)
         # for curriculum learning, every time the training set is requested, the death proportion will be adjusted
         self.curriculum=curriculum
+        self.cached = cached
 
         self.valid=None
         self.test=None
         self.train_valid_test_split()
+
 
         # the proportion of death records the last training set has
         self.proportion=None
@@ -640,9 +653,12 @@ class InputGenJ(InputGen):
 
         self.no_underlying=no_underlying
 
-        self.dspath="/local2/tmp/jasondata/"
+        self.dspath=dspath
 
     def train_valid_test_split(self):
+        if self.cached:
+            raise UserWarning("Splitted validation and training set will not be used, because you are using cached\n"
+                              "data set, set the init parameter cached=False. Splitting will be performed.")
         # splits the whole set by id
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
         self.death_rep_person_id = np.intersect1d(death_rep_person_id,self.rep_person_id)
@@ -667,6 +683,9 @@ class InputGenJ(InputGen):
         should be run only once in its lifetime
         :return:
         """
+        if self.cached:
+            return self.get_valid_cached()
+
         if self.valid is None:
             if self.death_only:
                 ids=self.valid_death_id
@@ -681,6 +700,9 @@ class InputGenJ(InputGen):
         should be run only once in its lifetime
         :return:
         """
+        if self.cached:
+            return self.get_test_cached()
+
         if self.test is None:
             if self.death_only:
                 ids=self.test_death_id
@@ -695,6 +717,10 @@ class InputGenJ(InputGen):
         modifies the deathfold everytime it is called
         :return:
         """
+        if self.cached:
+            return self.get_train_cached()
+
+
         if self.death_only:
             ids = permutation(self.train_death_id)
         else:
@@ -829,20 +855,23 @@ class DatasetCacher(Dataset):
         else:
             return self.len
 
-def cache_them():
+def cache_them(path):
 
-    with mp.Pool(8,valid_initializer) as p:
+    # first argument is processes counts,
+    # second argument is a function to initialize each process
+    with mp.Pool(8,valid_initializer, (path,)) as p:
         list(tqdm(p.imap(imap_valid_cache, range(1958)), total=1958))
 
-    with mp.Pool(16,test_initializer) as p:
+    with mp.Pool(16,test_initializer, (path,)) as p:
         list(tqdm(p.imap(imap_test_cache, range(1958)), total=1958))
 
-    with mp.Pool(16,train_initializer) as p:
+    with mp.Pool(16,train_initializer, (path,)) as p:
         list(tqdm(p.imap(imap_train_cache, range(15667)), total=15667))
 
     print("Done")
 
-def valid_initializer():
+def valid_initializer(path):
+
     global ig
     global valid_cacher
     # global train_cacher
@@ -852,13 +881,13 @@ def valid_initializer():
     ig.train_valid_test_split()
 
     valid=ig.get_valid()
-    valid_cacher=DatasetCacher("valid",valid)
+    valid_cacher=DatasetCacher("valid",valid,path=path)
     # train=ig.get_train()
     # train_cacher=DatasetCacher("train",train)
     # test=ig.get_test()
     # test_cacher=DatasetCacher("test",test)
 
-def train_initializer():
+def train_initializer(path):
     global ig
     global train_cacher
 
@@ -866,10 +895,10 @@ def train_initializer():
     ig.train_valid_test_split()
 
     train=ig.get_train()
-    train_cacher=DatasetCacher("train",train)
+    train_cacher=DatasetCacher("train",train, path=path)
 
 
-def test_initializer():
+def test_initializer(path):
     global ig
     global test_cacher
 
@@ -877,7 +906,7 @@ def test_initializer():
     ig.train_valid_test_split()
 
     test=ig.get_test()
-    test_cacher=DatasetCacher("test",test)
+    test_cacher=DatasetCacher("test",test, path=path)
 
 
 def imap_valid_cache(index):

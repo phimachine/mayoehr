@@ -253,6 +253,8 @@ class PriorDNC(nn.Module):
 
         yts=torch.stack(yts,dim=0)
         yts=torch.max(yts,dim=0)[0]
+        # this formula only works for binary prediction
+        # if multiple labels, you probably need to softmax yts first, because yts is not logits. They are free R.
         yts=yts+self.prior
         return yts
 
