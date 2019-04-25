@@ -1018,10 +1018,14 @@ def profiling():
 
 def try_pickle_again():
     ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
-    i,t,l=ig[100]
+    item=ig[100]
     import pickle
     with open("./test.pkl",'wb') as f:
-        pickle.dump((i,t,l),f)
+        pickle.dump(item,f)
+    with open("./test.pkl", 'rb') as f:
+        item = pickle.load(f)
+    print(item)
+
     print("stop")
 
 def try_load_pickle():
