@@ -23,7 +23,6 @@ from death.final.metrics import ConfusionMatrixStats
 import code
 from death.analysis.expectedroc import get_death_code_proportion
 from death.adnc.otheradnc import *
-from death.tran.EHRtransformer.EHRModels import EHRTransformer
 
 
 def logprint(logfile, string):
@@ -60,7 +59,9 @@ class ModelManager():
         self.batch_size=batch_size
         self.num_workers=num_workers
         self.save_str=save_str
+        #7298
         self.param_x=None
+        #435
         self.param_v_t=None
         self.ig=None
 
@@ -227,12 +228,12 @@ class ModelManager():
                 self.save_models(epoch, i)
                 print("model saved for epoch", epoch, "iteration", i)
 
-            for i, (input, target, loss_type) in enumerate(self.traindl):
+            for i, (input, target, loss_type, time_length) in enumerate(self.traindl):
                 i = starting_iter + i
                 if self.kill_time:
                     out_of_time()
                 # train
-                self.run_one_patient(i, input, target, loss_type, cmss, validate=False)
+                self.run_one_patient(i, input, target, loss_type, time_length, cmss, validate=False)
                 if i % print_interval==0:
                     for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
                         traincm, _ = cms[0], cms[1]
@@ -262,13 +263,13 @@ class ModelManager():
 
             starting_iter = 0
 
-    def run_one_patient(self, index, input, target, loss_type, cmss, validate=False):
+    def run_one_patient(self, index, input, target, loss_type, time_length, cmss, validate=False):
         for model, name, optim, logfile, cms, bin, time, is_transformer in \
                 zip(self.models, self.model_names, self.optims,
                     self.log_files, cmss, self.binary_criterions, self.time_criterions, self.transformer):
-            self.run_one_patient_one_model(model, input, target, loss_type, optim, cms, bin, time, validate, is_transformer)
+            self.run_one_patient_one_model(model, input, target, loss_type, time_length, optim, cms, bin, time, validate, is_transformer)
 
-    def run_one_patient_one_model(self, computer, input, target, loss_type,
+    def run_one_patient_one_model(self, computer, input, target, loss_type, time_length,
                                   optim, cms, binary, real, validate, is_transformer):
         global global_exception_counter
         patient_loss = None
@@ -284,10 +285,10 @@ class ModelManager():
             # we have no critical index, becuase critical index are those timesteps that
             # DNC is required to produce outputs. This is not the case for our project.
             # criterion does not need to be reinitiated for every story, because we are not using a mask
-            if not is_transformer:
-                patient_output = computer(src_seq, src_pos, tgt_seq)
-            else:
+            if is_transformer:
                 # TODO how to generate src_seq?
+                patient_output = computer(input, target, time_length)
+            else:
                 patient_output = computer(input)
             cause_of_death_output = patient_output[:, 1:]
             cause_of_death_target = target[:, 1:]

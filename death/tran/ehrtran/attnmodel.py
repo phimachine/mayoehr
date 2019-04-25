@@ -6,7 +6,8 @@ class TransformerMixedAttn(nn.Module):
     # no attention module here, because the input is not timewise
     # we will add time-wise attention to time-series model later.
 
-    def __init__(self, max_position, prior, d_model=256, input_size=50000, d_inner=32, n_head=8, d_k=16, d_v=32, dropout=0.1, n_layers=8, output_size=12, epsilon=1,
+    def __init__(self, max_position, prior, d_model=256, input_size=50000, d_inner=32,
+                 n_head=8, d_k=16, d_v=32, dropout=0.1, n_layers=8, output_size=12, epsilon=1,
                  xi=1, lambda_ml=1, lambda_at=1, lambda_em=1, lambda_vat=1):
         super(TransformerMixedAttn, self).__init__()
 
@@ -38,26 +39,29 @@ class TransformerMixedAttn(nn.Module):
         '''prior'''
         # this is the prior probability of each label predicting true
         # this is added to the logit
-        self.prior=prior
-        if isinstance(self.prior, np.ndarray):
-            self.prior=torch.from_numpy(self.prior).float()
-            self.prior=Variable(self.prior, requires_grad=False)
-        elif isinstance(self.prior, torch.Tensor):
-            self.prior=Variable(self.prior, requires_grad=False)
+        if prior is not None:
+            self.prior=prior
+            if isinstance(self.prior, np.ndarray):
+                self.prior=torch.from_numpy(self.prior).float()
+                self.prior=Variable(self.prior, requires_grad=False)
+            elif isinstance(self.prior, torch.Tensor):
+                self.prior=Variable(self.prior, requires_grad=False)
+            else:
+                assert(isinstance(self.prior, Variable))
+
+
+            # transform to logits
+            # because we are using sigmoid, not softmax, self.prior=log(P(y))-log(P(not y))
+            # sigmoid_input = z + self.prior
+            # z = log(P(x|y)) - log(P(x|not y))
+            # sigmoid output is the posterior positive
+            self.prior=self.prior.clamp(1e-8, 1 - 1e-8)
+            self.prior=torch.log(self.prior)-torch.log(1-self.prior)
+            a=Variable(torch.Tensor([0]))
+            self.prior=torch.cat((a,self.prior))
+            self.prior=self.prior.cuda()
         else:
-            assert(isinstance(self.prior, Variable))
-
-
-        # transform to logits
-        # because we are using sigmoid, not softmax, self.prior=log(P(y))-log(P(not y))
-        # sigmoid_input = z + self.prior
-        # z = log(P(x|y)) - log(P(x|not y))
-        # sigmoid output is the posterior positive
-        self.prior=self.prior.clamp(1e-8, 1 - 1e-8)
-        self.prior=torch.log(self.prior)-torch.log(1-self.prior)
-        a=Variable(torch.Tensor([0]))
-        self.prior=torch.cat((a,self.prior))
-        self.prior=self.prior.cuda()
+            self.prior=None
 
         self.reset_parameters()
 
@@ -71,15 +75,15 @@ class TransformerMixedAttn(nn.Module):
         torch.nn.init.xavier_normal_(self.embedding.data)
         self.apply(self.reset_mod)
 
-    def one_pass(self, input, target):
+    def one_pass(self, input, target, time_length):
         # ml
-        output = self(input)
+        output = self(input, time_length)
         lml = F.cross_entropy(output, target)
 
         # adv, at
         embed_grad = torch.autograd.grad(lml, self.embedding, only_inputs=True, retain_graph=True)[0]
         radv = self.radv(embed_grad)
-        yat = self(input, radv)
+        yat = self(input, time_length, radv)
         lat = F.cross_entropy(yat, target)
 
         # unsupervised
@@ -87,16 +91,16 @@ class TransformerMixedAttn(nn.Module):
 
         # vat
         xid = self.xid()
-        aoutput = self(input, xid)
+        aoutput = self(input, time_length, xid)
         rvat = self.rvat(output, aoutput)
-        yvat = self(input, rvat)
+        yvat = self(input, time_length, rvat)
         lvat = self.kl_divergence(output, yvat)
         lvat = lvat.sum(dim=1).mean(dim=0)
 
         all_loss = self.lambda_ml * lml + self.lambda_at * lat + self.lambda_em * lem + self.lambda_at * lvat
         return all_loss, lml, lat, lem, lvat, output
 
-    def forward(self, input, r=None):
+    def forward(self, input, time_length, r=None):
         """
         pass one time with embedding_grad=None
 
@@ -105,13 +109,11 @@ class TransformerMixedAttn(nn.Module):
         """
 
         # generate src_pos
+        time_length=time_length.squeeze(0)
 
-        # TODO check if these work as expected.
-        slf_attn_mask = get_attn_key_pad_mask(seq_k=input, seq_q=input)
-        non_pad_mask = get_non_pad_mask(input)
-
-        src_pos=None # TODO generate this
-        raise NotImplementedError("This is not a finished product!")
+        slf_attn_mask = get_attn_key_pad_mask(seq_k=input, seq_q=input, key_length=time_length).cuda()
+        non_pad_mask = get_non_pad_mask(input, time_length).cuda()
+        src_pos=get_src_pos(input, time_length).cuda()
 
         if r is None:
             embd = torch.matmul(input, self.embedding)
@@ -130,7 +132,11 @@ class TransformerMixedAttn(nn.Module):
 
         output = self.last_linear(enc_output)
         output = output.squeeze(1)
-        return output + self.prior
+        output = torch.max(output, dim=1)[0]
+        if self.prior is not None:
+            return output + self.prior
+        else:
+            return output
 
     def radv(self, embedding_grad):
         """
@@ -199,3 +205,14 @@ class TransformerMixedAttn(nn.Module):
         return dkl
 
 
+if __name__ == '__main__':
+    from death.post.inputgen_planJ import InputGenJ, pad_collate
+    igj=InputGenJ()
+    trainig=igj.get_train()
+    d1=trainig[10]
+    d2=trainig[11]
+    # input=torch.empty(64,400,7298).uniform_()
+    # target=torch.empty(64,435).uniform_()
+    input, target, loss_type, time_length=[t.cuda() for t in pad_collate((d1,d2))]
+    model=TransformerMixedAttn(max_position=500,input_size=7298, output_size=435, prior=None).cuda()
+    model.one_pass(input, target, time_length)

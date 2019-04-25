@@ -294,7 +294,8 @@ class InputGen(Dataset, DFManager):
             while word !="":
                 struct_code_list.append(dic[word]+codelist[0])
                 word=word[:-1]
-            indices[1]=list(set(struct_code_list))
+            new_list=list(set(struct_code_list))
+            indices=(indices[0],new_list)
             # remove all structured codes before
             # this causes target to be bigger than 1 therefore BCE cannot be applied.
             np.multiply.at(array,indices,0)
@@ -333,7 +334,7 @@ class InputGen(Dataset, DFManager):
             if val == val:
                 if val not in ("", "empty", "None", "none","NoDx","NaN"):
                     insidx = dic[val] + startidx
-                    np.add.at(input, [tss, insidx], 1)
+                    np.add.at(input, (tss, insidx), 1)
         if (input != input).any():
             raise ValueError("NA FOUND")
 
@@ -343,7 +344,7 @@ class InputGen(Dataset, DFManager):
         if val == val:
             if val not in ("", "empty", "None", "none","NoDx","NaN"):
                 if val:
-                    np.add.at(input, [tss, insidx], 1)
+                    np.add.at(input, (tss, insidx), 1)
         # this might have problem, we should use two dimensions for bool. But for now, let's not go back to prep.
         if (input != input).any():
             raise ValueError("NA FOUND")
@@ -354,7 +355,7 @@ class InputGen(Dataset, DFManager):
             # convert age
             earliest_month_age = (earliest.to_datetime64() - bd.to_datetime64()).astype("timedelta64[M]").astype("int")
             age_val = np.arange(earliest_month_age, earliest_month_age + time_length)
-            np.add.at(input, [tss, insidx], age_val)
+            np.add.at(input, (tss, insidx), age_val)
         if (input != input).any():
             raise ValueError("NA FOUND")
         #####
@@ -388,12 +389,12 @@ class InputGen(Dataset, DFManager):
                 # except KeyError:
                 #     print("Death code does not exist")
                 #     idx = dic["0"]
-                self.code_into_array_structurally(target, [[0], [1]], code, dic, debug)
+                self.code_into_array_structurally(target, ([0], [1]), code, dic, debug)
                 if debug:
                     if (target[1:]>1).any():
                         raise ValueError("The multiply in code_into_array_structurally() did not work?")
                 if underlying and not self.no_underlying:
-                    self.code_into_array_structurally(target, [[0], [self.underlying_code_location]], code, dic, debug)
+                    self.code_into_array_structurally(target, ([0], [self.underlying_code_location]), code, dic, debug)
                 # insidx += [1 + idx]
                 # if underlying:
                 #     insidx += [self.underlying_code_location + idx]
@@ -477,7 +478,7 @@ class InputGen(Dataset, DFManager):
                     for ts, val in zip(tsloc, allrows[coln]):
                         if val not in ("", "empty", "None", "none"):
                             codeidx=dic[val]
-                            np.add.at(input,[[ts],[codeidx+startidx]], 1)
+                            np.add.at(input,([ts],[codeidx+startidx]), 1)
 
                 for coln in nobari10:
                     startidx, endidx = self.get_column_index_range(dfn, coln)
@@ -526,7 +527,7 @@ class InputGen(Dataset, DFManager):
 
                             for val in vals:
                                 if val not in ("", "empty", "None", "none"):
-                                    np.add.at(input,[[ts],[startidx+dic[val]]],1)
+                                    np.add.at(input,([ts],[startidx+dic[val]]),1)
 
 
         if (input != input).any():
@@ -536,7 +537,8 @@ class InputGen(Dataset, DFManager):
             print("get item finished")
         if (input != input).any():
             raise ValueError("NA FOUND")
-        return input.astype("float32"), target.astype("float32"), loss_type.astype("float32")
+        time_length=np.array([time_length])
+        return input.astype("float32"), target.astype("float32"), loss_type.astype("float32"), time_length.astype("long")
 
     def __len__(self):
         '''
@@ -620,7 +622,7 @@ class GenHelper(Dataset):
 class InputGenJ(InputGen):
     def __init__(self, death_fold=0, death_only=True, curriculum=False, validation_test_proportion=0.1,
                  elim_rare_code=True, incidence=0.01, death_incidence=0.001, random_seed=10086, no_underlying=True,
-                 debug=False, verbose=False, cached=True, dspath="/local2/tmp/jasondata/"):
+                 debug=False, verbose=False, cached=False, dspath="/local2/tmp/jasondata/"):
         verbose = verbose
         debug = debug
         super(InputGenJ, self).__init__(elim_rare_code=elim_rare_code, incidence=incidence,
@@ -658,7 +660,8 @@ class InputGenJ(InputGen):
     def train_valid_test_split(self):
         if self.cached:
             raise UserWarning("Splitted validation and training set will not be used, because you are using cached\n"
-                              "data set, set the init parameter cached=False. Splitting will be performed.")
+                              "data set, set the init parameter cached=False.")
+            return
         # splits the whole set by id
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
         self.death_rep_person_id = np.intersect1d(death_rep_person_id,self.rep_person_id)
@@ -855,17 +858,17 @@ class DatasetCacher(Dataset):
         else:
             return self.len
 
-def cache_them(path):
+def cache_them(path,n_proc=16):
 
     # first argument is processes counts,
     # second argument is a function to initialize each process
-    with mp.Pool(8,valid_initializer, (path,)) as p:
+    with mp.Pool(n_proc//2,valid_initializer, (path,)) as p:
         list(tqdm(p.imap(imap_valid_cache, range(1958)), total=1958))
 
-    with mp.Pool(16,test_initializer, (path,)) as p:
+    with mp.Pool(n_proc,test_initializer, (path,)) as p:
         list(tqdm(p.imap(imap_test_cache, range(1958)), total=1958))
 
-    with mp.Pool(16,train_initializer, (path,)) as p:
+    with mp.Pool(n_proc,train_initializer, (path,)) as p:
         list(tqdm(p.imap(imap_train_cache, range(15667)), total=15667))
 
     print("Done")
@@ -877,7 +880,7 @@ def valid_initializer(path):
     # global train_cacher
     # global test_cacher
 
-    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True, cached=False)
     ig.train_valid_test_split()
 
     valid=ig.get_valid()
@@ -1031,4 +1034,4 @@ def try_load_pickle():
     print("Measure time")
 
 if __name__=="__main__":
-    try_load_pickle()
+    try_pickle_again()

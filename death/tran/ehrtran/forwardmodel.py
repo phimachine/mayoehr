@@ -69,6 +69,8 @@ class TransformerMixedForward(nn.Module):
         self.apply(self.reset_mod)
 
     def one_pass(self, input, target):
+
+        # none of these functions work for binary classifications. Rework them.
         # ml
         output = self(input)
         lml = F.cross_entropy(output, target)

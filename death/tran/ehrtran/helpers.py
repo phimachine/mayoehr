@@ -2,9 +2,24 @@ import torch
 import numpy as np
 from torch.autograd import Variable
 
-def get_non_pad_mask(seq):
-    assert seq.dim() == 2
-    return seq.ne(0).float().unsqueeze(-1)
+def get_non_pad_mask(seq, key_length=None):
+    if key_length is None:
+        assert seq.dim() == 2
+        return seq.ne(0).float().unsqueeze(-1)
+    else:
+        batch = seq.shape[0]
+        len_seq = seq.shape[1]
+        mask=torch.zeros(batch,len_seq)
+        for i in range(batch):
+            mask[i,:key_length[i]]=1
+        return mask.float().unsqueeze(-1)
+
+def get_src_pos(seq, key_length):
+    len_seq=seq.shape[1]
+    src_pos=torch.arange(1, len_seq+1)
+    src_pos=src_pos*get_non_pad_mask(seq,key_length).squeeze(-1).long()
+    return src_pos
+
 
 def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
     ''' Sinusoid position encoding table '''
@@ -26,15 +41,24 @@ def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
 
     return torch.FloatTensor(sinusoid_table)
 
-def get_attn_key_pad_mask(seq_k, seq_q):
+def get_attn_key_pad_mask(seq_k, seq_q, key_length=None):
     ''' For masking out the padding part of key sequence. '''
 
     # Expand to fit the shape of key query attention matrix.
-    len_q = seq_q.size(1)
-    padding_mask = seq_k.eq(0)
-    padding_mask = padding_mask.unsqueeze(1).expand(-1, len_q, -1)  # b x lq x lk
-
-    return padding_mask
+    if key_length is None:
+        len_q = seq_q.size(1)
+        padding_mask = seq_k.eq(0)
+        padding_mask = padding_mask.unsqueeze(1).expand(-1, len_q, -1)  # b x lq x lk
+        return padding_mask
+    else:
+        len_q = seq_q.size(1)
+        batch = seq_k.size(0)
+        len_k = seq_k.size(1)
+        padding_mask = torch.ones(batch,len_k).byte()
+        for i in range(batch):
+            padding_mask[i,:key_length[i]]=0
+        padding_mask = padding_mask.unsqueeze(1).expand(-1, len_q, -1)  # b x lq x lk
+        return padding_mask
 
 def get_subsequent_mask(seq):
     ''' For masking out the subsequent info. '''
