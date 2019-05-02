@@ -17,12 +17,14 @@ import torch.nn as nn
 from torch.autograd import Variable
 import traceback
 import datetime
-from death.final.losses import TOELoss
+from death.final.losses import TOELoss,DiscreteCrossEntropy
 from death.final.killtime import out_of_time
 from death.final.metrics import ConfusionMatrixStats
 import code
 from death.analysis.expectedroc import get_death_code_proportion
 from death.adnc.otheradnc import *
+from death.tran.ehrtran.attnmodel import TransformerMixedAttn
+from death.tran.ehrtran.forwardmodel import TransformerMixedForward
 
 
 def logprint(logfile, string):
@@ -42,6 +44,19 @@ def datetime_filename():
 
 def sv(var):
     return var.data.cpu().numpy()
+
+def save_for_debugging(model, input_tuple):
+    """
+    Sometimes debugging frame is not available, you can use this function to take the whole model out together with the problem input
+    :return:
+    """
+    with open("debug/save.pkl",'wb') as f:
+        torch.save((model,(input_tuple)),f)
+
+def load_for_debugging(fpath="debug/save.pkl"):
+    with open(fpath,'rb') as f:
+        model, (input_tuple)=torch.load(f)
+    return model(*input_tuple)
 
 class ModelManager():
     def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=1e-8, num_workers=32, kill_time=False,
@@ -81,7 +96,7 @@ class ModelManager():
         self.valid_batches=valid_batches
 
     def init_input_gen(self, inputgen_class, use_cache, collate_fn, *args, **kwargs):
-        self.ig=inputgen_class(*args,**kwargs)
+        self.ig=inputgen_class(*args,**kwargs, cached=use_cache)
         self.param_x=self.ig.input_dim
         self.param_v_t=self.ig.output_dim
         if use_cache:
@@ -96,6 +111,13 @@ class ModelManager():
                                  collate_fn=collate_fn, pin_memory=True)
 
     def add_model(self, model, model_name, transformer=False):
+        """
+
+        :param model:
+        :param model_name:
+        :param transformer: specify transformer, or anything else, to use different pipelines
+        :return:
+        """
         self.models.append(model)
         logfile = "log/" + model_name + "_" + datetime_filename() + ".txt"
         self.log_files.append(logfile)
@@ -144,9 +166,11 @@ class ModelManager():
             optims.append(optim)
             hes.append(highest_epoch)
             his.append(highest_iter)
-
-        he=hes[0]
-        hi=his[0]
+        try:
+            he=hes[0]
+            hi=his[0]
+        except:
+            raise ValueError("No model to load")
         for i in range(len(self.models)):
             assert(hes[i]==he)
             assert(his[i]==hi)
@@ -206,8 +230,8 @@ class ModelManager():
 
         valid_iterator = iter(self.validdl)
         print_interval = 100
-        val_interval = 999
-        save_interval = 5
+        val_interval = 500
+        save_interval = 2
         val_batch = int(self.valid_batches / self.batch_size)
 
         cmss=[]
@@ -221,9 +245,7 @@ class ModelManager():
                 logprint(logfile, param.data.shape)
 
         for epoch in range(starting_epoch, self.total_epochs):
-
             i=0
-
             if epoch % save_interval == 0:
                 self.save_models(epoch, i)
                 print("model saved for epoch", epoch, "iteration", i)
@@ -238,30 +260,30 @@ class ModelManager():
                     for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
                         traincm, _ = cms[0], cms[1]
                         cod_loss, toe_loss=traincm.running_loss()
-                        logprint(logfile, name+" epoch %4d, batch %4d. running cod: %.5f, toe: %.5f, total: %.5f" %
+                        logprint(logfile, "%14s " % name + "train epoch %4d, batch %4d. running cod: %.5f, toe: %.5f, total: %.5f" %
                                  (epoch, i, cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
-                        logprint(logfile, name+" train sen: %.6f, spe: %.6f, roc: %.6f" %
-                                 tuple(traincm.running_stats()))
+                        logprint(logfile, "%14s " % name + "train sen: %.6f, spe: %.6f, roc: %.6f" % tuple(traincm.running_stats()))
 
                 # running validation before training might cause problem
                 if i % val_interval == 0:
                     for _ in range(val_batch):
                         # we should consider running validation multiple times and average. TODO
                         try:
-                            (input, target, loss_type) = next(valid_iterator)
+                            (input, target, loss_type, time_length) = next(valid_iterator)
                         except StopIteration:
                             valid_iterator = iter(self.validdl)
-                            (input, target, loss_type) = next(valid_iterator)
-                        self.run_one_patient(i, input, target, loss_type, cmss, validate=True)
+                            (input, target, loss_type, time_length) = next(valid_iterator)
+                        self.run_one_patient(i, input, target, loss_type, time_length, cmss, validate=True)
                     for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
                         _, validcm= cms[0], cms[1]
                         cod_loss, toe_loss=validcm.running_loss()
-                        logprint(logfile, name + " validation. cod: %.10f, toe: %.10f, total: %.10f" %
+                        logprint(logfile, "%14s " % name + "validation. cod: %.10f, toe: %.10f, total: %.10f" %
                                  (cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
-                        logprint(logfile, name + " validate sen: %.6f, spe: %.6f, roc: %.6f" %
-                                 tuple(validcm.running_stats()))
+                        logprint(logfile, "%14s " % name + "validate sen: %.6f, spe: %.6f, roc: %.6f" % tuple(validcm.running_stats()))
+
 
             starting_iter = 0
+
 
     def run_one_patient(self, index, input, target, loss_type, time_length, cmss, validate=False):
         for model, name, optim, logfile, cms, bin, time, is_transformer in \
@@ -269,29 +291,42 @@ class ModelManager():
                     self.log_files, cmss, self.binary_criterions, self.time_criterions, self.transformer):
             self.run_one_patient_one_model(model, input, target, loss_type, time_length, optim, cms, bin, time, validate, is_transformer)
 
+    def pre_run_modifier(self,input,target):
+        return input, target
+
     def run_one_patient_one_model(self, computer, input, target, loss_type, time_length,
                                   optim, cms, binary, real, validate, is_transformer):
-        global global_exception_counter
+        # global global_exception_counter
         patient_loss = None
         traincm = cms[0]
         validcm = cms[1]
-        try:
-            optim.zero_grad()
+        # try:
+        optim.zero_grad()
 
-            input = Variable(torch.Tensor(input).cuda())
-            target = Variable(torch.Tensor(target).cuda())
-            loss_type = Variable(torch.Tensor(loss_type).cuda())
+        input,target=self.pre_run_modifier(input,target)
 
-            # we have no critical index, becuase critical index are those timesteps that
-            # DNC is required to produce outputs. This is not the case for our project.
-            # criterion does not need to be reinitiated for every story, because we are not using a mask
-            if is_transformer:
-                # TODO how to generate src_seq?
-                patient_output = computer(input, target, time_length)
-            else:
-                patient_output = computer(input)
+        input = Variable(torch.Tensor(input).cuda())
+        target = Variable(torch.Tensor(target).cuda())
+
+        # input contains inf values. some lab results. index 4069
+        input=input.clamp(-1e10, 1e10)
+
+
+        loss_type = Variable(loss_type.cuda())
+
+        # we have no critical index, becuase critical index are those timesteps that
+        # DNC is required to produce outputs. This is not the case for our project.
+        # criterion does not need to be reinitiated for every story, because we are not using a mask
+        cause_of_death_target = target[:, 1:]
+
+        if is_transformer:
+            # TODO how to generate src_seq?
+            total_loss, cod_loss, lat, lem, lvat, toe_loss, patient_output = computer.one_pass(input, time_length, target, loss_type)
             cause_of_death_output = patient_output[:, 1:]
-            cause_of_death_target = target[:, 1:]
+            sigoutput = torch.sigmoid(cause_of_death_output)
+        else:
+            patient_output = computer(input)
+            cause_of_death_output = patient_output[:, 1:]
             # pdb.set_trace()
             cod_loss = binary(cause_of_death_output, cause_of_death_target)
 
@@ -302,53 +337,53 @@ class ModelManager():
             total_loss = cod_loss + self.beta* toe_loss
             sigoutput = torch.sigmoid(cause_of_death_output)
 
-            # this numerical issue destroyed this model training.
-            # loss keeps going down, but ROC is the same. I need to load an earlier epoch and restart.
-            # I need to reimplement my BCE
-            # this is a known issue for PyTorch 0.3.1 https://github.com/pytorch/pytorch/issues/2866
+        # this numerical issue destroyed this model training.
+        # loss keeps going down, but ROC is the same. I need to load an earlier epoch and restart.
+        # I need to reimplement my BCE
+        # this is a known issue for PyTorch 0.3.1 https://github.com/pytorch/pytorch/issues/2866
 
-            # this happens when the logit is exactly 1 (\sigma(593)), and the loss is around 0.01
-            # I decide to not debug it, because the backwards signal should still be usable.
+        # this happens when the logit is exactly 1 (\sigma(593)), and the loss is around 0.01
+        # I decide to not debug it, because the backwards signal should still be usable.
 
-            # no. the actual problem is that the death target does not conform one-hot requirement.
-            # it's not the sparsity, because the output was one
-            if cod_loss.data[0] < 0:
-                import pickle
-                # this was reached with loss negative. Why did that happen?
-                # BCE loss is supposed to be positive all the time.
-                with open("debug/itcc.pkl", 'wb') as f:
-                    # this is a 1 Gb pickle. Somehow loading it takes forever. What?
-                    pickle.dump((input, target, cause_of_death_output, cause_of_death_target), f)
-                print(cod_loss.data[0])
-                code.interact(local=locals())
-                raise ValueError
+        # no. the actual problem is that the death target does not conform one-hot requirement.
+        # it's not the sparsity, because the output was one
+        if cod_loss.item() < 0:
+            import pickle
+            # this was reached with loss negative. Why did that happen?
+            # BCE loss is supposed to be positive all the time.
+            with open("debug/itcc.pkl", 'wb') as f:
+                # this is a 1 Gb pickle. Somehow loading it takes forever. What?
+                pickle.dump((input, target, cause_of_death_output, cause_of_death_target), f)
+            print(cod_loss.data[0])
+            code.interact(local=locals())
+            raise ValueError
 
-            if not validate:
-                total_loss.backward()
-                optim.step()
-                cod_loss=float(cod_loss.data)
-                toe_loss=float(toe_loss.data)
-                traincm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
-                return cod_loss, toe_loss
+        if not validate:
+            total_loss.backward()
+            optim.step()
+            cod_loss=float(cod_loss.item())
+            toe_loss=float(toe_loss.item())
+            traincm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
+            return cod_loss, toe_loss
 
-            else:
-                cod_loss=float(cod_loss.data)
-                toe_loss=float(toe_loss.data)
-                validcm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
-                return cod_loss, toe_loss
-
-            if global_exception_counter > -1:
-                global_exception_counter -= 1
-        except ValueError:
-            traceback.print_exc()
-            print("Value Error reached")
-            print(datetime.datetime.now().time())
-            global_exception_counter += 1
-            if global_exception_counter == 10:
-                save_model(computer, optimizer, epoch=0, iteration=global_exception_counter)
-                raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
-            else:
-                raise
+        else:
+            cod_loss=float(cod_loss.item())
+            toe_loss=float(toe_loss.item())
+            validcm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
+            return cod_loss, toe_loss
+        #
+        #     if global_exception_counter > -1:
+        #         global_exception_counter -= 1
+        # except ValueError:
+        #     traceback.print_exc()
+        #     print("Value Error reached")
+        #     print(datetime.datetime.now().time())
+        #     global_exception_counter += 1
+        #     if global_exception_counter == 10:
+        #         save_model(computer, optimizer, epoch=0, iteration=global_exception_counter)
+        #         raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
+        #     else:
+        #         raise
 
 
 class ExperimentManager(ModelManager):
@@ -607,8 +642,8 @@ class ExperimentManager(ModelManager):
             self.load_models()
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-    def debug_this(self,load=False):
-        self.save_str = "transformer"
+    def transformers(self,load=False):
+        self.save_str = "transformers"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
         """
@@ -631,45 +666,89 @@ class ExperimentManager(ModelManager):
             parser.add_argument('-embs_share_weight', action='store_true')
             parser.add_argument('-proj_share_weight', action='store_true')
         """
+        prior_probability = get_death_code_proportion(self.ig)
 
-        src_vocab_size = self.param_x
-        tgt_vocab_size = self.param_v_t
-        max_token_seq_len=123
-        proj_share_weight=True
-        embs_share_weight=False
-        d_k=64
-        d_v=64
-        d_model=512
-        d_word_vec=512
-        d_inner_hid=2048
-        n_layers=6
-        n_head=8
-        dropout=0.1
+        binary_criterion=self.binary_criterions()
+        real_criterion=self.time_criterions()
+        tranforward = TransformerMixedForward(binary_criterion=binary_criterion, real_criterion=real_criterion,
+                                     input_size=self.param_x, output_size=self.param_v_t, prior=prior_probability).cuda()
 
-        transformer=EHRTransformer(
-            src_vocab_size,
-            tgt_vocab_size,
-            max_token_seq_len,
-            tgt_emb_prj_weight_sharing=proj_share_weight,
-            emb_src_tgt_weight_sharing=embs_share_weight,
-            d_k=d_k,
-            d_v=d_v,
-            d_model=d_model,
-            d_word_vec=d_word_vec,
-            d_inner=d_inner_hid,
-            n_layers=n_layers,
-            n_head=n_head,
-            dropout=dropout).cuda()
+        binary_criterion=self.binary_criterions()
+        real_criterion=self.time_criterions()
+        tranattn = TransformerMixedAttn(binary_criterion=binary_criterion, real_criterion=real_criterion,
+                                     input_size=self.param_x, output_size=self.param_v_t, prior=prior_probability).cuda()
 
-        self.add_model(transformer.cuda(), "transformer")
+        self.add_model(tranforward.cuda(), "tranforward", transformer=True)
+        self.add_model(tranattn.cuda(), "tranattn", transformer=True)
+
         if load:
             self.load_models()
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
+    def transformer_with_no_mixed_obj(self, load=False):
+        self.save_str = "tran_no_mixed_obj"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        """
+            parser.add_argument('-data', required=True)
+
+            parser.add_argument('-epoch', type=int, default=10)
+            parser.add_argument('-batch_size', type=int, default=64)
+
+            #parser.add_argument('-d_word_vec', type=int, default=512)
+            parser.add_argument('-d_model', type=int, default=512)
+            parser.add_argument('-d_inner_hid', type=int, default=2048)
+            parser.add_argument('-d_k', type=int, default=64)
+            parser.add_argument('-d_v', type=int, default=64)
+
+            parser.add_argument('-n_head', type=int, default=8)
+            parser.add_argument('-n_layers', type=int, default=6)
+            parser.add_argument('-n_warmup_steps', type=int, default=4000)
+
+            parser.add_argument('-dropout', type=float, default=0.1)
+            parser.add_argument('-embs_share_weight', action='store_true')
+            parser.add_argument('-proj_share_weight', action='store_true')
+        """
+        prior_probability = get_death_code_proportion(self.ig)
+
+        binary_criterion = self.binary_criterions()
+        real_criterion = self.time_criterions()
+        tranforward = TransformerMixedForward(binary_criterion=binary_criterion, real_criterion=real_criterion,
+                                              input_size=self.param_x, output_size=self.param_v_t,
+                                              prior=prior_probability).cuda()
+
+        binary_criterion = self.binary_criterions()
+        real_criterion = self.time_criterions()
+        tranattn = TransformerMixedAttn(binary_criterion=binary_criterion, real_criterion=real_criterion,
+                                        input_size=self.param_x, output_size=self.param_v_t,
+                                        prior=prior_probability).cuda()
+
+        self.add_model(tranforward.cuda(), "tranforward", transformer=True)
+        self.add_model(tranattn.cuda(), "tranattn", transformer=True)
+
+        if load:
+            self.load_models()
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+    def softmax_experiment(self,load=False):
+        # 10 sensitivity is what we have to beat
+
+
+        self.save_str = "dnc_adnc_softmax"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        self.add_APDNC()
+        self.add_DNC()
+
+        if load:
+            self.load_models()
+        self.binary_criterions=DiscreteCrossEntropy
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
 
 def main():
-    ds=ExperimentManager(batch_size=8, num_workers=4)
-    ds.debug_this()
+    ds=ExperimentManager(batch_size=64, num_workers=4)
+    ds.softmax_experiment(load=False)
     ds.run()
 
 

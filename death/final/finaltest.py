@@ -89,7 +89,7 @@ def run_one_patient(computer, input, target, loss_type, beta):
     loss=patient_loss+beta*toe_loss
 
     # metrics
-    cause_of_death_output_sig=torch.nn.functional.sigmoid(cause_of_death_output)
+    cause_of_death_output_sig=torch.torch.sigmoid(cause_of_death_output)
     # sen=sensitivity(cause_of_death_output_sig,cause_of_death_target)
     # spe=specificity(cause_of_death_output_sig,cause_of_death_target)
     # f1=f1score(cause_of_death_output_sig,cause_of_death_target)

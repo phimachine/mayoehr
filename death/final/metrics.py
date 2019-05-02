@@ -12,7 +12,14 @@ class ConfusionMatrixStats():
     For my usages, only sensitivity and specificity are implemented.
     Uncomment for complete confusion matrix memory and implement the statis
     """
-    def __init__(self,dims,memory_len=50, string=None):
+    def __init__(self,dims,memory_len=50, string=None, *args):
+        """
+
+        :param dims:
+        :param memory_len:
+        :param string:
+        :param args: the names of the losses that you want to keep track of
+        """
 
         self.memory_len=memory_len
         self.dims=dims
@@ -25,8 +32,12 @@ class ConfusionMatrixStats():
         self.conditional_positives=np.zeros((dims,memory_len))
         self.conditional_negatives=np.zeros((dims,memory_len))
 
-        self.running_cod_loss = deque(maxlen=memory_len)
-        self.running_toe_loss = deque(maxlen=memory_len)
+        # self.running_cod_loss = deque(maxlen=memory_len)
+        # self.running_toe_loss = deque(maxlen=memory_len)
+        self.dequenames= args + ("cod", "toe")
+        for arg in self.dequenames:
+            name="running_"+arg+"_loss"
+            self.__setattr__(name, deque(maxlen=memory_len))
 
         self.idx=0
         self.all=False
@@ -37,7 +48,7 @@ class ConfusionMatrixStats():
         else:
             return super(ConfusionMatrixStats, self).__str__()
 
-    def update_one_pass(self, output, target, cod_loss=None, toe_loss=None):
+    def update_one_pass(self, output, target, *args):
         """
         record the confusion matrix statistics for each label.
         average is done on the final metrics of all labels, not before
@@ -45,11 +56,10 @@ class ConfusionMatrixStats():
         :param target: ditto
         :return:
         """
-
-        assert(not isinstance(cod_loss, Variable))
-        assert(not isinstance(toe_loss, Variable))
-        self.running_cod_loss.appendleft(cod_loss)
-        self.running_toe_loss.appendleft(toe_loss)
+        for dequename, loss in zip(self.dequenames, args):
+            assert(not isinstance(loss, Variable))
+            deque=self.__getattribute__("running_"+dequename+"_loss")
+            deque.appendleft(loss)
 
         positive=output.data.cpu().numpy()
         conditional_positive=target.data.cpu().numpy()
@@ -73,12 +83,12 @@ class ConfusionMatrixStats():
         batch_specificity=np.mean(true_negative/conditional_negative.clip(1e-8,None), axis=0)
         batch_ROC=batch_sensitivity+batch_specificity
 
-        assert((batch_sensitivity>0).all())
-        assert((batch_sensitivity<1).all())
-        assert((batch_specificity>0).all())
-        assert((batch_specificity<1).all())
-        assert((batch_ROC>0).all())
-        assert((batch_ROC<2).all())
+        assert((batch_sensitivity>=0).all())
+        assert((batch_sensitivity<=1).all())
+        assert((batch_specificity>=0).all())
+        assert((batch_specificity<=1).all())
+        assert((batch_ROC>=0).all())
+        assert((batch_ROC<=2).all())
         self.idx+=1
         if self.idx==self.memory_len:
             self.idx=0
@@ -108,9 +118,11 @@ class ConfusionMatrixStats():
 
     def running_loss(self):
         if len(self.running_cod_loss)==0:
-            return 0, 0
+            return (0,)*len(self.dequenames)
         else:
-            return np.mean(self.running_cod_loss), np.mean(self.running_toe_loss)
+            # deque=self.__getattribute__("running_"+dequename+"_loss")
+            return tuple(np.mean(self.__getattribute__("running_"+dq+"_loss")) for dq in self.dequenames)
+            #np.mean(self.running_cod_loss), np.mean(self.running_toe_loss)
 
 
 def sensitivity(output, target):

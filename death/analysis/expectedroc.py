@@ -13,7 +13,7 @@ def get_death_code_proportion(ig):
     patient_list = []
     last_patient = None
 
-    for index, row in tqdm.tqdm(ig.death.iterrows()):
+    for index, row in tqdm.tqdm(ig.death.iterrows(), total=ig.death.shape[0]):
         rep_id=index[0]
         if rep_id in patients_lookup:
             if rep_id != last_patient:

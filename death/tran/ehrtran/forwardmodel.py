@@ -5,8 +5,8 @@ class TransformerMixedForward(nn.Module):
     # no attention module here, because the input is not timewise
     # we will add time-wise attention to time-series model later.
 
-    def __init__(self, prior, binary_criterion, real_criterion, d_model=256, input_size=50000, d_inner=32, dropout=0.1,
-                 n_layers=8, output_size=12, epsilon=1, xi=1, beta=0.01,
+    def __init__(self, prior, binary_criterion, real_criterion, d_model=512, input_size=50000, d_inner=2048, dropout=0.1,
+                 n_layers=6, output_size=12, epsilon=1, xi=1, beta=0.01,
                  lambda_ml=1, lambda_at=1, lambda_em=1, lambda_vat=1):
         super(TransformerMixedForward, self).__init__()
 
@@ -81,31 +81,36 @@ class TransformerMixedForward(nn.Module):
         # ml
         output = self(input, input_length)
         toe_output = output[:, 0]
-        time_loss = self.real_criterion(toe_output, target[:, 0], loss_type)
+        toe_loss = self.real_criterion(toe_output, target[:, 0], loss_type)
         cod_output = output[:, 1:]
         cod_target = target[:, 1:]
         lml = self.binary_criterion(cod_output, cod_target)
-
-        # adv, at
-        embed_grad = torch.autograd.grad(lml, self.embedding, only_inputs=True, retain_graph=True)[0]
-        radv = self.radv(embed_grad)
-        yat = self(input, input_length, radv)
-        lat = self.binary_criterion(yat[:, 1:], cod_target)
-
-        # unsupervised
-        lem = self.em(cod_output)
-
-        # vat
-        xid = self.xid()
-        aoutput = self(input, input_length, xid)
-        rvat = self.rvat(cod_output, aoutput[:, 1:])
-        yvat = self(input, input_length, rvat)
-        lvat = self.binary_kl_divergence(cod_output, yvat[:, 1:])
-        lvat = lvat.mean(dim=1).mean(dim=0)
-
-        all_loss = self.lambda_ml * lml + self.lambda_at * lat + self.lambda_em * lem + self.lambda_at * lvat \
-                   + self.beta * time_loss
-        return all_loss, lml, lat, lem, lvat, output
+        #
+        # # adv, at
+        # embed_grad = torch.autograd.grad(lml, self.embedding, only_inputs=True, retain_graph=True)[0]
+        # radv = self.radv(embed_grad)
+        # yat = self(input, input_length, radv)
+        # lat = self.binary_criterion(yat[:, 1:], cod_target)
+        #
+        # # unsupervised
+        # lem = self.em(cod_output)
+        #
+        # # vat
+        # xid = self.xid()
+        # aoutput = self(input, input_length, xid)
+        # rvat = self.rvat(cod_output, aoutput[:, 1:])
+        # yvat = self(input, input_length, rvat)
+        # lvat = self.binary_kl_divergence(cod_output, yvat[:, 1:])
+        # lvat = lvat.mean(dim=1).mean(dim=0)
+        #
+        # all_loss = self.lambda_ml * lml + self.lambda_at * lat + self.lambda_em * lem + self.lambda_at * lvat \
+        #            + self.beta * toe_loss
+        # assert (output==output).all()
+        all_loss=lml+self.beta*toe_loss
+        lat=None
+        lem=None
+        lvat=None
+        return all_loss, lml, lat, lem, lvat, toe_loss, output
 
     def forward(self, input, input_length, r=None):
         """
@@ -116,7 +121,6 @@ class TransformerMixedForward(nn.Module):
         :param r: for mixed objective loss
         :return:
         """
-
         input=input.max(dim=1)[0]
         if r is None:
             enc_output = torch.matmul(input, self.embedding)
@@ -125,6 +129,7 @@ class TransformerMixedForward(nn.Module):
 
         for enc_layer in self.layer_stack:
             enc_output = enc_layer(enc_output)
+            assert (enc_output==enc_output).all()
 
         output = self.last_linear(enc_output)
         output = output.squeeze(1)
@@ -168,6 +173,7 @@ class TransformerMixedForward(nn.Module):
         dkl = dkl.sum(dim=1).mean(dim=0)
         g = torch.autograd.grad(dkl, self.embedding, retain_graph=True, only_inputs=True)[0]
         rvat = self.radv(g)
+        assert (rvat==rvat).all()
         return rvat
 
     def em(self,output):
@@ -178,7 +184,7 @@ class TransformerMixedForward(nn.Module):
         :return:
         """
         # the output is logit
-        loss=self.binary_criterion(output,output)
+        loss=self.binary_criterion(output,torch.sigmoid(output))
         return loss
 
     @staticmethod

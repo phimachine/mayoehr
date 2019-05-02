@@ -330,7 +330,7 @@ class PriorDNC(nn.Module):
         # erase strength, [W]
         erase_vector = interface_input[:, last_index:last_index + self.W]
         last_index = last_index + self.W
-        erase_vector = nn.functional.sigmoid(erase_vector)
+        erase_vector = torch.sigmoid(erase_vector)
 
         # write vector, [W]
         write_vector = interface_input[:, last_index:last_index + self.W]
@@ -340,17 +340,17 @@ class PriorDNC(nn.Module):
         free_gates = interface_input[:, last_index:last_index + self.R]
 
         last_index = last_index + self.R
-        free_gates = nn.functional.sigmoid(free_gates)
+        free_gates = torch.sigmoid(free_gates)
 
         # allocation gate [1]
         allocation_gate = interface_input[:, last_index:last_index + 1]
         last_index = last_index + 1
-        allocation_gate = nn.functional.sigmoid(allocation_gate)
+        allocation_gate = torch.sigmoid(allocation_gate)
 
         # write gate [1]
         write_gate = interface_input[:, last_index:last_index + 1]
         last_index = last_index + 1
-        write_gate = nn.functional.sigmoid(write_gate)
+        write_gate = torch.sigmoid(write_gate)
 
         # read modes [R,3]
         read_modes = interface_input[:, last_index:last_index + self.R * 3]
@@ -703,7 +703,7 @@ class Stock_LSTM(nn.Module):
         self.v_t= v_t
 
         self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
-                       dropout=True)
+                       dropout=0.1)
         self.last=nn.Linear(self.h, self.v_t)
         self.st=None
 

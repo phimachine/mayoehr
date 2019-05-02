@@ -538,7 +538,12 @@ class InputGen(Dataset, DFManager):
         if (input != input).any():
             raise ValueError("NA FOUND")
         time_length=np.array([time_length])
-        return input.astype("float32"), target.astype("float32"), loss_type.astype("float32"), time_length.astype("long")
+        input=np.nan_to_num(input.astype("float32"))
+        target=np.nan_to_num(target.astype("float32"))
+        loss_type=np.nan_to_num(loss_type.astype("long"))
+        time_length=np.nan_to_num(time_length.astype("long"))
+
+        return input, target, loss_type, time_length
 
     def __len__(self):
         '''
@@ -578,6 +583,33 @@ class InputGen(Dataset, DFManager):
                 print(df.isna().any())
 
         return
+
+    def reverse_lookup(self,index):
+        """
+        Searches for the index
+        :param index:
+        :return:
+        """
+        dff=None
+        colnn=None
+        idx=None
+        for df, coln, start_idx in self.input_dim_manual:
+            if start_idx<=index:
+                dff=df
+                colnn=coln
+                idx=start_idx
+            else:
+                break
+        diff=index-idx
+        try:
+            dic=self.get_dict(dff,colnn)
+        except AttributeError:
+            assert diff==0
+            return dff, colnn, None
+        for key, value in dic.items():
+            if value==diff:
+                return dff, colnn, key
+
 
 # class GenHelper(Dataset):
 #     def __init__(self, mother, length, mapping):
@@ -642,7 +674,6 @@ class InputGenJ(InputGen):
         self.test=None
         self.train_valid_test_split()
 
-
         # the proportion of death records the last training set has
         self.proportion=None
         print("Using InputGenJ")
@@ -658,10 +689,7 @@ class InputGenJ(InputGen):
         self.dspath=dspath
 
     def train_valid_test_split(self):
-        if self.cached:
-            raise UserWarning("Splitted validation and training set will not be used, because you are using cached\n"
-                              "data set, set the init parameter cached=False.")
-            return
+
         # splits the whole set by id
         death_rep_person_id = self.death.index.get_level_values(0).unique().values
         self.death_rep_person_id = np.intersect1d(death_rep_person_id,self.rep_person_id)
@@ -847,8 +875,8 @@ class DatasetCacher(Dataset):
         fname = self.path + self.id + "_" + str(index) + ".pkl"
         try:
             with open(fname, "rb") as f:
-                item=pickle.load(f)
-                return item
+                items=pickle.load(f)
+                return tuple(np.nan_to_num(item) for item in items)
         except FileNotFoundError:
             raise
 
@@ -1038,4 +1066,8 @@ def try_load_pickle():
     print("Measure time")
 
 if __name__=="__main__":
-    try_pickle_again()
+    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    item=ig[4069]
+    valid=ig.get_valid_cached()
+    print(valid[235])
+    print(item)

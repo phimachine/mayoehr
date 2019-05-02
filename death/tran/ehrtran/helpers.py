@@ -83,4 +83,6 @@ def from_pretrained(embeddings, freeze=True):
 
 def norm2reci(tensor):
     norm = tensor.pow(2).sum().rsqrt()
+    # if the residual is inf
+    norm = norm.clamp(0,1e10)
     return norm

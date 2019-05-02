@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from torch.nn import LayerNorm
+from death.helper.layernorm import LayerNorm
 import numpy as np
 
 class EncoderLayerForward(nn.Module):
@@ -57,10 +57,16 @@ class ResidualForward(nn.Module):
     def forward(self, x):
         residual = x
         # output = x.transpose(1, 2)
+        # this generates nan
         output = self.w_2(F.relu(self.w_1(x)))
+        assert(output==output).all()
+
         # output = output.transpose(1, 2)
         output = self.dropout(output)
+        assert(output==output).all()
+
         output = self.layer_norm(output + residual)
+        assert(output==output).all()
         return output
 
 
@@ -146,6 +152,7 @@ class MultiHeadAttention(nn.Module):
         residual = q
 
         q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
+        assert (q==q).all()
         k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
         v = self.w_vs(v).view(sz_b, len_v, n_head, d_v)
 

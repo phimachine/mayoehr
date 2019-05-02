@@ -47,7 +47,7 @@ class TOELoss(nn.Module):
         # only take the positive part
         offset=F.relu(diff)
         offset=self.real_criterion(offset,zeros)
-        offset=offset*loss_type
+        offset=offset*loss_type.float()
 
         loss=base_loss-offset
 
@@ -114,6 +114,22 @@ class AnotherBCEWithLogits(nn.Module):
         loss=self.bce(prob,target)
 
         return loss
+
+class DiscreteCrossEntropy(nn.Module):
+    """
+    Multiclass cross entropy for problems that are supposed to be binary.
+    """
+    def __init__(self):
+        super(DiscreteCrossEntropy, self).__init__()
+
+    def forward(self, input, target):
+        normalized_target=target/target.sum(1).unsqueeze(1)
+        logsoftmax=torch.log_softmax(input, dim=1)
+        loss=normalized_target*logsoftmax
+        # sum over classes for cross entropy, mean over batches for final loss
+        loss=-loss.sum(1).mean(0)
+        return loss
+
 
 
 def test_toe_loss():
