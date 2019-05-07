@@ -12,7 +12,7 @@ class ConfusionMatrixStats():
     For my usages, only sensitivity and specificity are implemented.
     Uncomment for complete confusion matrix memory and implement the statis
     """
-    def __init__(self,dims,memory_len=50, string=None, *args):
+    def __init__(self,dims,memory_len=50, string=None, test=False, AUROC_alpha=None, *args):
         """
 
         :param dims:
@@ -24,13 +24,26 @@ class ConfusionMatrixStats():
         self.memory_len=memory_len
         self.dims=dims
         self.string=string
+        self.test=test
+        self.AUROC_alpha=AUROC_alpha
+        self.ruler=np.arange(0,1,AUROC_alpha)
+        self.steps=self.ruler.shape[0]
+        self.ruler=np.expand_dims(self.ruler, axis=1)
+        self.ruler=np.repeat(self.ruler,self.dims,axis=1)
+        self.ruler=np.expand_dims(self.ruler, axis=0)
 
-        # self.positive=np.zeros(dims,memory_len)
-        # self.negative=np.zeros(dims,memory_len)
-        self.true_positive=np.zeros((dims,memory_len))
-        self.true_negative=np.zeros((dims,memory_len))
-        self.conditional_positives=np.zeros((dims,memory_len))
-        self.conditional_negatives=np.zeros((dims,memory_len))
+        if not self.test:
+            # self.positive=np.zeros(dims,memory_len)
+            # self.negative=np.zeros(dims,memory_len)
+            self.true_positive=np.zeros((dims,memory_len))
+            self.true_negative=np.zeros((dims,memory_len))
+            self.conditional_positives=np.zeros((dims,memory_len))
+            self.conditional_negatives=np.zeros((dims,memory_len))
+        else:
+            self.true_positive=np.zeros((self.steps, dims)).astype(np.long)
+            self.true_negative=np.zeros((self.steps, dims)).astype(np.long)
+            self.conditional_positives=np.zeros((dims, )).astype(np.long)
+            self.conditional_negatives=np.zeros((dims, )).astype(np.long)
 
         # self.running_cod_loss = deque(maxlen=memory_len)
         # self.running_toe_loss = deque(maxlen=memory_len)
@@ -52,49 +65,86 @@ class ConfusionMatrixStats():
         """
         record the confusion matrix statistics for each label.
         average is done on the final metrics of all labels, not before
-        :param output: PyTorch 0.3.1 Variables
+        :param output: PyTorch 0.3.1 Variables, [0-1]
         :param target: ditto
         :return:
         """
-        for dequename, loss in zip(self.dequenames, args):
-            assert(not isinstance(loss, Variable))
-            deque=self.__getattribute__("running_"+dequename+"_loss")
-            deque.appendleft(loss)
+        if not self.test:
+            assert (output<=1).all()
+            assert (output>=0).all()
+            for dequename, loss in zip(self.dequenames, args):
+                assert(not isinstance(loss, Variable))
+                deque=self.__getattribute__("running_"+dequename+"_loss")
+                deque.appendleft(loss)
 
-        positive=output.data.cpu().numpy()
-        conditional_positive=target.data.cpu().numpy()
-        true_positive=positive*conditional_positive
-        true_negative=(1-positive)*(1-conditional_positive)
-        conditional_negative=1-conditional_positive
+            positive=output.data.cpu().numpy()
+            conditional_positive=target.data.cpu().numpy()
+            true_positive=positive*conditional_positive
+            true_negative=(1-positive)*(1-conditional_positive)
+            conditional_negative=1-conditional_positive
 
-        conditional_positive=conditional_positive.sum(0)
-        true_positive=true_positive.sum(0)
-        true_negative=true_negative.sum(0)
-        conditional_negative=conditional_negative.sum(0)
+            conditional_positive=conditional_positive.sum(0)
+            true_positive=true_positive.sum(0)
+            true_negative=true_negative.sum(0)
+            conditional_negative=conditional_negative.sum(0)
 
-        # self.positive[:,self.idx]=positive
-        # self.negative[:,self.idx]=negative
-        self.conditional_positives[:,self.idx]=conditional_positive
-        self.conditional_negatives[:,self.idx]=conditional_negative
-        self.true_positive[:,self.idx]=true_positive
-        self.true_negative[:,self.idx]=true_negative
+            # self.positive[:,self.idx]=positive
+            # self.negative[:,self.idx]=negative
+            self.conditional_positives[:,self.idx]=conditional_positive
+            self.conditional_negatives[:,self.idx]=conditional_negative
+            self.true_positive[:,self.idx]=true_positive
+            self.true_negative[:,self.idx]=true_negative
 
-        batch_sensitivity=np.mean(true_positive/conditional_positive.clip(1e-8,None), axis=0)
-        batch_specificity=np.mean(true_negative/conditional_negative.clip(1e-8,None), axis=0)
-        batch_ROC=batch_sensitivity+batch_specificity
+            batch_sensitivity=np.mean(true_positive/conditional_positive.clip(1e-8,None), axis=0)
+            batch_specificity=np.mean(true_negative/conditional_negative.clip(1e-8,None), axis=0)
+            batch_ROC=batch_sensitivity+batch_specificity
 
-        assert((batch_sensitivity>=0).all())
-        assert((batch_sensitivity<=1).all())
-        assert((batch_specificity>=0).all())
-        assert((batch_specificity<=1).all())
-        assert((batch_ROC>=0).all())
-        assert((batch_ROC<=2).all())
-        self.idx+=1
-        if self.idx==self.memory_len:
-            self.idx=0
-            self.all=True
+            assert((batch_sensitivity>=0).all())
+            assert((batch_sensitivity<=1).all())
+            assert((batch_specificity>=0).all())
+            assert((batch_specificity<=1).all())
+            assert((batch_ROC>=0).all())
+            assert((batch_ROC<=2).all())
+            self.idx+=1
+            if self.idx==self.memory_len:
+                self.idx=0
+                self.all=True
 
-        return batch_sensitivity, batch_specificity, batch_ROC
+            return batch_sensitivity, batch_specificity, batch_ROC
+        else:
+
+            for dequename, loss in zip(self.dequenames, args):
+                assert(not isinstance(loss, Variable))
+                deque=self.__getattribute__("running_"+dequename+"_loss")
+                deque.appendleft(loss)
+
+            # during test time, no running stats is kept.
+            assert (output<=1).all()
+            assert (output>=0).all()
+            assert (target<=1).all()
+            assert (target>=0).all()
+            output=output.detach().cpu().numpy()
+            target=target.detach().cpu().numpy().astype(np.bool)
+            output=np.expand_dims(output,axis=1)
+            output=np.repeat(output, self.steps, axis=1)
+            positive=output>self.ruler
+
+            target_repeat=np.expand_dims(target,axis=1)
+            target_repeat=np.repeat(target_repeat, self.steps, axis=1)
+            true_positive=positive * target_repeat
+            true_negative=np.invert(positive)*np.invert(target_repeat)
+            true_positive=true_positive.sum(axis=0)
+            true_negative=true_negative.sum(axis=0)
+            conditional_positive=target.sum(axis=0)
+            conditional_negative=np.invert(target).sum(axis=0)
+
+            self.true_positive+=true_positive
+            self.conditional_positives+=conditional_positive
+            self.true_negative+=true_negative
+            self.conditional_negatives+=conditional_negative
+
+            self.idx+=1
+
 
     def running_stats(self):
         if self.all:
@@ -115,6 +165,14 @@ class ConfusionMatrixStats():
         assert((running_ROC<=2).all())
 
         return running_sensitivity, running_specificity, running_ROC
+
+    def running_stats(self):
+
+        sens=self.true_positive/self.conditional_positives.clip(min=1e-8)
+        spec=self.true_negative/self.conditional_negatives.clip(min=1e-8)
+
+        return sens.mean(), spec.mean(), spec.mean()+sens.mean()
+
 
     def running_loss(self):
         if len(self.running_cod_loss)==0:

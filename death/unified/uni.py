@@ -25,7 +25,9 @@ from death.analysis.expectedroc import get_death_code_proportion
 from death.adnc.otheradnc import *
 from death.tran.ehrtran.attnmodel import TransformerMixedAttn
 from death.tran.ehrtran.forwardmodel import TransformerMixedForward
-
+import numpy as np
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def logprint(logfile, string):
     string = str(string)
@@ -84,6 +86,8 @@ class ModelManager():
         self.validds=None
         self.traindl=None
         self.validdl=None
+        self.testds=None
+        self.testdl=None
         self.prior_probability=None
         self.he=None
         self.hi=None
@@ -102,13 +106,18 @@ class ModelManager():
         if use_cache:
             self.trainds=self.ig.get_train_cached()
             self.validds=self.ig.get_valid_cached()
+            self.testds=self.ig.get_test_cached()
         else:
             self.trainds=self.ig.get_train()
             self.validds=self.ig.get_valid()
+            self.testds=self.ig.get_test()
         self.traindl = DataLoader(dataset=self.trainds, batch_size=self.batch_size, num_workers=self.num_workers,
                                  collate_fn=collate_fn, pin_memory=True)
         self.validdl = DataLoader(dataset=self.validds, batch_size=self.batch_size, num_workers=self.num_workers // 2,
                                  collate_fn=collate_fn, pin_memory=True)
+        self.testdl = DataLoader(dataset=self.testds, batch_size=self.batch_size, num_workers=self.num_workers,
+                                 collate_fn=collate_fn, pin_memory=True)
+
 
     def add_model(self, model, model_name, transformer=False):
         """
@@ -160,8 +169,12 @@ class ModelManager():
         optims=[]
         hes=[]
         his=[]
+
+        if len(self.optims)==0:
+            raise ValueError("Please initialize models and optims first")
+
         for model, name, optim in zip(self.models, self.model_names, self.optims):
-            model, optim, highest_epoch, highest_iter = self.load_model(model, optim, 0, 0, self.save_str)
+            model, optim, highest_epoch, highest_iter = self.load_model(model, optim, 0, 0, self.save_str, name)
             models.append(model)
             optims.append(optim)
             hes.append(highest_epoch)
@@ -194,8 +207,8 @@ class ModelManager():
 
         for child in save_dir.iterdir():
             try:
-                epoch = str(child).split("_")[3]
-                iteration = str(child).split("_")[4].split('.')[0]
+                epoch = child.name.split("_")[1]
+                iteration = child.name.split("_")[2].split('.')[0]
             except IndexError:
                 print(str(child))
             iteration = int(iteration)
@@ -255,7 +268,7 @@ class ModelManager():
                 if self.kill_time:
                     out_of_time()
                 # train
-                self.run_one_patient(i, input, target, loss_type, time_length, cmss, validate=False)
+                self.run_one_patient(input, target, loss_type, time_length, cmss)
                 if i % print_interval==0:
                     for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
                         traincm, _ = cms[0], cms[1]
@@ -273,7 +286,7 @@ class ModelManager():
                         except StopIteration:
                             valid_iterator = iter(self.validdl)
                             (input, target, loss_type, time_length) = next(valid_iterator)
-                        self.run_one_patient(i, input, target, loss_type, time_length, cmss, validate=True)
+                        self.run_one_patient(input, target, loss_type, time_length, cmss, validate=True)
                     for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
                         _, validcm= cms[0], cms[1]
                         cod_loss, toe_loss=validcm.running_loss()
@@ -284,22 +297,64 @@ class ModelManager():
 
             starting_iter = 0
 
+    def test(self, AUROC_alpha=0.001):
 
-    def run_one_patient(self, index, input, target, loss_type, time_length, cmss, validate=False):
+        print_interval = 100
+
+        cmss=[]
+        for name in self.model_names:
+            testcm = ConfusionMatrixStats(self.param_v_t - 1, string=name + " test", test=True, AUROC_alpha=AUROC_alpha)
+            cmss=cmss+[(testcm,)]
+
+        for computer, logfile in zip(self.models, self.log_files):
+            for name, param in computer.named_parameters():
+                logprint(logfile, name)
+                logprint(logfile, param.data.shape)
+
+        for i, (input, target, loss_type, time_length) in enumerate(self.testdl):
+            if self.kill_time:
+                out_of_time()
+            # train
+            self.run_one_patient(input, target, loss_type, time_length, cmss, test=True)
+            if i % print_interval == 0:
+                for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
+                    testcm = cms[0]
+                    cod_loss, toe_loss = testcm.running_loss()
+                    logprint(logfile,
+                             "%14s " % name + "test batch: %4d. running cod: %.5f, toe: %.5f, total: %.5f" %
+                             (i, cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
+                    logprint(logfile,
+                             "%14s " % name + "test sen: %.6f, spe: %.6f, roc: %.6f" % tuple(testcm.running_stats()))
+        for model, name, logfile, cms in zip(self.models, self.model_names, self.log_files, cmss):
+            testcm = cms[0]
+            cod_loss, toe_loss = testcm.running_loss()
+            logprint(logfile,
+                     "%14s " % name + "test batch: %4d. running cod: %.5f, toe: %.5f, total: %.5f" %
+                     (i, cod_loss, toe_loss, cod_loss + self.beta * toe_loss))
+            logprint(logfile,
+                     "%14s " % name + "test sen: %.6f, spe: %.6f, roc: %.6f" % tuple(testcm.running_stats()))
+
+        self.save_test_stats(cmss)
+
+
+    def run_one_patient(self, input, target, loss_type, time_length, cmss, validate=False, test=False):
         for model, name, optim, logfile, cms, bin, time, is_transformer in \
                 zip(self.models, self.model_names, self.optims,
                     self.log_files, cmss, self.binary_criterions, self.time_criterions, self.transformer):
-            self.run_one_patient_one_model(model, input, target, loss_type, time_length, optim, cms, bin, time, validate, is_transformer)
+            self.run_one_patient_one_model(model, input, target, loss_type, time_length,
+                                           optim, cms, bin, time, validate, test, is_transformer)
 
     def pre_run_modifier(self,input,target):
         return input, target
 
     def run_one_patient_one_model(self, computer, input, target, loss_type, time_length,
-                                  optim, cms, binary, real, validate, is_transformer):
-        # global global_exception_counter
+                                  optim, cms, binary, real, validate=False, test=False, is_transformer=False):
         patient_loss = None
-        traincm = cms[0]
-        validcm = cms[1]
+        if not test:
+            traincm = cms[0]
+            validcm = cms[1]
+        else:
+            testcm = cms[0]
         # try:
         optim.zero_grad()
 
@@ -311,12 +366,8 @@ class ModelManager():
         # input contains inf values. some lab results. index 4069
         input=input.clamp(-1e10, 1e10)
 
-
         loss_type = Variable(loss_type.cuda())
 
-        # we have no critical index, becuase critical index are those timesteps that
-        # DNC is required to produce outputs. This is not the case for our project.
-        # criterion does not need to be reinitiated for every story, because we are not using a mask
         cause_of_death_target = target[:, 1:]
 
         if is_transformer:
@@ -337,28 +388,15 @@ class ModelManager():
             total_loss = cod_loss + self.beta* toe_loss
             sigoutput = torch.sigmoid(cause_of_death_output)
 
-        # this numerical issue destroyed this model training.
-        # loss keeps going down, but ROC is the same. I need to load an earlier epoch and restart.
-        # I need to reimplement my BCE
-        # this is a known issue for PyTorch 0.3.1 https://github.com/pytorch/pytorch/issues/2866
-
-        # this happens when the logit is exactly 1 (\sigma(593)), and the loss is around 0.01
-        # I decide to not debug it, because the backwards signal should still be usable.
-
-        # no. the actual problem is that the death target does not conform one-hot requirement.
-        # it's not the sparsity, because the output was one
         if cod_loss.item() < 0:
             import pickle
-            # this was reached with loss negative. Why did that happen?
-            # BCE loss is supposed to be positive all the time.
             with open("debug/itcc.pkl", 'wb') as f:
-                # this is a 1 Gb pickle. Somehow loading it takes forever. What?
                 pickle.dump((input, target, cause_of_death_output, cause_of_death_target), f)
             print(cod_loss.data[0])
             code.interact(local=locals())
             raise ValueError
 
-        if not validate:
+        if not validate and not test:
             total_loss.backward()
             optim.step()
             cod_loss=float(cod_loss.item())
@@ -366,25 +404,28 @@ class ModelManager():
             traincm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
             return cod_loss, toe_loss
 
-        else:
+        elif validate:
             cod_loss=float(cod_loss.item())
             toe_loss=float(toe_loss.item())
             validcm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
             return cod_loss, toe_loss
-        #
-        #     if global_exception_counter > -1:
-        #         global_exception_counter -= 1
-        # except ValueError:
-        #     traceback.print_exc()
-        #     print("Value Error reached")
-        #     print(datetime.datetime.now().time())
-        #     global_exception_counter += 1
-        #     if global_exception_counter == 10:
-        #         save_model(computer, optimizer, epoch=0, iteration=global_exception_counter)
-        #         raise ValueError("Global exception counter reached 10. Likely the model has nan in weights")
-        #     else:
-        #         raise
+        else:
+            assert test
+            cod_loss=float(cod_loss.item())
+            toe_loss=float(toe_loss.item())
+            testcm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
 
+    def save_test_stats(self,cmss):
+        for model_name, cms in zip(self.model_names, cmss):
+            testcm=cms[0]
+            task_dir = os.path.dirname(abspath(__file__))
+            stats_path=Path(task_dir) / "saves" / (self.save_str+"_stats")
+            if not os.path.isdir(stats_path):
+                os.mkdir(stats_path)
+            np.savetxt(stats_path/(model_name+"_tp.csv"), testcm.true_positive, delimiter=",")
+            np.savetxt(stats_path/(model_name+"tn.csv"), testcm.true_negative, delimiter=",")
+            np.savetxt(stats_path/(model_name+"cp.csv"), testcm.conditional_positives, delimiter=",")
+            np.savetxt(stats_path/(model_name+"cn.csv"), testcm.conditional_negatives, delimiter=",")
 
 class ExperimentManager(ModelManager):
     def __init__(self, *args, **kwargs):
@@ -402,6 +443,9 @@ class ExperimentManager(ModelManager):
 
     def run(self):
         self.train()
+    
+    def test(self, AUROC_alpha=0.001):
+        super(ExperimentManager, self).test(AUROC_alpha=AUROC_alpha)
 
     def add_DNC(self):
         param_h = 64  # 64
@@ -537,18 +581,20 @@ class ExperimentManager(ModelManager):
         self.init_input_gen(InputGenJ, collate_fn=pad_collate)
         self.add_APDNC()
 
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
         if load:
             self.load_models()
-        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def baseline(self,save_str="baseline", load=False):
         self.save_str=save_str
         self.init_input_gen(InputGenJ,collate_fn=pad_collate,use_cache=True)
         self.add_LSTM()
         self.add_Tacotron()
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
         if load:
             self.load_models()
-        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def adnc_variations(self,load=False):
 
@@ -605,9 +651,10 @@ class ExperimentManager(ModelManager):
                        prior=prior_probability)
         self.add_model(dnc.cuda(), "ADNCMEM")
 
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
         if load:
             self.load_models()
-        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def lstm_tacotron_with_prior(self, load=False):
         from death.baseline.priorlstm import PriorLSTM
@@ -625,9 +672,11 @@ class ExperimentManager(ModelManager):
         self.add_model(lstm, "priorlstm")
         self.add_model(taco, "priortaco")
 
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
         if load:
             self.load_models()
-        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def dnc_adnc_rerun(self,load=False):
         # log was incorrect, and validaion was incorrect. I want to run it again.
@@ -638,9 +687,10 @@ class ExperimentManager(ModelManager):
         self.add_APDNC()
         self.add_DNC()
 
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
         if load:
             self.load_models()
-        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def transformers(self,load=False):
         self.save_str = "transformers"
@@ -681,9 +731,11 @@ class ExperimentManager(ModelManager):
         self.add_model(tranforward.cuda(), "tranforward", transformer=True)
         self.add_model(tranattn.cuda(), "tranattn", transformer=True)
 
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
         if load:
             self.load_models()
-        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def transformer_with_no_mixed_obj(self, load=False):
         self.save_str = "tran_no_mixed_obj"
@@ -726,9 +778,11 @@ class ExperimentManager(ModelManager):
         self.add_model(tranforward.cuda(), "tranforward", transformer=True)
         self.add_model(tranattn.cuda(), "tranattn", transformer=True)
 
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
         if load:
             self.load_models()
-        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def softmax_experiment(self,load=False):
         # 10 sensitivity is what we have to beat
@@ -740,16 +794,17 @@ class ExperimentManager(ModelManager):
         self.add_APDNC()
         self.add_DNC()
 
-        if load:
-            self.load_models()
         self.binary_criterions=DiscreteCrossEntropy
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
+        if load:
+            self.load_models()
+
 
 def main():
-    ds=ExperimentManager(batch_size=64, num_workers=4)
-    ds.softmax_experiment(load=False)
-    ds.run()
+    ds=ExperimentManager(batch_size=64, num_workers=4, total_epochs=50)
+    ds.softmax_experiment(load=True)
+    ds.test(0.001)
 
 
 
