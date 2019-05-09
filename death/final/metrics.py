@@ -147,31 +147,31 @@ class ConfusionMatrixStats():
 
 
     def running_stats(self):
-        if self.all:
-            running_sensitivity=np.mean(np.sum(self.true_positive,axis=1)/np.sum(self.conditional_positives,axis=1).clip(min=1e-8), axis=0)
-            running_specificity=np.mean(np.sum(self.true_negative,axis=1)/np.sum(self.conditional_negatives,axis=1).clip(min=1e-8), axis=0)
-            running_ROC=running_sensitivity+running_specificity
+        if not self.test:
+            if self.all:
+                running_sensitivity=np.mean(np.sum(self.true_positive,axis=1)/np.sum(self.conditional_positives,axis=1).clip(min=1e-8), axis=0)
+                running_specificity=np.mean(np.sum(self.true_negative,axis=1)/np.sum(self.conditional_negatives,axis=1).clip(min=1e-8), axis=0)
+                running_ROC=running_sensitivity+running_specificity
+            else:
+                running_sensitivity=np.mean(np.sum(self.true_positive[:,:self.idx],axis=1)/
+                                            np.sum(self.conditional_positives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
+                running_specificity=np.mean(np.sum(self.true_negative[:,:self.idx],axis=1)/
+                                            np.sum(self.conditional_negatives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
+                running_ROC=running_sensitivity+running_specificity
+            assert((running_sensitivity>=0).all())
+            assert((running_sensitivity<=1).all())
+            assert((running_specificity>=0).all())
+            assert((running_specificity<=1).all())
+            assert((running_ROC>=0).all())
+            assert((running_ROC<=2).all())
+
+            return running_sensitivity, running_specificity, running_ROC
+
         else:
-            running_sensitivity=np.mean(np.sum(self.true_positive[:,:self.idx],axis=1)/
-                                        np.sum(self.conditional_positives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
-            running_specificity=np.mean(np.sum(self.true_negative[:,:self.idx],axis=1)/
-                                        np.sum(self.conditional_negatives[:,:self.idx],axis=1).clip(min=1e-8), axis=0)
-            running_ROC=running_sensitivity+running_specificity
-        assert((running_sensitivity>=0).all())
-        assert((running_sensitivity<=1).all())
-        assert((running_specificity>=0).all())
-        assert((running_specificity<=1).all())
-        assert((running_ROC>=0).all())
-        assert((running_ROC<=2).all())
+            sens=self.true_positive/self.conditional_positives.clip(min=1e-8)
+            spec=self.true_negative/self.conditional_negatives.clip(min=1e-8)
 
-        return running_sensitivity, running_specificity, running_ROC
-
-    def running_stats(self):
-
-        sens=self.true_positive/self.conditional_positives.clip(min=1e-8)
-        spec=self.true_negative/self.conditional_negatives.clip(min=1e-8)
-
-        return sens.mean(), spec.mean(), spec.mean()+sens.mean()
+            return sens.mean(), spec.mean(), spec.mean()+sens.mean()
 
 
     def running_loss(self):
