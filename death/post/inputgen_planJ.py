@@ -389,6 +389,9 @@ class InputGen(Dataset, DFManager):
             latest_distance = (death_date.to_datetime64() - latest.to_datetime64()).astype("timedelta64[M]").astype(
                 "int")
             # countdown_val = np.arange(earliest_distance, earliest_distance - time_length, -1)
+            if latest_distance<0:
+                latest_distance=0
+
             np.add.at(target, (0, 0), latest_distance)
 
             # cause of death

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.utils.data
 
-from death.tran.transformer import Constants
+from death.tranreference.transformer import Constants
 
 
 def paired_collate_fn(insts):

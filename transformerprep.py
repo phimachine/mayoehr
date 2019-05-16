@@ -1,4 +1,4 @@
-from death.tran.preprocess import main
+from death.tranreference.preprocess import main
 
 if __name__ == '__main__':
     main()

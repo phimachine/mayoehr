@@ -2,7 +2,7 @@
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from death.tran.transformer.Modules import ScaledDotProductAttention
+from death.tranreference.transformer.Modules import ScaledDotProductAttention
 from death.helper.layernorm import LayerNorm
 
 __author__ = "Yu-Hsiang Huang"

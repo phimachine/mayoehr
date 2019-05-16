@@ -1,5 +1,7 @@
 # this script processes the log files en masse
 # the output is a .csv file with all information. the file name is a unique id for the model and train
+# this is very awkwardly programmed and obsolete
+# use plotter.py
 
 from pathlib import Path
 import os

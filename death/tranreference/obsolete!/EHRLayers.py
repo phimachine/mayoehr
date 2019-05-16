@@ -1,6 +1,6 @@
 ''' Define the Layers '''
 import torch.nn as nn
-from death.tran.EHRtransformer.EHRSubLayers import MultiHeadAttention, PositionwiseFeedForward
+from death.tranreference.EHRtransformer.EHRSubLayers import MultiHeadAttention, PositionwiseFeedForward
 
 __author__ = "Yu-Hsiang Huang"
 

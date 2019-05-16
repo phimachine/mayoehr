@@ -5,9 +5,9 @@ import torch.utils.data
 import argparse
 from tqdm import tqdm
 
-from death.tran.dataset import collate_fn, TranslationDataset
-from death.tran.transformer.Translator import Translator
-from death.tran.preprocess import read_instances_from_file, convert_instance_to_idx_seq
+from death.tranreference.dataset import collate_fn, TranslationDataset
+from death.tranreference.transformer.Translator import Translator
+from death.tranreference.preprocess import read_instances_from_file, convert_instance_to_idx_seq
 
 def main():
     '''Main Function'''

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from death.tran.ehrtranforward.layers import *
+from death.tranreference.ehrtranforward.layers import *
 
 
 class AT(nn.Module):

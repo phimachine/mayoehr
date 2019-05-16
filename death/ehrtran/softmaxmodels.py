@@ -6,7 +6,7 @@ class TransformerMixedForwardSoftmax(nn.Module):
     # no attention module here, because the input is not timewise
     # we will add time-wise attention to time-series model later.
 
-    def __init__(self, binary_criterion, real_criterion, prior=None, d_model=512, input_size=50000, d_inner=2048,
+    def __init__(self, binary_criterion, real_criterion, prior=None, mixed=True,d_model=512, input_size=50000, d_inner=2048,
                  n_head=8, d_k=64, d_v=64, dropout=0.1, n_layers=6, output_size=12, epsilon=1,
                  xi=1, beta=0.01, lambda_ml=1, lambda_at=1, lambda_em=1, lambda_vat=1, max_position=279):
         super(TransformerMixedForwardSoftmax, self).__init__()
@@ -15,6 +15,7 @@ class TransformerMixedForwardSoftmax(nn.Module):
         self.d_model = d_model
         self.n_layer = n_layers
         self.dropout = dropout
+        self.mixed=mixed
 
         self.input_size = input_size
         self.embedding = torch.nn.Parameter(torch.Tensor(input_size, d_model))
@@ -90,33 +91,35 @@ class TransformerMixedForwardSoftmax(nn.Module):
         cod_target = target[:, 1:]
         lml = self.binary_criterion(cod_output, cod_target)
 
-        # adv, at
-        embed_grad = torch.autograd.grad(lml, self.embedding, only_inputs=True, retain_graph=True)[0]
-        radv = self.radv(embed_grad)
-        yat = self(input, input_length, radv)
-        lat = self.binary_criterion(yat[:,1:], cod_target)
+        if self.mixed:
+            # adv, at
+            embed_grad = torch.autograd.grad(lml, self.embedding, only_inputs=True, retain_graph=True)[0]
+            radv = self.radv(embed_grad)
+            yat = self(input, input_length, radv)
+            lat = self.binary_criterion(yat[:,1:], cod_target)
 
-        # unsupervised
-        lem = self.em(cod_output)
+            # unsupervised
+            lem = self.em(cod_output)
 
-        # vat
-        xid = self.xid()
-        aoutput = self(input, input_length, xid)
-        rvat = self.rvat(cod_output, aoutput[:,1:])
-        yvat = self(input, input_length, rvat)
-        lvat = self.binary_kl_divergence(cod_output, yvat[:,1:])
-        lvat = lvat.mean(dim=1).mean(dim=0)
+            # vat
+            xid = self.xid()
+            aoutput = self(input, input_length, xid)
+            rvat = self.rvat(cod_output, aoutput[:,1:])
+            yvat = self(input, input_length, rvat)
+            lvat = self.binary_kl_divergence(cod_output, yvat[:,1:])
+            lvat = lvat.mean(dim=1).mean(dim=0)
 
-        all_loss = self.lambda_ml * lml + self.lambda_at * lat + self.lambda_em * lem + self.lambda_at * lvat \
-                   + self.beta * toe_loss
+            all_loss = self.lambda_ml * lml + self.lambda_at * lat + self.lambda_em * lem + self.lambda_at * lvat \
+                       + self.beta * toe_loss
+        else:
+            all_loss = lml + self.beta * toe_loss
+            lat = None
+            lem = None
+            lvat = None
 
         assert (output==output).all()
 
-        # use this block if ony ml is used.
-        # all_loss = lml + self.beta * toe_loss
-        # lat = None
-        # lem = None
-        # lvat = None
+
         return all_loss, lml, lat, lem, lvat, toe_loss, output
 
     def forward(self, input, time_length, r=None):
@@ -250,7 +253,7 @@ class TransformerMixedAttnSoftmax(nn.Module):
     # no attention module here, because the input is not timewise
     # we will add time-wise attention to time-series model later.
 
-    def __init__(self, binary_criterion, real_criterion, prior=None, d_model=512, input_size=50000, d_inner=2048,
+    def __init__(self, binary_criterion, real_criterion, prior=None, mixed=True, d_model=512, input_size=50000, d_inner=2048,
                  n_head=8, d_k=64, d_v=64, dropout=0.1, n_layers=6, output_size=12, epsilon=1,
                  xi=1, beta=0.01, lambda_ml=1, lambda_at=1, lambda_em=1, lambda_vat=1, max_position=279):
         super(TransformerMixedAttnSoftmax, self).__init__()
@@ -334,32 +337,35 @@ class TransformerMixedAttnSoftmax(nn.Module):
         cod_target=target[:,1:]
         lml = self.binary_criterion(cod_output, cod_target)
 
-        # adv, at
-        embed_grad = torch.autograd.grad(lml, self.embedding, only_inputs=True, retain_graph=True)[0]
-        radv = self.radv(embed_grad)
-        yat = self(input, input_length, radv)
-        lat = self.binary_criterion(yat[:,1:], cod_target)
+        if self.mixed:
 
-        # unsupervised
-        lem = self.em(cod_output)
+            # adv, at
+            embed_grad = torch.autograd.grad(lml, self.embedding, only_inputs=True, retain_graph=True)[0]
+            radv = self.radv(embed_grad)
+            yat = self(input, input_length, radv)
+            lat = self.binary_criterion(yat[:,1:], cod_target)
 
-        # vat
-        xid = self.xid()
-        aoutput = self(input, input_length, xid)
-        rvat = self.rvat(cod_output, aoutput[:,1:])
-        yvat = self(input, input_length, rvat)
-        lvat = self.binary_kl_divergence(cod_output, yvat[:,1:])
-        lvat = lvat.mean(dim=1).mean(dim=0)
+            # unsupervised
+            lem = self.em(cod_output)
 
-        all_loss = self.lambda_ml * lml + self.lambda_at * lat + self.lambda_em * lem + self.lambda_at * lvat \
-                   + self.beta * toe_loss
+            # vat
+            xid = self.xid()
+            aoutput = self(input, input_length, xid)
+            rvat = self.rvat(cod_output, aoutput[:,1:])
+            yvat = self(input, input_length, rvat)
+            lvat = self.binary_kl_divergence(cod_output, yvat[:,1:])
+            lvat = lvat.mean(dim=1).mean(dim=0)
+
+            all_loss = self.lambda_ml * lml + self.lambda_at * lat + self.lambda_em * lem + self.lambda_at * lvat \
+                       + self.beta * toe_loss
+        else:
+            all_loss=lml+self.beta*toe_loss
+            lat=None
+            lem=None
+            lvat=None
 
         assert (output==output).all()
 
-        # all_loss=lml+self.beta*toe_loss
-        # lat=None
-        # lem=None
-        # lvat=None
         return all_loss, lml, lat, lem, lvat, toe_loss, output
 
     def forward(self, input, time_length, r=None):

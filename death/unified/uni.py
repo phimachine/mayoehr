@@ -139,7 +139,7 @@ class ModelManager():
         :return:
         """
         self.models.append(model)
-        logfile = "log/" + model_name + "_" + datetime_filename() + ".txt"
+        logfile = "log/" + self.save_str+ "_" + model_name + "_" + datetime_filename() + ".txt"
         self.log_files.append(logfile)
         self.model_names.append(model_name)
         self.transformer.append(transformer)
@@ -216,18 +216,19 @@ class ModelManager():
             os.mkdir(Path(task_dir) / "saves" / savestr)
 
         for child in save_dir.iterdir():
-            try:
-                epoch = child.name.split("_")[1]
-                iteration = child.name.split("_")[2].split('.')[0]
-            except IndexError:
-                print(str(child))
-            iteration = int(iteration)
-            epoch = int(epoch)
-            # some files are open but not written to yet.
-            if child.stat().st_size > 20480:
-                if epoch > highestepoch or (iteration > highestiter and epoch == highestepoch):
-                    highestepoch = epoch
-                    highestiter = iteration
+            if child.name.split("_")[0]==model_name:
+                try:
+                    epoch = child.name.split("_")[1]
+                    iteration = child.name.split("_")[2].split('.')[0]
+                except IndexError:
+                    print(str(child))
+                iteration = int(iteration)
+                epoch = int(epoch)
+                # some files are open but not written to yet.
+                if child.stat().st_size > 20480:
+                    if epoch > highestepoch or (iteration > highestiter and epoch == highestepoch):
+                        highestepoch = epoch
+                        highestiter = iteration
         if highestepoch == 0 and highestiter == 0:
             print("nothing to load")
             return computer, optim, starting_epoch, starting_iteration
@@ -671,6 +672,87 @@ class ExperimentManager(ModelManager):
         if load:
             self.load_models()
 
+    def adnc_variations_1(self, load=False):
+
+        self.save_str = "adncvariations1"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        param_h = 64
+        param_L = 4
+        param_W = 8
+        param_R = 8
+        param_N = 64
+        param_x = self.param_x
+        param_v_t = self.param_v_t
+        prior_probability = get_death_code_proportion(self.ig)
+
+        dnc = ADNCNorm(x=param_x,
+                       h=param_h,
+                       L=param_L,
+                       v_t=param_v_t,
+                       W=param_W,
+                       R=param_R,
+                       N=param_N,
+                       prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCNorm")
+
+        dnc = ADNCbi(x=param_x,
+                     h=param_h,
+                     L=param_L,
+                     v_t=param_v_t,
+                     W=param_W,
+                     R=param_R,
+                     N=param_N,
+                     prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCbi")
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
+
+
+    def adnc_variations_2(self, load=False):
+
+        self.save_str = "adncvariations2"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        param_h = 64
+        param_L = 4
+        param_W = 8
+        param_R = 8
+        param_N = 64
+        param_x = self.param_x
+        param_v_t = self.param_v_t
+        prior_probability = get_death_code_proportion(self.ig)
+
+
+        dnc = ADNCDrop(x=param_x,
+                       h=param_h,
+                       L=param_L,
+                       v_t=param_v_t,
+                       W=param_W,
+                       R=param_R,
+                       N=param_N,
+                       prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCDrop")
+
+        dnc = ADNCMEM(x=param_x,
+                      h=param_h,
+                      L=param_L,
+                      v_t=param_v_t,
+                      W=param_W,
+                      R=param_R,
+                      N=param_N,
+                      prior=prior_probability)
+        self.add_model(dnc.cuda(), "ADNCMEM")
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
     def lstm_tacotron_with_prior(self, load=False):
         self.save_str = "lowbeta"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -689,6 +771,38 @@ class ExperimentManager(ModelManager):
         if load:
             self.load_models()
 
+    def lstm_with_prior(self,load=False):
+        self.save_str = "lstm"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        prior_probability = get_death_code_proportion(self.ig)
+
+        lstm = PriorLSTM(input_size=self.param_x, output_size=self.param_v_t, hidden_size=64, num_layers=4,
+                         prior=prior_probability).cuda()
+
+        self.add_model(lstm, "priorlstm")
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
+
+    def tacotron_with_prior(self, load=False):
+        self.save_str = "taco"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        prior_probability = get_death_code_proportion(self.ig)
+
+        taco = PriorTacotron(self.param_x, self.param_v_t, prior=prior_probability).cuda()
+
+        self.add_model(taco, "priortaco")
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
     def dnc_adnc_rerun(self, load=False):
         # log was incorrect, and validaion was incorrect. I want to run it again.
 
@@ -697,6 +811,31 @@ class ExperimentManager(ModelManager):
 
         self.add_APDNC()
         self.add_DNC()
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
+    def dnc_rerun(self, load=False):
+
+        self.save_str = "dnc_rerun"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        self.add_DNC()
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
+
+    def adnc_rerun(self, load=False):
+
+        self.save_str = "dnc_rerun"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        self.add_APDNC()
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
@@ -824,6 +963,64 @@ class ExperimentManager(ModelManager):
         if load:
             self.load_models()
 
+    def transformer_with_mixed_softmax_1(self, load=False, mixed=True):
+
+        if mixed:
+            id="tranmixedforwardsoftmax"
+        else:
+            id="tranforwardsoftmax"
+
+        self.save_str = id
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        prior_probability = get_death_code_proportion(self.ig)
+
+        self.binary_criterions = DiscreteCrossEntropy
+
+        binary_criterion = self.binary_criterions()
+        real_criterion = self.time_criterions()
+        tranforward = TransformerMixedForwardSoftmax(binary_criterion=binary_criterion, real_criterion=real_criterion,
+                                                     input_size=self.param_x, output_size=self.param_v_t,
+                                                     prior=prior_probability, d_model=128, n_layers=4,
+                                                     mixed=mixed).cuda()
+
+
+        self.add_model(tranforward.cuda(), id, transformer=True)
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
+    def transformer_with_mixed_softmax_2(self, load=False, mixed=True):
+        if mixed:
+            id="tranmixedattnsoftmax"
+        else:
+            id="tranattnsoftmax"
+
+        self.save_str = id
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        prior_probability = get_death_code_proportion(self.ig)
+
+        self.binary_criterions = DiscreteCrossEntropy
+
+
+        binary_criterion = self.binary_criterions()
+        real_criterion = self.time_criterions()
+        tranattn = TransformerMixedAttnSoftmax(binary_criterion=binary_criterion, real_criterion=real_criterion,
+                                               input_size=self.param_x, output_size=self.param_v_t,
+                                               prior=prior_probability, d_model=128, n_layers=4,
+                                               mixed=mixed).cuda()
+
+        self.add_model(tranattn.cuda(), id, transformer=True)
+
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
     def softmax_experiment(self, load=False):
         # 10 sensitivity is what we have to beat
 
@@ -881,17 +1078,74 @@ class ExperimentManager(ModelManager):
 
         if load:
             self.load_models()
-        self.kill_time=True
 
 
 def main():
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=50)
-    ds.run_simple()
-    # ds.lstm_tacotron_with_prior(load=False)
+    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+    ds.lstm_with_prior(load=True)
     ds.run()
     # ds.test(AUROC_alpha=0.001)
 
     # ds.adnc_variations()
+
+def main2():
+    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+    ds.tacotron_with_prior(load=True)
+    ds.run()
+    # ds.test(AUROC_alpha=0.001)
+
+    # ds.adnc_variations()
+
+def main3():
+    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+    ds.dnc_rerun(load=True)
+    ds.run()
+
+    try:
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+        ds.transformer_with_mixed_softmax_1(load=False)
+        ds.run()
+    except:
+        pass
+
+    try:
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+        ds.adnc_variations_1(load=False)
+        ds.run()
+    except:
+        pass
+
+    try:
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+        ds.transformer_with_mixed_softmax_1(load=False, mixed=False)
+        ds.run()
+    except:
+        pass
+
+def main4():
+    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+    ds.adnc_rerun(load=True)
+    ds.run()
+    try:
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+        ds.transformer_with_mixed_softmax_2(load=False)
+        ds.run()
+    except:
+        pass
+
+    try:
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+        ds.adnc_variations_2(load=False)
+        ds.run()
+    except:
+        pass
+
+    try:
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+        ds.transformer_with_mixed_softmax_2(load=False, mixed=False)
+        ds.run()
+    except:
+        pass
 
 if __name__ == '__main__':
     main()

@@ -6,7 +6,7 @@
 """
 
 import torch
-import death.tran.transformer.Constants as Constants
+import death.tranreference.transformer.Constants as Constants
 
 class Beam():
     ''' Beam search '''

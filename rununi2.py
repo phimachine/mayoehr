@@ -2,4 +2,5 @@ import pandas as pd
 from death.unified.uni import *
 
 if __name__ == '__main__':
-    main3()
+    with torch.cuda.device(1):
+        main4()

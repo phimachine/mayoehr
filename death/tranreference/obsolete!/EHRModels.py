@@ -6,8 +6,8 @@ Becasue there is no decoder, target is not fed into the Transformer model for de
 import torch
 import torch.nn as nn
 import numpy as np
-import death.tran.transformer.Constants as Constants
-from death.tran.EHRtransformer.EHRLayers import EncoderLayer, DecoderLayer
+import death.tranreference.transformer.Constants as Constants
+from death.tranreference.EHRtransformer.EHRLayers import EncoderLayer, DecoderLayer
 from torch.autograd import Variable
 from death.helper.pretrained_embedding import from_pretrained
 

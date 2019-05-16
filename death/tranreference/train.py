@@ -11,10 +11,10 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-import death.tran.transformer.Constants as Constants
-from death.tran.dataset import TranslationDataset, paired_collate_fn
-from death.tran.transformer.Models import Transformer
-from death.tran.transformer.Optim import ScheduledOptim
+import death.tranreference.transformer.Constants as Constants
+from death.tranreference.dataset import TranslationDataset, paired_collate_fn
+from death.tranreference.transformer.Models import Transformer
+from death.tranreference.transformer.Optim import ScheduledOptim
 from torch.autograd import Variable
 
 def cal_performance(pred, gold, smoothing=False):

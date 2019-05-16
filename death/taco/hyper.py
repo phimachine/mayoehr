@@ -33,7 +33,7 @@ checkpoint_path = './model_new'
 
 
 # my definition
-embedding_size=63 #hp
-hidden_size=66 #hp
+embedding_size=64 #hp
+hidden_size=64 #hp
 timesteps=10
-decoder_output_dim=65
+decoder_output_dim=64
