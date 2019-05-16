@@ -1,4 +1,4 @@
-from death.baseline.lstmtrainerG import *
+from death.lstmbaseline.lstmtrainerG import *
 import torch
 
 with torch.cuda.device(0):

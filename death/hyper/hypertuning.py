@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch
 import datetime
 from death.DNC.seqDNC import SeqDNC
-from death.baseline.lstmtrainerG import lstmwrapperG
+from death.lstmbaseline.lstmtrainerG import lstmwrapperG
 import pickle
 
 import torch.multiprocessing
@@ -218,7 +218,7 @@ class HyperParameterTuner():
         if self.mode=="DNC":
             from death.post.channelmanager import ChannelManager
         else:
-            from death.baseline.lstmcm import ChannelManager
+            from death.lstmbaseline.lstmcm import ChannelManager
 
         if bigger:
             self.bs //= 2

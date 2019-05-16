@@ -47,16 +47,37 @@ class InputGen(Dataset, DFManager):
     See get_by_id()
     '''
 
-    def __init__(self, elim_rare_code=True, incidence=0.01, death_incidence=0.001, verbose=False, debug=False, no_underlying=False):
+    def __init__(self, elim_rare_code=True, incidence=0.009316, death_incidence=0.00263, verbose=False, debug=False, no_underlying=False):
+        """
+
+        :param elim_rare_code:
+        :param incidence: set awkwardly to avoid model retraining.
+        :param death_incidence:
+        :param verbose:
+        :param debug:
+        :param no_underlying:
+        """
         super(InputGen, self).__init__()
         self.verbose = verbose
         self.debug=debug
-        self.rare_thres=int(230000 * incidence)
-        self.rare_death_thres=int(59394 * death_incidence)
         self.no_underlying=no_underlying
-
         self.elim_rare_code=elim_rare_code
+
         self.load_pickle(verbose=verbose)
+
+
+        # this df has no na
+        self.earla = pd.read_csv("/infodev1/rep/projects/jason/new/earla.csv", parse_dates=["earliest", "latest"])
+        self.earla.set_index("rep_person_id", inplace=True)
+        # earla will have to be consulted. If no time step was found, then it is discarded.
+        self.rep_person_id = self.earla.index.values
+        self.len = len(self.rep_person_id)
+        # self.check_nan()
+
+        # 230,000 patients, with incidence rate of 0.01, the code needs to appear 230 times in the REP
+        self.rare_thres=int(len(self) * incidence)
+        self.rare_death_thres=int(max(self.get_count_dict("death","code").values()) * death_incidence)
+
         if self.elim_rare_code:
             # take a look at this function to determine how you want to eliminate rare codes
             # you can select the criterion and columsn to be modified. The parameters are too complicated to be included
@@ -70,13 +91,7 @@ class InputGen(Dataset, DFManager):
         self.output_dim = None
         self.get_input_dim()
         self.get_output_dim()
-        # this df has no na
-        self.earla = pd.read_csv("/infodev1/rep/projects/jason/new/earla.csv", parse_dates=["earliest", "latest"])
-        self.earla.set_index("rep_person_id", inplace=True)
-        # earla will have to be consulted. If no time step was found, then it is discarded.
-        self.rep_person_id = self.earla.index.values
-        self.len = len(self.rep_person_id)
-        # self.check_nan()
+
         if self.verbose:
             print("Input Gen initiated")
 
@@ -653,7 +668,7 @@ class GenHelper(Dataset):
 
 class InputGenJ(InputGen):
     def __init__(self, death_fold=0, death_only=True, curriculum=False, validation_test_proportion=0.1,
-                 elim_rare_code=True, incidence=0.01, death_incidence=0.001, random_seed=10086, no_underlying=True,
+                 elim_rare_code=True, incidence=0.009316, death_incidence=0.00263, random_seed=10086, no_underlying=True,
                  debug=False, verbose=False, cached=False, dspath="/local2/tmp/jasondata/"):
         verbose = verbose
         debug = debug
@@ -886,11 +901,11 @@ class DatasetCacher(Dataset):
         else:
             return self.len
 
-def cache_them(path,n_proc=16):
+def cache_them(path,n_proc=8):
 
     # first argument is processes counts,
     # second argument is a function to initialize each process
-    with mp.Pool(n_proc//2,valid_initializer, (path,)) as p:
+    with mp.Pool(n_proc,valid_initializer, (path,)) as p:
         list(tqdm(p.imap(imap_valid_cache, range(1958)), total=1958))
 
     with mp.Pool(n_proc,test_initializer, (path,)) as p:
@@ -1066,8 +1081,8 @@ def try_load_pickle():
     print("Measure time")
 
 if __name__=="__main__":
-    ig = InputGenJ(no_underlying=True, death_only=True, debug=True)
+    ig = InputGenJ(elim_rare_code=True,no_underlying=True, death_only=True, debug=True)
     item=ig[4069]
-    valid=ig.get_valid_cached()
-    print(valid[235])
+    t=ig.get_train()
+    print(t[235])
     print(item)

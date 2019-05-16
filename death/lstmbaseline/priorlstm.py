@@ -7,7 +7,7 @@ from torch.autograd import Variable
 
 class PriorLSTM(nn.Module):
     def __init__(self,prior,input_size=52686, output_size=2976,hidden_size=128,num_layers=16,batch_first=True,
-                 dropout=True,):
+                 dropout=0.1):
         super(PriorLSTM, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)

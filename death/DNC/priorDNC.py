@@ -126,27 +126,28 @@ class PriorDNC(nn.Module):
         # this is the prior probability of each label predicting true
         # this is added to the logit
         self.prior=prior
-        if isinstance(self.prior, np.ndarray):
-            self.prior=torch.from_numpy(self.prior).float()
-            self.prior=Variable(self.prior, requires_grad=False)
-        elif isinstance(self.prior, torch.Tensor):
-            self.prior=Variable(self.prior, requires_grad=False)
-        else:
-            assert(isinstance(self.prior, Variable))
+        if self.prior is not None:
+            if isinstance(self.prior, np.ndarray):
+                self.prior=torch.from_numpy(self.prior).float()
+                self.prior=Variable(self.prior, requires_grad=False)
+            elif isinstance(self.prior, torch.Tensor):
+                self.prior=Variable(self.prior, requires_grad=False)
+            else:
+                assert(isinstance(self.prior, Variable))
 
 
-        # transform to logits
-        # because we are using sigmoid, not softmax, self.prior=log(P(y))-log(P(not y))
-        # sigmoid_input = z + self.prior
-        # z = log(P(x|y)) - log(P(x|not y))
-        # sigmoid output is the posterior positive
-        self.prior=self.prior.clamp(1e-8, 1 - 1e-8)
-        self.prior=torch.log(self.prior)-torch.log(1-self.prior)
-        a=Variable(torch.Tensor([0]))
-        self.prior=torch.cat((a,self.prior))
-        self.prior=self.prior.cuda()
+            # transform to logits
+            # because we are using sigmoid, not softmax, self.prior=log(P(y))-log(P(not y))
+            # sigmoid_input = z + self.prior
+            # z = log(P(x|y)) - log(P(x|not y))
+            # sigmoid output is the posterior positive
+            self.prior=self.prior.clamp(1e-8, 1 - 1e-8)
+            self.prior=torch.log(self.prior)-torch.log(1-self.prior)
+            a=Variable(torch.Tensor([0]))
+            self.prior=torch.cat((a,self.prior))
+            self.prior=self.prior.cuda()
 
-        print("Using DNC with prior probability")
+            print("Using DNC with prior probability")
         print("All except the first dimension are BCE causes of death logits")
 
 
@@ -255,7 +256,8 @@ class PriorDNC(nn.Module):
         yts=torch.max(yts,dim=0)[0]
         # this formula only works for binary prediction
         # if multiple labels, you probably need to softmax yts first, because yts is not logits. They are free R.
-        yts=yts+self.prior
+        if self.prior is not None:
+            yts=yts+self.prior
         return yts
 
 

@@ -1,5 +1,5 @@
-from death.tran.ehrtran.layers import *
-from death.tran.ehrtran.helpers import *
+from death.ehrtran.layers import *
+from death.ehrtran.helpers import *
 from death.final.losses import DiscreteCrossEntropy
 
 class TransformerMixedForwardSoftmax(nn.Module):

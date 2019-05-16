@@ -13,8 +13,8 @@ class NotRightNow(Exception):
 def out_of_time():
     now=datetime.datetime.now()
     if  now.hour>=8 and now.hour<=17 and not (now.weekday() in (5,6)) :
-        print(now.hour, now.minute)
-        print("Time satisfied")
+        # print(now.hour, now.minute)
+        # print("Time satisfied")
         raise NotRightNow
 
 def time_dec(func):

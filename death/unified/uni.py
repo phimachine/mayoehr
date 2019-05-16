@@ -3,21 +3,21 @@
 # the design is simple. I want to pass a tuple of models and share a single input generator.
 # will this work take some time? Sure. But not so much. Especially not so much when I start working.
 
-import torch
+
 import pandas as pd
-import numpy as np
+import torch
 from pathlib import Path
 import os
 from os.path import abspath
 from death.post.inputgen_planJ import InputGenJ, pad_collate
 from death.DNC.priorDNC import PriorDNC
 from death.adnc.adnc import APDNC
-from death.baseline.lstmtrainerG import lstmwrapperG
+from death.lstmbaseline.priorlstm import PriorLSTM
+from death.lstmbaseline.lstmtrainerG import lstmwrapperG
 from death.taco.model import Tacotron
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from torch.autograd import Variable
-import traceback
 import datetime
 from death.final.losses import TOELoss, DiscreteCrossEntropy
 from death.final.killtime import out_of_time
@@ -25,11 +25,11 @@ from death.final.metrics import ConfusionMatrixStats
 import code
 from death.analysis.expectedroc import get_death_code_proportion
 from death.adnc.otheradnc import *
-from death.tran.ehrtran.attnmodel import TransformerMixedAttn
-from death.tran.ehrtran.forwardmodel import TransformerMixedForward
-from death.tran.ehrtran.softmaxmodels import TransformerMixedForwardSoftmax, TransformerMixedAttnSoftmax
-from death.baseline.priorlstm import PriorLSTM
+from death.ehrtran.attnmodel import TransformerMixedAttn
+from death.ehrtran.forwardmodel import TransformerMixedForward
+from death.ehrtran.softmaxmodels import TransformerMixedForwardSoftmax, TransformerMixedAttnSoftmax
 from death.taco.model import PriorTacotron
+from death.ehrtran.simple import Simple
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -73,7 +73,7 @@ def load_for_debugging(fpath="debug/save.pkl"):
 
 
 class ModelManager():
-    def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=1e-8, num_workers=32, kill_time=False,
+    def __init__(self, save_str="defuni", total_epochs=40, batch_size=64, beta=1e-8, num_workers=4, kill_time=False,
                  binary_criterion=nn.BCEWithLogitsLoss, time_criterion=TOELoss,
                  valid_batches=2048, moving_len=50):
         self.models = []
@@ -450,8 +450,8 @@ class ExperimentManager(ModelManager):
     def __init__(self, *args, **kwargs):
         super(ExperimentManager, self).__init__(*args, **kwargs)
 
-    def initialize(self, load=False):
-        self.init_input_gen(InputGenJ, collate_fn=pad_collate)
+    def initialize(self, use_cache=True, load=False):
+        self.init_input_gen(InputGenJ, use_cache=use_cache, collate_fn=pad_collate)
         self.add_DNC()
         self.add_LSTM()
         # self.add_Tacotron()
@@ -672,8 +672,6 @@ class ExperimentManager(ModelManager):
             self.load_models()
 
     def lstm_tacotron_with_prior(self, load=False):
-
-
         self.save_str = "lowbeta"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -841,13 +839,59 @@ class ExperimentManager(ModelManager):
         if load:
             self.load_models()
 
+    def prior_ablation(self,load=False):
+
+        self.save_str = "prior_ablation"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        param_h = 64  # 64
+        param_L = 4  # 4
+        param_W = 8  # 8
+        param_R = 8  # 8
+        param_N = 64  # 64
+        param_x = self.param_x
+        param_v_t = self.param_v_t
+
+        computer = PriorDNC(x=param_x,
+                            h=param_h,
+                            L=param_L,
+                            v_t=param_v_t,
+                            W=param_W,
+                            R=param_R,
+                            N=param_N,
+                            prior=None)
+        self.add_model(computer.cuda(), "DNC")
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+
+    def run_simple(self,load=False):
+        self.save_str = "simple"
+        self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
+
+        param_x = self.param_x
+        param_v_t = self.param_v_t
+
+        computer = Simple(input_size=param_x, target_size=param_v_t)
+        self.add_model(computer.cuda(), "simple")
+
+        self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
+
+        if load:
+            self.load_models()
+        self.kill_time=True
+
 
 def main():
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=50)
-    ds.transformer_with_mixed_softmax(load=False)
+    ds.run_simple()
+    # ds.lstm_tacotron_with_prior(load=False)
     ds.run()
     # ds.test(AUROC_alpha=0.001)
 
+    # ds.adnc_variations()
 
 if __name__ == '__main__':
     main()
