@@ -1,3 +1,5 @@
+# this is obsolete, use uni.test()
+
 # because loading all models together causes out-of-memory error, I need to load them and test them one by one
 # all of the metrics take into consideration structural codes.
 # For code A1234, the machine needs to predict all.

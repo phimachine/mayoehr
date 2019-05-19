@@ -701,7 +701,7 @@ class Stock_LSTM(nn.Module):
         self.v_t= v_t
 
         self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
-                       dropout=True, bidirectional=True)
+                       dropout=0.1, bidirectional=True)
         self.last=nn.Linear(self.h*2, self.v_t)
         self.st=None
 

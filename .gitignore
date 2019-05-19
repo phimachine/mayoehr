@@ -11,3 +11,7 @@ death/data/*
 death/DNC/babi/data/*
 *.pkl
 death/tran/data/
+*/log/*
+*.perl
+*.en
+*.de

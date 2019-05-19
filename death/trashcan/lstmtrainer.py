@@ -225,7 +225,7 @@ def valid(computer, optimizer, real_criterion, binary_criterion,
 
 class lstmwrapper(nn.Module):
     def __init__(self,input_size=66529, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
-                 dropout=True):
+                 dropout=0.1):
         super(lstmwrapper, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)
@@ -244,7 +244,7 @@ class lstmwrapper(nn.Module):
 
 class lstmwrapper2(nn.Module):
     def __init__(self,input_size=66529, output_size=5952,hidden_size=52,num_layers=16,batch_first=True,
-                 dropout=True):
+                 dropout=0.1):
         super(lstmwrapper, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)

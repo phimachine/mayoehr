@@ -12,7 +12,7 @@ def onedgeomedian(array):
     def dist_func(x0):
         return sum(((np.full(len(array), x0[0]) - array) ** 2) ** (1 / 2))
 
-    res = minimize(dist_func, x0, method='TNC', options={'xtol': 1e-8, 'disp': True, "minfev":4000})
+    res = minimize(dist_func, x0, method='Nelder-Mead', options={'xtol': 1e-8, 'disp': True})
     print(res)
 
 def calcexptoe():
@@ -38,12 +38,16 @@ def calcexptoe():
     print((toe - toe.mean()).abs().apply(lambda x: 0.5 * x * x if x < 1 else x - 0.5).mean())
     print("we done")
 
-    geom=onedgeomedian(toe)
+    onedgeomedian(toe)
     # the geo median is 0
-    print(geom)
-    # 7.818847980391156
+    # 7.423658275034469
     print(toe.abs().apply(lambda x: 0.5 * x * x if x < 1 else x - 0.5).mean())
 
+    toe[toe<0]=0
+    onedgeomedian(toe)
+
+    # still zero. well.
+    print("DONE")
 
 def test_onedgeomedian():
     np.random.seed(3)

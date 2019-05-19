@@ -176,7 +176,7 @@ def train(computer, optimizer, story_length, batch_size, pgd, input_dim, startin
 
 class lstmwrapper(nn.Module):
     def __init__(self,input_size=47764, output_size=3620,hidden_size=128,num_layers=16,batch_first=True,
-                 dropout=True):
+                 dropout=0.1):
         super(lstmwrapper, self).__init__()
         self.lstm=LSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,
                        batch_first=batch_first,dropout=dropout)
@@ -209,7 +209,7 @@ def main():
         x=len(lexicon_dictionary)
 
         computer = lstmwrapper(input_size=x,output_size=x,hidden_size=256,num_layers=128,batch_first=True,
-                               dropout=True)
+                               dropout=0.1)
         computer.reset_parameters()
 
         # if load model

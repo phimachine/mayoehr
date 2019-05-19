@@ -133,18 +133,27 @@ class Plotter():
                 self.__setattr__(coln + "_valid", [])
             else:
                 pass
+    def replace_model_name(self,model_name):
+        replace={"softmaxDNC": "priorDNC",
+                 "softmaxADNC": "APDNC"}
+        if model_name in replace:
+            model_name = replace[model_name]
+        return model_name
 
     def init_columns(self, file, model_name):
-
+        model_name=self.replace_model_name(model_name)
         self.cols=[]
         self.cols_valid = []
 
         with open(file, 'r') as f:
             while True:
                 first_line = f.readline()
-                words=first_line.split()
-                if words[0]==model_name:
-                    break
+                if first_line:
+                    words=first_line.split()
+                    if words[0]==model_name:
+                        break
+                else:
+                    raise ValueError("Nothing read for this file")
 
             words = strip(words)
             if "train" in words:
@@ -165,6 +174,9 @@ class Plotter():
             assert words[1] == "validate"
             self.valid_init_columns(words[2:])
 
+            self.epoch_valid=[]
+            self.cols_valid=["epoch"]+self.cols_valid
+
 
     def push_train(self, words):
         try:
@@ -181,7 +193,7 @@ class Plotter():
             thelist = self.__getattribute__(col)
             thelist.append(words[i * 2 + 1])
 
-    def push_valid(self,words):
+    def push_valid(self, words):
         try:
             words.remove("validation")
         except ValueError:
@@ -192,6 +204,7 @@ class Plotter():
         except ValueError:
             pass
 
+
         for i in range(len(words) // 2):
             assert (words[i * 2].isalpha())
             col = words[i * 2]
@@ -199,6 +212,8 @@ class Plotter():
             thelist.append(words[i * 2 + 1])
 
     def push_line(self,model,line):
+        model=self.replace_model_name(model)
+
         words = line.split()
         words = strip(words)
         if len(words) < 2:
@@ -211,6 +226,7 @@ class Plotter():
             words = words[1:]
             self.push_train(words)
         elif words[1] == "validation":
+            self.epoch_valid.append(self.current_epoch)
             words = words[1:]
             self.push_valid(words)
         elif words[1] == "validate":
@@ -248,12 +264,17 @@ class Plotter():
                     self.init_columns(file,model)
                     with file.open('r') as f:
                         for line in f:
+                            lineepoch = self.get_epoch(line)
+                            if lineepoch is not None:
+                                self.current_epoch=lineepoch
                             self.push_line(model,line)
                 if i!=0:
                     with file.open('r') as f:
                         skipping = True
                         for line in f:
                             lineepoch=self.get_epoch(line)
+                            if lineepoch is not None:
+                                self.current_epoch=lineepoch
                             if lineepoch is not None and lineepoch>max([int(epoch) for epoch in self.epoch]):
                                 skipping=False
                             if not skipping:
@@ -281,7 +302,7 @@ class Plotter():
     def get_max_epoch(self):
         return max(self.epoch_train)
 
-if __name__ == '__main__':
+def plot_manually():
     # lc=LogCollector(["/home/m193194/local2/new_jason_project/death/unified/log",
     #              "/home/m193194/local2/new_jason_project/log"])
     # files=lc.get_long_logs()
@@ -290,6 +311,44 @@ if __name__ == '__main__':
                         "priorlstm_05_15_22:23:40.txt",
                         "priorlstm_05_15_23:03:29.txt"],
            "priortaco":["priortaco_05_15_21:14:05.txt",
-                        "priortaco_05_15_22:30:03.txt"]}
+                        "priortaco_05_15_22:30:03.txt"],
+           "priorDNC":["dnc_rerun_priorDNC_05_16_00:31:42.txt",
+                       "dnc_rerun_priorDNC_05_16_02:15:03.txt"],
+           "APDNC": ["dnc_rerun_APDNC_05_15_23:42:37.txt",
+                     "dnc_rerun_APDNC_05_16_02:15:01.txt"],
+           "tranforwardsoftmax":["tranforwardsoftmax_tranforwardsoftmax_05_16_07:49:00.txt"],
+           "tranattnsoftmax":["tranattnsoftmax_tranattnsoftmax_05_18_15:57:11.txt"],
+           "tranmixedforwardsoftmax":["tranmixedforwardsoftmax_tranmixedforwardsoftmax_05_16_15:07:14.txt"],
+           "tranmixedattnsoftmax":["tranmixedattnsoftmax_tranmixedattnsoftmax_05_16_15:07:14.txt"],
+           "softmaxADNC":["dnc_adnc_softmax_APDNC_05_17_13:28:52.txt"],
+           "softmaxDNC":["dnc_adnc_softmax_priorDNC_05_17_13:28:57.txt"],
+           "ADNCMEM":["adncvariations2_ADNCMEM_05_16_16:38:19.txt"],
+           "ADNCDrop":["adncvariations2_ADNCDrop_05_16_16:38:19.txt"],
+           "ADNCNorm":["adncvariations1_ADNCNorm_05_17_02:15:26.txt"],
+           "ADNCbi":["adncvariations1_ADNCbi_05_17_02:15:26.txt"],
+           "DNC":["DNC_05_14_21:24:55.txt","prior_ablation_DNC_05_18_18:10:06.txt"],
+           "simple":["simple_05_15_01:41:06.txt"]
+           }
+    for model in files:
+        files[model]=[dir+path for path in files[model]]
     plot=Plotter(files)
     plot.make_csv()
+
+
+if __name__ == '__main__':
+    plot_manually()
+
+# to be rerun:
+# priorLSTM: DONE
+# priorTaco: DONE
+# ADNC: DONE
+# DNC: DONE
+# DNC no prior:
+# Transformer mixed forward (dense) DONE
+# Transformer mixed attn: DONE
+# Transformer forward (dense): DONE
+# Transformer attn: DONE
+# softmax DNC DONE
+# softmax ADNC DONE
+# 4 ADNC variants DONE
+# simple: DONE

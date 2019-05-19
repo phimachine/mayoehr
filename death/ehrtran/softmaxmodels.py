@@ -262,6 +262,7 @@ class TransformerMixedAttnSoftmax(nn.Module):
         self.d_model = d_model
         self.n_layer = n_layers
         self.dropout = dropout
+        self.mixed=mixed
 
         self.input_size = input_size
         self.embedding = torch.nn.Parameter(torch.Tensor(input_size, d_model))

@@ -19,7 +19,7 @@ class Stock_LSTM(nn.Module):
         self.v_t= v_t
 
         self.LSTM=LSTM(input_size=self.x+self.R*self.W,hidden_size=h,num_layers=L,batch_first=True,
-                       dropout=True)
+                       dropout=0.1)
         self.last=nn.Linear(self.h, self.v_t)
         self.st=None
 
@@ -47,8 +47,8 @@ class Stock_LSTM(nn.Module):
 
 
 def testbid():
-    lstm=LSTM(input_size=100, hidden_size=77, batch_first=True, dropout=True)
-    lstmbi=LSTM(input_size=100, hidden_size=77, batch_first=True, dropout=True, bidirectional=True)
+    lstm=LSTM(input_size=100, hidden_size=77, batch_first=True, dropout=0.1)
+    lstmbi=LSTM(input_size=100, hidden_size=77, batch_first=True, dropout=0.1, bidirectional=True)
     input=Variable(torch.Tensor(64,8,100))
     output=lstm(input, None)
     outputbi=lstmbi(input, None)

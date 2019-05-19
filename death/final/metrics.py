@@ -47,10 +47,15 @@ class ConfusionMatrixStats():
 
         # self.running_cod_loss = deque(maxlen=memory_len)
         # self.running_toe_loss = deque(maxlen=memory_len)
+
         self.dequenames= args + ("cod", "toe")
         for arg in self.dequenames:
             name="running_"+arg+"_loss"
-            self.__setattr__(name, deque(maxlen=memory_len))
+            if not self.test:
+                dq=deque(maxlen=memory_len)
+            else:
+                dq=deque()
+            self.__setattr__(name, dq)
 
         self.idx=0
         self.all=False
