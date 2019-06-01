@@ -24,6 +24,8 @@ get_model_names<-function(csvs){
 
 model_names<-get_model_names(csvs)
 
+model_rename<-list()
+
 # 
 curve<-function(model_names, traincolnames=NULL, validcolnames=NULL){
   # all column names will be plotted and they will have different line type
@@ -71,21 +73,117 @@ curve<-function(model_names, traincolnames=NULL, validcolnames=NULL){
   
   if (length(colnames)>1){
     g<-ggplot()+
-      geom_smooth(data=alldts, aes_string(x="epoch", y="value", color="experiment", linetype="variable"), span=0.2, alpha=0.3)
+      geom_smooth(data=alldts, aes_string(x="epoch", y="value", color="experiment", linetype="variable"), span=0.2, alpha=0.3)+
+      theme(legend.position="bottom")+
+      theme(text = element_text(size=20))
+    
   }else{
     g<-ggplot()+
-      geom_line(data=alldts, aes_string(x="epoch", y="value", color="experiment"), size=1)
+      geom_line(data=alldts, aes_string(x="epoch", y="value", color="experiment"), size=1)+
+      theme(legend.position="bottom")+
+      theme(text = element_text(size=20))
+    
   }
   g
 }
 
-# curve(c("vroc","troc"),dnconly = TRUE)
-# curve("vroc")
-exclude<-c("simple")
-model_names<-model_names[!model_names %in% exclude]
-softmax<-c("tranforwardsoftmax", "tranmixedattnsoftmax","tranmixedforwardsoftmax", "tranattnsoftmax","softmaxADNC","softmaxDNC")
-model_names<-model_names[!model_names %in% curve]
-# g<-curve(model_names,traincolnames=c("total"))
-curve(model_names,validcolnames=c("senspe"))
+plot_examples<-function(){
+  # curve(c("vroc","troc"),dnconly = TRUE)
+  # curve("vroc")
+  exclude<-c("simple")
+  model_names<-model_names[!model_names %in% exclude]
+  softmax<-c("tranforwardsoftmax", "tranmixedattnsoftmax","tranmixedforwardsoftmax", "tranattnsoftmax","softmaxADNC","softmaxDNC")
+  model_names<-model_names[!model_names %in% softmax]
+  # g<-curve(model_names,traincolnames=c("total"))
+  curve(model_names,validcolnames=c("total"))
+  curve(model_names,validcolnames=c("senspe"))
+  
+  curve(softmax,validcolnames=c("total"))
+  curve(softmax,validcolnames=c("senspe"))
+}
 
-curve(softmax, validcolnames=c("senspe"))
+plot_them<-function(model_names, col, train=T){
+  if (train){
+    curve(model_names,traincolnames = c(col))
+  }else{
+    curve(model_names,validcolnames = c(col))
+  }
+}
+
+# ablation
+ablation_names<-c("DNC","priorDNC")
+plot_them(ablation_names,"total",T)+labs(x="Epoch", y="Total trainning loss")
+ggsave("plots/prior_ablation_train_loss.png")
+plot_them(ablation_names,"total",F)+labs(x="Epoch", y="Total trainning loss")
+ggsave("plots/prior_ablation_valid_loss.png")
+plot_them(ablation_names,"senspe",T)+labs(x="Epoch", y="Sensitivity + specificity")
+ggsave("plots/prior_ablation_train_senspe.png")
+plot_them(ablation_names,"senspe",F)+labs(x="Epoch", y="Sensitivity + specificity")
+ggsave("plots/prior_ablation_valid_senspe.png")
+
+# bce
+exclude<-c("simple","DNC")
+bce_models<-model_names[!model_names %in% exclude]
+softmax<-c("tranforwardsoftmax", "tranmixedattnsoftmax","tranmixedforwardsoftmax", "tranattnsoftmax","softmaxADNC","softmaxDNC")
+bce_models<-bce_models[!bce_models %in% softmax]
+
+# total
+plot_them(bce_models,"total",T)+labs(x="Epoch", y="Training total loss")
+ggsave("plots/bce_train_loss.png")
+plot_them(bce_models,"total",F)+labs(x="Epoch", y="Validation total loss")
+ggsave("plots/bce_valid_loss.png")
+
+# senspe
+plot_them(bce_models,"senspe",T)+labs(x="Epoch", y="Sensitivity + specificity")
+ggsave("plots/bce_train_senspe.png")
+plot_them(bce_models,"senspe",F)+labs(x="Epoch", y="Sensitivity + specificity")
+ggsave("plots/bce_valid_senspe.png")
+
+# toe
+plot_them(bce_models,"toe",T)+labs(x="Epoch", y="Training time to event smoothed L1 loss")
+ggsave("plots/bce_train_toe.png")
+plot_them(bce_models,"toe",F)+labs(x="Epoch", y="Validation time to event smoothed L1 loss")
+ggsave("plots/bce_valid_toe.png")
+
+# cod
+plot_them(bce_models,"cod",T)+labs(x="Epoch", y="Training binary cross entropy loss")
+ggsave("plots/bce_train_cod.png")
+plot_them(bce_models,"cod",F)+labs(x="Epoch", y="Validation binary cross entropy loss")
+ggsave("plots/bce_valid_cod.png")
+
+
+# softmax models
+# total
+plot_them(softmax,"total",T)+labs(x="Epoch", y="Training total loss")
+ggsave("plots/softmax_train_loss.png")
+plot_them(softmax,"total",F)+labs(x="Epoch", y="Validation total loss")
+ggsave("plots/softmax_valid_loss.png")
+
+# senspe
+plot_them(softmax,"senspe",T)+labs(x="Epoch", y="Sensitivity + specificity")
+ggsave("plots/softmax_train_senspe.png")
+plot_them(softmax,"senspe",F)+labs(x="Epoch", y="Sensitivity + specificity")
+ggsave("plots/softmax_valid_senspe.png")
+
+# toe
+plot_them(softmax,"toe",T)+labs(x="Epoch", y="Training time to event smoothed L1 loss")
+ggsave("plots/softmax_train_toe.png")
+plot_them(softmax,"toe",F)+labs(x="Epoch", y="Validation time to event smoothed L1 loss")
+ggsave("plots/softmax_valid_toe.png")
+
+# cod
+plot_them(softmax,"cod",T)+labs(x="Epoch", y="Training binary cross entropy loss")
+ggsave("plots/softmax_train_cod.png")
+plot_them(softmax,"cod",F)+labs(x="Epoch", y="Validation binary cross entropy loss")
+ggsave("plots/softmax_valid_cod.png")
+
+
+# prior ablation
+plot_them(c("DNC","priorDNC"),"total",T)+labs(x="Epoch", y="Training total loss")
+ggsave("plots/ablation_train_loss.png")
+plot_them(c("DNC","priorDNC"),"total",F)+labs(x="Epoch", y="Validation total loss")
+ggsave("plots/ablation_valid_loss.png")
+plot_them(c("DNC","priorDNC"),"senspe",T)+labs(x="Epoch", y="Training sensitivity + specificity")
+ggsave("plots/ablation_train_senspe.png")
+plot_them(c("DNC","priorDNC"),"senspe",F)+labs(x="Epoch", y="Validation sensitivity + specificity")
+ggsave("plots/ablation_valid_senspe.png")

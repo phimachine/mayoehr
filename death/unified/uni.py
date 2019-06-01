@@ -174,7 +174,12 @@ class ModelManager():
 
             print("saved model", model_name, "at", pickle_file)
 
-    def load_models(self):
+    def load_models(self, epoch=0):
+        """
+
+        :param epoch: 0 is load the newest, or load the epoch epoch.
+        :return:
+        """
         models = []
         optims = []
         hes = []
@@ -184,7 +189,7 @@ class ModelManager():
             raise ValueError("Please initialize models and optims first")
 
         for model, name, optim in zip(self.models, self.model_names, self.optims):
-            model, optim, highest_epoch, highest_iter = self.load_model(model, optim, 0, 0, self.save_str, name)
+            model, optim, highest_epoch, highest_iter = self.load_model(model, optim, epoch, 0, self.save_str, name)
             models.append(model)
             optims.append(optim)
             hes.append(highest_epoch)
@@ -232,17 +237,21 @@ class ModelManager():
         if highestepoch == 0 and highestiter == 0:
             print("nothing to load")
             return computer, optim, starting_epoch, starting_iteration
+
         if starting_epoch == 0 and starting_iteration == 0:
             pickle_file = Path(task_dir).joinpath(
                 "saves/" + savestr + "/" + model_name + "_" + str(highestepoch) + "_" + str(highestiter) + ".pkl")
+            print("loading model at", pickle_file)
+            with pickle_file.open('rb') as pickle_file:
+                computer, optim, epoch, iteration = torch.load(pickle_file)
+            print('Loaded model at epoch ', highestepoch, 'iteration', highestiter)
         else:
             pickle_file = Path(task_dir).joinpath(
-                "saves/" + savestr + "/" + model_name + "_" + str(starting_epoch) + "_" + str(
-                    starting_iteration) + ".pkl")
-        print("loading model at", pickle_file)
-        with pickle_file.open('rb') as pickle_file:
-            computer, optim, epoch, iteration = torch.load(pickle_file)
-        print('Loaded model at epoch ', highestepoch, 'iteration', iteration)
+                "saves/" + savestr + "/" + model_name + "_" + str(starting_epoch) + "_" + str(starting_iteration) + ".pkl")
+            print("loading model at", pickle_file)
+            with pickle_file.open('rb') as pickle_file:
+                computer, optim, epoch, iteration = torch.load(pickle_file)
+            print('Loaded model at epoch ', starting_epoch, 'iteration', starting_iteration)
 
         return computer, optim, highestepoch, highestiter
 
@@ -312,7 +321,7 @@ class ModelManager():
 
             starting_iter = 0
 
-    def test(self, AUROC_alpha=0.001, verbose=False):
+    def test(self, AUROC_alpha=0.001, verbose=False, test_stat_dir=None):
 
         print_interval = 100
 
@@ -351,7 +360,7 @@ class ModelManager():
             logprint(logfile,
                      "%14s " % name + "test sen: %.6f, spe: %.6f, roc: %.6f" % tuple(testcm.running_stats()))
 
-        self.save_test_stats(cmss)
+        self.save_test_stats(cmss, test_stat_dir)
 
     def run_one_patient(self, input, target, loss_type, time_length, cmss, validate=False, test=False):
         for model, name, optim, logfile, cms, bin, time, is_transformer in \
@@ -432,11 +441,15 @@ class ModelManager():
             toe_loss = float(toe_loss.item())
             testcm.update_one_pass(sigoutput, cause_of_death_target, cod_loss, toe_loss)
 
-    def save_test_stats(self, cmss):
+    def save_test_stats(self, cmss, test_stat_dir):
         for model_name, cms in zip(self.model_names, cmss):
             testcm = cms[0]
             task_dir = os.path.dirname(abspath(__file__))
-            stats_path = Path(task_dir) / "test_stats" / (self.save_str + "_stats")
+            if test_stat_dir is None:
+                stats_path = Path(task_dir) / "test_stats" / (self.save_str + "_stats")
+            else:
+                stats_path = Path(task_dir) / test_stat_dir / (self.save_str + "_stats")
+
             if not os.path.isdir(stats_path):
                 os.mkdir(stats_path)
 
@@ -444,6 +457,10 @@ class ModelManager():
             tp.to_csv(stats_path / (model_name + "_tp.csv"))
             tn=pd.DataFrame(testcm.true_negative)
             tn.to_csv(stats_path / (model_name + "_tn.csv"))
+            fp=pd.DataFrame(testcm.false_positive)
+            fp.to_csv(stats_path / (model_name + "_fp.csv"))
+            fn=pd.DataFrame(testcm.false_negative)
+            fn.to_csv(stats_path / (model_name + "_fn.csv"))
 
             conditional=pd.DataFrame({"cp":testcm.conditional_positives, "cn":testcm.conditional_negatives})
             conditional.to_csv(stats_path / (model_name+"_conditional.csv"))
@@ -454,20 +471,28 @@ class ExperimentManager(ModelManager):
     def __init__(self, *args, **kwargs):
         super(ExperimentManager, self).__init__(*args, **kwargs)
 
-    def initialize(self, use_cache=True, load=False):
+    def initialize(self, use_cache=True, epoch=None):
         self.init_input_gen(InputGenJ, use_cache=use_cache, collate_fn=pad_collate)
         self.add_DNC()
         self.add_LSTM()
         # self.add_Tacotron()
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
     def run(self):
+        print("Training", self.save_str, self.model_names)
         self.train()
 
-    def test(self, AUROC_alpha=0.001):
-        super(ExperimentManager, self).test(AUROC_alpha=AUROC_alpha)
+    def test(self, AUROC_alpha=0.0001, verbose=False, test_stat_dir=None):
+        """
+
+        :param AUROC_alpha: the step size of AUROC curve
+        :param epoch: Select an epoch to test with
+        :return:
+        """
+        print("Testing", self.save_str, self.model_names)
+        super(ExperimentManager, self).test(AUROC_alpha=AUROC_alpha, test_stat_dir=test_stat_dir)
 
     def add_DNC(self):
         param_h = 64  # 64
@@ -522,7 +547,7 @@ class ExperimentManager(ModelManager):
 
         self.add_model(apdnc.cuda(), "APDNC")
 
-    def overfitting_experiment(self, load=False):
+    def overfitting_experiment(self, epoch=None):
         self.save_str = "overfitting"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -556,11 +581,11 @@ class ExperimentManager(ModelManager):
                       prior=prior_probability)
         self.add_model(apdnc.cuda(), "onefourthADNC")
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-    def high_parameters(self, load=False):
+    def high_parameters(self, epoch=None):
         self.save_str = "highparam"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -593,11 +618,11 @@ class ExperimentManager(ModelManager):
                       prior=prior_probability)
         self.add_model(apdnc.cuda(), "doubleADNC")
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-    def high_parameters_1(self, load=False):
+    def high_parameters_1(self, epoch=None):
         self.save_str = "highparam"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -620,11 +645,11 @@ class ExperimentManager(ModelManager):
                        prior=prior_probability)
         self.add_model(dnc.cuda(), "doubleDNC")
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-    def high_parameters_2(self, load=False):
+    def high_parameters_2(self, epoch=None):
         self.save_str = "highparam"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -647,19 +672,19 @@ class ExperimentManager(ModelManager):
                       prior=prior_probability)
         self.add_model(apdnc.cuda(), "doubleADNC")
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-    def adnc_exp(self, load=False):
+    def adnc_exp(self, epoch=None):
         self.init_input_gen(InputGenJ, collate_fn=pad_collate)
         self.add_APDNC()
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def baseline(self, save_str="baseline", load=False):
+    def baseline(self, save_str="baseline", epoch=None):
         self.save_str = save_str
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
         self.add_LSTM()
@@ -667,10 +692,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def adnc_variations(self, load=False):
+    def adnc_variations(self, epoch=None):
 
         self.save_str = "adncvariations"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -726,10 +751,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def adnc_variations_1(self, load=False):
+    def adnc_variations_1(self, epoch=None):
 
         self.save_str = "adncvariations1"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -765,12 +790,12 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
 
 
-    def adnc_variations_2(self, load=False):
+    def adnc_variations_2(self, epoch=None):
 
         self.save_str = "adncvariations2"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -807,10 +832,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def lstm_tacotron_with_prior(self, load=False):
+    def lstm_tacotron_with_prior(self, epoch=None):
         self.save_str = "lowbeta"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -825,10 +850,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def lstm_with_prior(self,load=False):
+    def lstm_with_prior(self,epoch=None):
         self.save_str = "lstm"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -841,11 +866,11 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
 
-    def tacotron_with_prior(self, load=False):
+    def tacotron_with_prior(self, epoch=None):
         self.save_str = "taco"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -857,10 +882,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def dnc_adnc_rerun(self, load=False):
+    def dnc_adnc_rerun(self, epoch=None):
         # log was incorrect, and validaion was incorrect. I want to run it again.
 
         self.save_str = "dnc_adnc_rerun"
@@ -871,10 +896,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def dnc_rerun(self, load=False):
+    def dnc_rerun(self, epoch=None):
 
         self.save_str = "dnc_rerun"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -883,11 +908,11 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
 
-    def adnc_rerun(self, load=False):
+    def adnc_rerun(self, epoch=None):
 
         self.save_str = "adnc_rerun"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -896,10 +921,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def transformers(self, load=False):
+    def transformers(self, epoch=None):
         self.save_str = "transformers"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -942,10 +967,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def transformer_with_no_mixed_obj(self, load=False):
+    def transformer_with_no_mixed_obj(self, epoch=None):
         self.save_str = "tran_no_mixed_obj"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -988,10 +1013,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def transformer_with_mixed_softmax(self, load=False):
+    def transformer_with_mixed_softmax(self, epoch=None):
 
         self.save_str = "tran_mixed_softmax"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -1017,10 +1042,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def transformer_with_mixed_softmax_forward(self, load=False, mixed=True):
+    def transformer_with_mixed_softmax_forward(self, epoch=None, mixed=True):
 
         if mixed:
             id="tranmixedforwardsoftmax"
@@ -1047,10 +1072,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def transformer_with_mixed_softmax_attn(self, load=False, mixed=True):
+    def transformer_with_mixed_softmax_attn(self, epoch=None, mixed=True):
         if mixed:
             id="tranmixedattnsoftmax"
         else:
@@ -1077,10 +1102,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def softmax_experiment(self, load=False):
+    def softmax_experiment(self, epoch=None):
         # 10 sensitivity is what we have to beat
 
         self.save_str = "dnc_adnc_softmax"
@@ -1092,10 +1117,10 @@ class ExperimentManager(ModelManager):
         self.binary_criterions = DiscreteCrossEntropy
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def prior_ablation(self,load=False):
+    def prior_ablation(self,epoch=None):
 
         self.save_str = "prior_ablation"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -1120,10 +1145,10 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
-    def run_simple(self,load=False):
+    def run_simple(self,epoch=None):
         self.save_str = "simple"
         self.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
 
@@ -1135,15 +1160,15 @@ class ExperimentManager(ModelManager):
 
         self.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-        if load:
-            self.load_models()
+        if epoch is not None:
+            self.load_models(epoch=epoch)
 
 
 
 
 def main():
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-    ds.lstm_with_prior(load=True)
+    ds.lstm_with_prior(epoch=0)
     ds.run()
     # ds.test(AUROC_alpha=0.001)
 
@@ -1151,7 +1176,7 @@ def main():
 
 def main2():
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.tacotron_with_prior(load=True)
+    ds.tacotron_with_prior(epoch=0)
     ds.run()
     # ds.test(AUROC_alpha=0.001)
 
@@ -1161,26 +1186,26 @@ def main3():
 
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.adnc_variations_1(load=False)
+    ds.adnc_variations_1(epoch=None)
     ds.run()
 
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.transformer_with_mixed_softmax_forward(load=False, mixed=False)
+    ds.transformer_with_mixed_softmax_forward(epoch=None, mixed=False)
     ds.run()
 
 def main4():
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.adnc_variations_2(load=False)
+    ds.adnc_variations_2(epoch=None)
     ds.run()
 
 def main5():
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.softmax_experiment(load=False)
+    ds.softmax_experiment(epoch=None)
     ds.run()
 
-def main6(load=False):
+def main6(epoch=None):
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
     ds.save_str = "tranattnsoftmax"
     ds.init_input_gen(InputGenJ, collate_fn=pad_collate, use_cache=True)
@@ -1198,140 +1223,199 @@ def main6(load=False):
 
     ds.init_optims_and_criterions(torch.optim.Adam, 1e-3)
 
-    if load:
-        ds.load_models()
+    if epoch is not None:
+        ds.load_models(epoch=epoch)
     ds.run()
 
 def main7():
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-    ds.prior_ablation(load=True)
+    ds.prior_ablation(epoch=0)
     ds.run()
 
 # alphabetical order, as plots
 # run another 20 epochs
 def all_working_1():
+    def e1():
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+        ds.dnc_rerun(epoch=0)
+        ds.run()
+        del ds
 
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-    ds.lstm_with_prior(load=True)
-    ds.run()
-    del ds
+    def e2():
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+        ds.adnc_variations_1(epoch=0)
+        ds.run()
+        del ds
 
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-    ds.dnc_rerun(load=True)
-    ds.run()
-    del ds
+    def e3():
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+        ds.prior_ablation(epoch=0)
+        ds.run()
+        del ds
 
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-    ds.adnc_variations_1(load=True)
-    ds.run()
-    del ds
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-    ds.prior_ablation(load=True)
-    ds.run()
-    del ds
+    def e4():
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+        ds.run_simple(epoch=0)
+        ds.run()
+        del ds
 
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-    ds.run_simple(load=True)
-    ds.run()
-    del ds
+    def e5():
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+        ds.lstm_with_prior(epoch=0)
+        ds.run()
+
+    # e1()
+    # e2()
+    # e3()
+    # e4()
+    e5()
 
 def all_working_2():
     with torch.cuda.device(1):
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-        ds.tacotron_with_prior(load=True)
-        ds.run()
-        del ds
+        def e1():
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+            ds.tacotron_with_prior(epoch=0)
+            ds.run()
+            del ds
 
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-        ds.adnc_rerun(load=True)
-        ds.run()
-        del ds
+        def e2():
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+            ds.adnc_rerun(epoch=0)
+            ds.run()
+            del ds
 
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-        ds.softmax_experiment(load=True)
-        ds.run()
-        del ds
+        def e3():
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+            ds.softmax_experiment(epoch=0)
+            ds.run()
+            del ds
 
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=30)
-        ds.adnc_variations_2(load=True)
-        ds.run()
-        del ds
+        def e4():
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=41)
+            ds.adnc_variations_2(epoch=0)
+            ds.run()
+            del ds
 
-def test_all_for_AUROC():
+        e1()
+        e2()
+        e3()
+        e4()
+
+def test_all_for_AUROC_0(epoch=0, AUROC_alpha=0.0001, test_stat_dir=None):
     # incredibly messy https://github.com/pytorch/pytorch/issues/8637
     # the model has to load on the correct gpu, otherwise it does not work at all.
     # I suggest that you look into the save_models function to not save methods
 
-    with torch.cuda.device(1):
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-        ds.tacotron_with_prior(load=True)
-        ds.test(AUROC_alpha=0.001)
+    # you won't be able to run all tests on V100. memory does not get freed comlpetely.
+
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-    ds.lstm_with_prior(load=True)
-    ds.test(AUROC_alpha=0.001)
+    ds.lstm_with_prior(epoch=epoch)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-    ds.dnc_rerun(load=True)
-    ds.test(AUROC_alpha=0.001)
-
-    with torch.cuda.device(1):
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-        ds.adnc_rerun(load=True)
-        ds.test(AUROC_alpha=0.001)
+    ds.dnc_rerun(epoch=epoch)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
 
     # transformers
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.transformer_with_mixed_softmax_forward(load=True, mixed=False)
-    ds.test(AUROC_alpha=0.001)
+    ds.transformer_with_mixed_softmax_forward(epoch=epoch, mixed=False)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.transformer_with_mixed_softmax_forward(load=True, mixed=True)
-    ds.test(AUROC_alpha=0.001)
+    ds.transformer_with_mixed_softmax_forward(epoch=epoch, mixed=True)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
     del ds
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-    ds.transformer_with_mixed_softmax_attn(load=True, mixed=False)
-    ds.test(AUROC_alpha=0.001)
-    del ds
-
-    with torch.cuda.device(1):
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
-        ds.transformer_with_mixed_softmax_attn(load=True, mixed=True)
-        ds.test(AUROC_alpha=0.001)
-        del ds
-
-    with torch.cuda.device(1):
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-        ds.softmax_experiment(load=True)
-        ds.test(AUROC_alpha=0.001)
-        del ds
-
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-    ds.adnc_variations_1(load=True)
-    ds.test(AUROC_alpha=0.001)
-    del ds
-
-    with torch.cuda.device(1):
-        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-        ds.adnc_variations_2(load=True)
-        ds.test(AUROC_alpha=0.001)
-        del ds
-
-    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-    ds.prior_ablation(load=True)
-    ds.test(AUROC_alpha=0.001)
+    ds.transformer_with_mixed_softmax_attn(epoch=epoch, mixed=False)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
     del ds
 
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-    ds.run_simple(load=True)
-    ds.test(AUROC_alpha=0.001)
+    ds.adnc_variations_1(epoch=epoch)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
     del ds
 
+    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+    ds.prior_ablation(epoch=epoch)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
+    del ds
 
+    # ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+    # ds.run_simple(epoch=epoch)
+    # ds.test(AUROC_alpha=AUROC_alpha, test_stat_dir=test_stat_dir)
+    # del ds
+
+
+def test_all_for_AUROC_1(epoch=0, AUROC_alpha=0.0001, test_stat_dir=None):
+    def e1():
+        with torch.cuda.device(1):
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+            ds.tacotron_with_prior(epoch=epoch)
+            ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
+
+    def e2():
+        with torch.cuda.device(1):
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+            ds.adnc_rerun(epoch=epoch)
+            ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
+
+    def e5():
+        with torch.cuda.device(1):
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=20)
+            ds.transformer_with_mixed_softmax_attn(epoch=epoch, mixed=True)
+            ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
+            del ds
+
+    def e3():
+        with torch.cuda.device(1):
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+            ds.softmax_experiment(epoch=epoch)
+            ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
+            del ds
+    def e4():
+        with torch.cuda.device(1):
+            ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+            ds.adnc_variations_2(epoch=epoch)
+            ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
+            del ds
+
+    # e1()
+    # e2()
+    # e5()
+    e3()
+    e4()
+
+def transformer200():
+    with torch.cuda.device(1):
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=21)
+        ds.transformer_with_mixed_softmax_attn(epoch=0, mixed=True)
+        ds.run()
+
+def transformer201():
+    with torch.cuda.device(0):
+        # transformers
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=21)
+        ds.transformer_with_mixed_softmax_forward(epoch=0, mixed=False)
+        ds.run()
+
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=21)
+        ds.transformer_with_mixed_softmax_forward(epoch=0, mixed=True)
+        ds.run()
+
+        ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=21)
+        ds.transformer_with_mixed_softmax_attn(epoch=0, mixed=False)
+        ds.run()
+
+
+def retest_lstm(epoch=4, AUROC_alpha=0.0001, test_stat_dir="earlystopping_stats"):
+    ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
+    ds.lstm_with_prior(epoch=epoch)
+    ds.test(AUROC_alpha=AUROC_alpha,test_stat_dir=test_stat_dir)
 
 if __name__ == '__main__':
     ds = ExperimentManager(batch_size=64, num_workers=4, total_epochs=40)
-    ds.run_simple(load=True)
-    ds.test(AUROC_alpha=0.001)
+    ds.run_simple(epoch=0)
+    ds.test(AUROC_alpha=0.0001)
     del ds

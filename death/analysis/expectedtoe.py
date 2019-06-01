@@ -54,5 +54,3 @@ def test_onedgeomedian():
     test_array = np.array([np.random.normal(88.2, 20) for i in np.arange(10000)])
     onedgeomedian(test_array)
 
-if __name__ == '__main__':
-    calcexptoe()

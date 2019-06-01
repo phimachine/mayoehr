@@ -42,6 +42,8 @@ class ConfusionMatrixStats():
         else:
             self.true_positive=np.zeros((self.steps, dims)).astype(np.long)
             self.true_negative=np.zeros((self.steps, dims)).astype(np.long)
+            self.false_positive=np.zeros((self.steps, dims)).astype(np.long)
+            self.false_negative=np.zeros((self.steps, dims)).astype(np.long)
             self.conditional_positives=np.zeros((dims, )).astype(np.long)
             self.conditional_negatives=np.zeros((dims, )).astype(np.long)
 
@@ -136,10 +138,17 @@ class ConfusionMatrixStats():
 
             target_repeat=np.expand_dims(target,axis=1)
             target_repeat=np.repeat(target_repeat, self.steps, axis=1)
+
             true_positive=positive * target_repeat
             true_negative=np.invert(positive)*np.invert(target_repeat)
+            false_positive=positive * np.invert(target_repeat)
+            false_negative=np.invert(positive)*target_repeat
+
             true_positive=true_positive.sum(axis=0)
             true_negative=true_negative.sum(axis=0)
+            false_positive=false_positive.sum(axis=0)
+            false_negative=false_negative.sum(axis=0)
+
             conditional_positive=target.sum(axis=0)
             conditional_negative=np.invert(target).sum(axis=0)
 
@@ -147,6 +156,9 @@ class ConfusionMatrixStats():
             self.conditional_positives+=conditional_positive
             self.true_negative+=true_negative
             self.conditional_negatives+=conditional_negative
+
+            self.false_positive+=false_positive
+            self.false_negative+=false_negative
 
             self.idx+=1
 
